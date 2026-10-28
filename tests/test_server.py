@@ -50,3 +50,33 @@ def test_review_and_approve_need_a_named_human(srv):
     assert call("/api/approve", srv, {"id": prop["id"]})[0] == 400
     assert call("/api/approve", srv, {"id": "../../etc/passwd", "actor": "x"})[0] == 400
     assert call("/api/approve", srv, {"id": prop["id"], "actor": "Priya"})[0] == 200
+
+
+def test_diff_endpoint_and_path_traversal_guards(srv):
+    # Switch back to scenario A (risky PR)
+    call("/api/scenario", srv, {"name": "risky"})
+
+    # Valid diff retrieval
+    s, b = call("/api/diff?path=.github/workflows/ci.yml", srv)
+    assert s == 200
+    data = json.loads(b)
+    assert data["path"] == ".github/workflows/ci.yml"
+    assert "diff" in data and len(data["diff"]) > 0
+    assert any(f["rule"] == "blocked-path" for f in data["findings"])
+
+    # File with masked secret
+    s, b = call("/api/diff?path=shop/config.py", srv)
+    assert s == 200
+    data = json.loads(b)
+    assert any(f["rule"] == "secret" for f in data["findings"])
+
+    # Path traversal attempts
+    assert call("/api/diff?path=../../etc/passwd", srv)[0] == 400
+    assert call("/api/diff?path=/etc/passwd", srv)[0] == 400
+    assert call("/api/diff?path=..\\windows\\win.ini", srv)[0] == 400
+    assert call("/api/diff?path=", srv)[0] == 400
+    assert call("/api/diff", srv)[0] == 400
+
+    # Non-existent file / not in change set
+    assert call("/api/diff?path=does_not_exist.py", srv)[0] == 404
+

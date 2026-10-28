@@ -7,7 +7,7 @@ import shutil
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 
 from . import audit as A
 from . import demo, explainer, gitutil, llm, optimizer, report, review, shield
@@ -83,6 +83,38 @@ def make_handler(ctx, token, port):
                         rev = review.run(ctx.root, pol, ctx.base, ctx.home)
                         return self._send(200, report.compliance(rev, ctx.log.entries(), ctx.log.verify(), pol),
                                           "text/markdown")
+                if u.path == "/api/diff":
+                    qs = parse_qs(u.query)
+                    req_path = qs.get("path", [""])[0].strip()
+                    if not req_path:
+                        return self._send(400, {"error": "path parameter required"})
+                    norm = os.path.normpath(req_path).replace("\\", "/")
+                    if norm.startswith("..") or os.path.isabs(req_path) or req_path.startswith("/") or req_path.startswith("\\"):
+                        return self._send(400, {"error": "path traversal refused"})
+                    target = os.path.realpath(os.path.join(ctx.root, norm))
+                    real_root = os.path.realpath(ctx.root)
+                    if os.path.commonpath([real_root, target]) != real_root:
+                        return self._send(403, {"error": "path escapes repository"})
+                    changed = {p: s for s, p in gitutil.changed_files(ctx.root, ctx.base)}
+                    if norm not in changed:
+                        return self._send(404, {"error": f"file '{norm}' not in current change set"})
+                    status = changed[norm]
+                    diff_text = gitutil.git(ctx.root, "diff", "-u", f"{ctx.base}...HEAD", "--", norm, check=False)
+                    if len(diff_text) > 500_000:
+                        diff_text = diff_text[:500_000] + "\n... [diff truncated at 500KB limit]"
+                    pol = ctx.policy()
+                    rev = review.run(ctx.root, pol, ctx.base, ctx.home)
+                    file_findings = [f for f in rev["findings"] if f["file"] == norm]
+                    file_gate = [g for g in rev["gate"] if g["file"] == norm]
+                    return self._send(200, {
+                        "path": norm,
+                        "status": status,
+                        "diff": diff_text,
+                        "findings": file_findings,
+                        "gate": file_gate,
+                        "base": ctx.base,
+                        "head": gitutil.head(ctx.root),
+                    })
                 self._send(404, {"error": "not found"})
             except Exception as e:
                 self._send(500, {"error": str(e)})

@@ -86,7 +86,7 @@ def main():
             print("  ✓ Proposal applied to repo with Approved-by trailer")
 
             # Confirm Review passes
-            page.locator("button:has-text('PR review')").click()
+            page.locator("#btnTabReview").click()
             page.wait_for_selector(".v-ALLOWED", timeout=10000)
             assert "ALLOWED" in page.locator(".verdict .big").inner_text()
             page.screenshot(path=os.path.join(SCREENSHOTS_DIR, "05_review_allowed.png"))
@@ -94,8 +94,8 @@ def main():
 
             # Audit trail & Tamper detection
             print("[7/7] Verifying audit hash chain & tamper detection...")
-            page.locator("button:has-text('Audit & report')").click()
-            page.wait_for_selector("text=chain ✓", timeout=10000)
+            page.locator("#btnTabAudit").click()
+            page.wait_for_selector("#chainStatus:has-text('chain ✓')", timeout=10000)
             page.locator("button:has-text('Simulate tampering')").click()
             page.wait_for_selector("text=DETECTED", timeout=10000)
             page.screenshot(path=os.path.join(SCREENSHOTS_DIR, "06_audit_tamper_detected.png"))

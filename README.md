@@ -14,7 +14,7 @@ It does not write code. It decides what AI (and humans) may change, cleans up wh
 ```bash
 pip install -r requirements.txt          # pyyaml, pytest, coverage. Python 3.10+, git
 python server.py                         # seeds a REAL git repo with AI-authored PRs and opens the console
-python -m pytest -q tests                # 65 passed, 1 skipped (requires ANTHROPIC_API_KEY)
+python -m pytest -q tests                # 67 passed, 1 skipped (requires ANTHROPIC_API_KEY)
 ```
 
 Console walkthrough (≈3 min):
