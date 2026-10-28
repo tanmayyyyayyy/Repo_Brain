@@ -84,10 +84,13 @@ function vOpt(){const p=S.prop,st=S.state;
   const ai=st&&st.llm.allowed?`<label style="display:inline-flex;gap:6px;align-items:center;margin:0 10px"><input type="checkbox" id="useai" style="width:auto" ${st.llm.available?"":"disabled"}> AI tier ${st.llm.available?"":"(set ANTHROPIC_API_KEY)"}</label>`:`<span class="mut small" style="margin:0 10px">AI tier off (policy allow_llm: false)</span>`;
   let h=`<div class="card"><div class="row"><div><b>Rule-based, test-gated cleanup</b><div class="mut small">Rewrites only functions in files this PR changed, runs your tests on a copy, and proposes a patch. Nothing is applied until a human approves.</div></div><div style="flex:none">${ai}<button class="b" onclick="runOpt()">Run optimizer</button></div></div></div>`;
   if(!p)return h;
-  const cls=p.status==="verified"?"p-ok":p.status==="nothing-to-optimize"?"":"p-block";
+  const cls=p.status==="verified"?"p-ok":p.status.includes("partial")?"p-warn":p.status==="nothing-to-optimize"?"":"p-block";
   h+=`<div class="card"><h3>Result ${pill(p.status,cls)}</h3>`+(p.tests.ran?`<div class="small">Tests (<code>${esc(p.tests.cmd)}</code>): ${p.tests.ok?'<span class="good">passed</span>':'<span class="err">FAILED</span>'}</div><pre>${esc((p.tests.output||"").trim().split("\n").slice(-6).join("\n"))}</pre>`:'<div class="small mut">no tests found - proposal is unverified</div>');
   if(p.llm.requested)h+=`<div class="small mut">AI tier: ${p.llm.used?"used":"not used"} ${esc(p.llm.reason)}</div>`;
   h+=`</div>`;
+  if(p.unexecuted_functions&&p.unexecuted_functions.length){
+    h+=`<div class="card" style="border-left:4px solid var(--warn)"><b>⚠️ Partial test coverage</b>: The following rewritten function(s) were never executed by your tests:<br>${p.unexecuted_functions.map(u=>`• <code>${esc(u.file)}::${esc(u.function)}</code> (${u.coverage_pct}% executed)`).join("<br>")}</div>`;
+  }
   h+=p.files.map(f=>{const b=f.metrics.before,a=f.metrics.after;
    return `<div class="card"><h3><code>${esc(f.path)}</code></h3><div class="small">max cognitive <b>${b.max_cog}</b> <span class="arrow">→</span> <b class="good">${a.max_cog}</b> · max depth <b>${b.max_depth}</b> <span class="arrow">→</span> <b class="good">${a.max_depth}</b> · lines <b>${b.loc}</b> <span class="arrow">→</span> <b class="good">${a.loc}</b> · max cyclomatic ${b.max_cc} → ${a.max_cc}</div>
    <div>${Object.entries(f.notes).map(([k,v])=>pill(k+" ×"+v)).join("")}</div>
@@ -95,7 +98,10 @@ function vOpt(){const p=S.prop,st=S.state;
    ${f.remaining.length?`<div class="small err">still over limits: ${esc(f.remaining.map(r=>r.name).join(", "))} - needs a human (or the AI tier)</div>`:""}
    <pre class="diff">${diffHtml(f.diff)}</pre></div>`}).join("");
   if(p.skipped.length)h+=`<div class="card"><h3>Skipped (kept as-is)</h3>${p.skipped.map(s=>`<div class="small"><code>${esc(s.file||"")}::${esc(s.function)}</code> - ${esc(s.reason)}</div>`).join("")}</div>`;
-  if(p.applicable&&p.files.length&&!p.applied)h+=`<div class="card"><h3>Human approval</h3><div class="row"><div><label>Your name (recorded in the audit log and the commit)</label><input id="aactor"></div><button class="b g" onclick="approve()">Approve &amp; apply</button></div></div>`;
+  if(p.applicable&&p.files.length&&!p.applied){
+    const covHint = st&&st.policy&&st.policy.min_function_coverage!==null?`<span class="mut small">(policy min_function_coverage: ${st.policy.min_function_coverage}%)</span>`:""
+    h+=`<div class="card"><h3>Human approval ${covHint}</h3><div class="row"><div><label>Your name (recorded in the audit log and the commit)</label><input id="aactor"></div><button class="b g" onclick="approve()">Approve &amp; apply</button></div></div>`;
+  }
   if(p.applied)h+=`<div class="card"><span class="good">Applied</span> as commit <code>${esc(String(p.applied.commit).slice(0,8))}</code>. Re-run the review to confirm the gate.</div>`;
   return h}
 function runOpt(){guard(async()=>{S.prop=await api("/api/optimize",{ai:!!($("#useai")&&$("#useai").checked)})})}

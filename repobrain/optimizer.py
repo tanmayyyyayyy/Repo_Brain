@@ -33,6 +33,50 @@ def has_tests(root, policy):
     return False
 
 
+def _analyze_function_coverage(work, overrides, cov_data):
+    """Determine line execution per function in overrides using CoverageData.
+    Returns (unexecuted_functions, function_coverage_list)."""
+    unexecuted = []
+    func_cov = []
+    measured_map = {}
+    for mf in cov_data.measured_files():
+        measured_map[os.path.realpath(mf)] = mf
+        measured_map[os.path.normpath(mf)] = mf
+
+    for rel, text in overrides.items():
+        full_work = os.path.realpath(os.path.join(work, os.path.normpath(rel)))
+        cov_key = measured_map.get(full_work)
+        if not cov_key:
+            for mf in cov_data.measured_files():
+                if mf.replace("\\", "/").endswith(rel.replace("\\", "/")):
+                    cov_key = mf
+                    break
+        executed_lines = set(cov_data.lines(cov_key) or []) if cov_key else set()
+
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            continue
+
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                body_lines = set()
+                for b in node.body:
+                    for sub in ast.walk(b):
+                        if hasattr(sub, "lineno") and sub.lineno != node.lineno:
+                            body_lines.add(sub.lineno)
+                if not body_lines:
+                    body_lines = {node.lineno}
+                covered = body_lines & executed_lines
+                pct = round(len(covered) / max(len(body_lines), 1) * 100, 1)
+                entry = {"file": rel, "function": node.name, "coverage_pct": pct,
+                         "executed": len(covered), "total_lines": len(body_lines)}
+                func_cov.append(entry)
+                if not covered:
+                    unexecuted.append(entry)
+    return unexecuted, func_cov
+
+
 def run_tests(root, overrides, policy):
     """Copy the repo, apply `overrides` ({relpath: text}), run the test command. -> dict"""
     if not has_tests(root, policy):
@@ -53,11 +97,35 @@ def run_tests(root, overrides, policy):
         env.update(PYTHONDONTWRITEBYTECODE="1", HOME=tmp)
         if os.name == "nt":
             env.update(USERPROFILE=tmp, APPDATA=os.path.join(tmp, "AppData"))
+
+        has_coverage = False
+        cov_file = os.path.join(tmp, ".coverage")
+        cov_cmd = list(cmd)
         try:
-            r = subprocess.run(cmd, cwd=work, capture_output=True, text=True, env=env,
+            import coverage
+            has_coverage = True
+            if len(cmd) >= 3 and cmd[0] == sys.executable and cmd[1] == "-m":
+                cov_cmd = [sys.executable, "-m", "coverage", "run", f"--data-file={cov_file}"] + cmd[1:]
+            elif "pytest" in cmd[0] or (len(cmd) > 1 and "pytest" in cmd[1]):
+                cov_cmd = [sys.executable, "-m", "coverage", "run", f"--data-file={cov_file}"] + cmd
+        except ImportError:
+            has_coverage = False
+
+        try:
+            r = subprocess.run(cov_cmd, cwd=work, capture_output=True, text=True, env=env,
                                timeout=policy.get("test_timeout", 180))
             out = (r.stdout + r.stderr)[-4000:]
-            return {"ran": True, "ok": r.returncode == 0, "output": out, "cmd": " ".join(cmd)}
+            cov_info = {"available": False, "unexecuted_functions": [], "function_coverage": []}
+            if r.returncode == 0 and has_coverage and os.path.exists(cov_file):
+                try:
+                    import coverage
+                    cov = coverage.Coverage(data_file=cov_file)
+                    cov.load()
+                    unexec, f_cov = _analyze_function_coverage(work, overrides, cov.get_data())
+                    cov_info = {"available": True, "unexecuted_functions": unexec, "function_coverage": f_cov}
+                except Exception:
+                    pass
+            return {"ran": True, "ok": r.returncode == 0, "output": out, "cmd": " ".join(cmd), "coverage": cov_info}
         except subprocess.TimeoutExpired:
             return {"ran": True, "ok": False, "output": "test run timed out", "cmd": " ".join(cmd)}
         except FileNotFoundError as e:
@@ -248,19 +316,50 @@ def propose(root, policy, files, home, use_llm=False, ask=None, head=None):
                                       for x in b for y in a if x["name"] == y["name"]]}
         r["remaining"] = [{"name": v["name"], "why": v["why"]} for v in metrics.violations(a, policy)]
         out_files.append(r)
+    cov_info = tests.get("coverage", {})
+    unexec = cov_info.get("unexecuted_functions", [])
+    min_cov = policy.get("min_function_coverage")
+
+    # Match unexecuted functions to rewritten functions
+    rewritten_names = set()
+    for r in out_files:
+        if r.get("ai_functions"):
+            rewritten_names.update(r["ai_functions"])
+        for f in r.get("metrics", {}).get("functions", []):
+            if f["before"] != f["after"]:
+                rewritten_names.add(f["name"])
+
+    unexec_rewritten = [u for u in unexec if (not rewritten_names or u["function"] in rewritten_names or any(u["function"] == n.split(".")[-1] for n in rewritten_names))]
+    below_threshold = []
+    if min_cov is not None and cov_info.get("function_coverage"):
+        below_threshold = [f for f in cov_info["function_coverage"]
+                           if (not rewritten_names or f["function"] in rewritten_names or any(f["function"] == n.split(".")[-1] for n in rewritten_names))
+                           and f["coverage_pct"] < min_cov]
+
     if not out_files:
         status = "nothing-to-optimize"
     elif tests["ok"] is False:
         status = "rejected-tests-failed"
     elif tests["ok"] is None:
         status = "unverified-no-tests"
+    elif unexec_rewritten or below_threshold:
+        status = "verified (partial coverage)"
     else:
         status = "verified"
+
+    applicable = status in ("verified", "verified (partial coverage)") or (
+        status == "unverified-no-tests" and not policy["require_tests"]
+    )
+    if min_cov is not None and (unexec_rewritten or below_threshold) and policy.get("require_tests") and min_cov > 0:
+        applicable = False
+
     prop = {"id": pid, "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "status": status, "files": out_files,
             "skipped": skipped_all + [dict(s, file=r["path"]) for r in results for s in r["skipped"]],
-            "tests": tests, "llm": llm_info,
+            "tests": tests, "coverage": cov_info,
+            "unexecuted_functions": unexec_rewritten or below_threshold,
+            "llm": llm_info,
             "head": gitutil.head(root) if gitutil.is_repo(root) else None,
-            "applicable": status == "verified" or (status == "unverified-no-tests" and not policy["require_tests"])}
+            "applicable": applicable}
     os.makedirs(os.path.join(home, "proposals"), exist_ok=True)
     with open(os.path.join(home, "proposals", pid + ".json"), "w", encoding="utf-8") as f:
         json.dump(prop, f)
