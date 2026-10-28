@@ -56,7 +56,8 @@ function go(t){S.tab=t;nav();render()}
 async function guard(fn){try{S.busy=true;await fn()}catch(e){alert(e.message)}finally{S.busy=false;render();audit()}}
 async function loadState(){S.state=await api("/api/state");const r=S.state.repo;
   $("#meta").textContent=`${r.branch} @ ${r.head.slice(0,8)}  vs  ${r.base}`;
-  $("#scen").innerHTML=r.demo?`<span class="mut small">demo scenario: </span>`+r.scenarios.map(n=>`<button class="b s" onclick="scenario('${n}')">${n==="risky"?"A · risky AI PR":"B · messy AI PR"}</button>`).join(" ")+` <button class="b s" onclick="resetDemo()">reset</button>`:""}
+  const scenLabels = {"risky": "A · risky AI PR", "pricing": "B · messy AI PR", "orders": "C · AI refactor"};
+  $("#scen").innerHTML=r.demo?`<span class="mut small">demo scenario: </span>`+r.scenarios.map(n=>`<button class="b s" onclick="scenario('${n}')">${scenLabels[n]||n}</button>`).join(" ")+` <button class="b s" onclick="resetDemo()">reset</button>`:""}
 function scenario(n){guard(async()=>{await api("/api/scenario",{name:n});S.prop=null;S.tab="review";nav();await loadState();S.rev=await api("/api/review",{})})}
 function resetDemo(){if(!confirm("Reseed the demo repo and clear its audit log?"))return;guard(async()=>{await api("/api/reset",{});S.rev=S.prop=null;await loadState();S.rev=await api("/api/review",{})})}
 async function audit(){try{const a=await api("/api/audit");S.audit=a;

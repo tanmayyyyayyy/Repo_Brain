@@ -66,37 +66,93 @@ def _diff(path, a, b):
                                         f"a/{path}", f"b/{path}", n=2))
 
 
-def _llm_refine(src, policy, funcs, ask, feedback=""):
+def _map_functions(tree):
+    """Map qualified names (e.g. 'Class.method' or 'func') to (node, start_lineno)."""
+    mapping = {}
+
+    def visit(node, prefix):
+        for ch in ast.iter_child_nodes(node):
+            if isinstance(ch, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                qname = prefix + ch.name
+                start = min([d.lineno for d in ch.decorator_list] + [ch.lineno])
+                mapping[qname] = (ch, start)
+                visit(ch, qname + ".")
+            elif isinstance(ch, ast.ClassDef):
+                visit(ch, prefix + ch.name + ".")
+            else:
+                visit(ch, prefix)
+
+    visit(tree, "")
+    return mapping
+
+
+def _llm_refine(src, policy, funcs, ask, feedback="", path="refactor.py"):
     """Ask the LLM to rewrite individual over-threshold functions. Returns (new_src, [names])."""
+    from .shield import scan_text
+    import textwrap
+
     lines, names, edits = src.splitlines(), [], []
     tree = ast.parse(src)
-    by_name = {}
-    for n in ast.walk(tree):
-        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            by_name.setdefault(n.name, n)
+    mapping = _map_functions(tree)
+
     for f in funcs:
-        node = by_name.get(f["name"].split(".")[-1])
-        if node is None:
-            continue
-        seg = "\n".join(lines[node.lineno - 1:node.end_lineno])
+        target_qname = f["name"]
+        entry = mapping.get(target_qname)
+        if entry is None:
+            # Fallback to bare-name match only if unambiguous
+            bare = target_qname.split(".")[-1]
+            bare_matches = [k for k in mapping if k.split(".")[-1] == bare]
+            if len(bare_matches) == 1:
+                entry = mapping[bare_matches[0]]
+                target_qname = bare_matches[0]
+            else:
+                continue
+
+        node, start_line = entry
+        is_method = "." in target_qname
+        seg = "\n".join(lines[start_line - 1:node.end_lineno])
+
+        method_hint = ("You are refactoring a class method. Keep 'self' as the first parameter, "
+                       "and add helper methods to the class (taking self or decorated with @staticmethod)."
+                       if is_method else
+                       "You may add small private helper functions after it.")
         prompt = (f"Refactor this Python function to reduce complexity (target: cyclomatic <= "
                   f"{policy['complexity_threshold']}, nesting depth <= {policy['max_depth']}, cognitive <= "
-                  f"{policy['max_cognitive']}) WITHOUT changing behaviour. Keep the name and signature, "
-                  "keep comments. You may add small private helper functions after it. Reply with ONE "
-                  "```python block containing only the code.\n" + (f"\nPrevious attempt failed tests:\n{feedback}\n"
-                  if feedback else "") + f"\n```python\n{textwrap_dedent(seg)}\n```")
+                  f"{policy['max_cognitive']}) WITHOUT changing behaviour.\n"
+                  f"Keep the function name '{node.name}' and exact parameter signature.\n"
+                  f"CRITICAL: Keep all existing comments, docstrings, type annotations, and logic intact.\n"
+                  f"{method_hint}\n"
+                  "Reply with ONE ```python block containing only the replacement code.\n" +
+                  (f"\nPrevious attempt failed tests:\n{feedback}\n" if feedback else "") +
+                  f"\n```python\n{textwrap.dedent(seg)}\n```")
+
         reply = ask(prompt, "You are a careful refactoring tool. Output code only.")
-        m = re.search(r"```(?:python)?\n(.*?)```", reply, re.S)
+        m = re.search(r"```(?:python)?\s*\n(.*?)\n```", reply, re.S)
         if not m:
             continue
+        cleaned_code = textwrap.dedent(m.group(1).rstrip())
         try:
-            ast.parse(m.group(1))
+            parsed = ast.parse(cleaned_code)
         except SyntaxError:
             continue
-        indent = lines[node.lineno - 1][:node.col_offset]
-        new = [(indent + l if l.strip() else l) for l in m.group(1).rstrip().split("\n")]
-        edits.append((node.lineno, node.end_lineno, new))
-        names.append(f["name"])
+
+        # Treat model reply as untrusted: run Shield scan to refuse secrets, injection, hidden chars
+        shield_findings = scan_text(path, cleaned_code, policy)
+        if any(finding.get("severity") == "block" for finding in shield_findings):
+            continue
+
+        # Verify target function is present in reply
+        parsed_funcs = [n for n in ast.walk(parsed) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        if not any(n.name == node.name for n in parsed_funcs):
+            continue
+
+        # Preserve indentation
+        indent_match = re.match(r"^\s*", lines[start_line - 1])
+        indent = indent_match.group(0) if indent_match else ""
+        new = [(indent + l if l.strip() else "") for l in cleaned_code.split("\n")]
+        edits.append((start_line, node.end_lineno, new))
+        names.append(target_qname)
+
     for s, e, new in sorted(edits, key=lambda x: -x[0]):
         lines[s - 1:e] = new
     return "\n".join(lines) + ("\n" if src.endswith("\n") else ""), names
@@ -149,12 +205,17 @@ def propose(root, policy, files, home, use_llm=False, ask=None, head=None):
                 picked = {}
                 for r, bad in remaining:
                     try:
-                        new, names = _llm_refine(r["after"], policy, bad, ask, feedback)
+                        new, names = _llm_refine(r["after"], policy, bad, ask, feedback, path=r["path"])
                     except Exception as e:                    # network / API problems must not crash review
                         llm_info["reason"] = f"LLM call failed: {e}"[:200]
                         names, new = [], r["after"]
                     if names:
-                        picked[r["path"]] = (r, new, names)
+                        from .shield import scan_text
+                        shield_findings = scan_text(r["path"], new, policy)
+                        if any(f.get("severity") == "block" for f in shield_findings):
+                            llm_info["reason"] = f"Proposed LLM refactor for {r['path']} refused: violates Shield policy"
+                        else:
+                            picked[r["path"]] = (r, new, names)
                 if not picked:
                     break
                 trial = {**overrides, **{p: v[1] for p, v in picked.items()}}

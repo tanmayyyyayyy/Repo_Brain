@@ -67,12 +67,42 @@ def seed(root):
     ai = ("Claude Code", "noreply@anthropic.com")
     _commit(root, {"shop/pricing.py": _read("pricing.py"), "tests/test_pricing.py": _read("test_pricing.py")},
             "Add pricing module with tests", *ai)
+    # Scenario C: AI agent touches complex order-processing code (cyclomatic 27), human base allows LLM
+    _git(root, "checkout", "-q", "main")
+    _git(root, "checkout", "-q", "-b", "orders-base")
+    tight_policy = _read("repobrain.yml").replace("allow_llm: false", "allow_llm: true")
+    _commit(root, {"repobrain.yml": tight_policy}, "Enable AI refactor tier in base policy", *human)
+    _git(root, "checkout", "-q", "-b", "ai/orders")
+    _commit(root, {"shop/orders.py": "# Updated order processing\n" + _read("orders.py")},
+            "Touch order processing module", *ai)
     _git(root, "checkout", "-q", "ai/risky-pr")
     return root
 
 
-SCENARIOS = {"risky": "ai/risky-pr", "pricing": "ai/pricing"}
+SCENARIOS = {"risky": "ai/risky-pr", "pricing": "ai/pricing", "orders": "ai/orders"}
+SCENARIO_BASES = {"risky": "main", "pricing": "main", "orders": "orders-base"}
 
 
 def switch(root, name):
     _git(root, "checkout", "-q", "-f", SCENARIOS[name])
+
+
+def run_scenario_c(root=None, ask=None):
+    """Run AI tier on Scenario C (shop/orders.py) with allow_llm: true and tight thresholds.
+    Returns proposal dict containing before/after metrics and test results."""
+    from . import optimizer, policy as P
+    import tempfile
+    created = False
+    if not root:
+        root = tempfile.mkdtemp(prefix="repobrain-demo-c-")
+        seed(root)
+        created = True
+    try:
+        switch(root, "orders")
+        pol = P.load_for(root, SCENARIO_BASES["orders"])
+        home = os.path.join(root, ".repobrain")
+        prop = optimizer.propose(root, pol, ["shop/orders.py"], home, use_llm=True, ask=ask)
+        return prop
+    finally:
+        if created:
+            shutil.rmtree(root, ignore_errors=True)

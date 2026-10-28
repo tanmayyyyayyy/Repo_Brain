@@ -164,7 +164,8 @@ def route(ctx, path, body):
         return A.simulate_tamper(ctx.log.entries())
     if path == "/api/scenario" and ctx.demo:
         demo.switch(ctx.root, body["name"])
-        return {"branch": gitutil.branch(ctx.root)}
+        ctx.base = demo.SCENARIO_BASES.get(body["name"], "main")
+        return {"branch": gitutil.branch(ctx.root), "base": ctx.base}
     if path == "/api/reset" and ctx.demo:
         demo.seed(ctx.root)
         shutil.rmtree(ctx.home, ignore_errors=True)
