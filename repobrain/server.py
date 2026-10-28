@@ -171,6 +171,9 @@ def route(ctx, path, body):
         shutil.rmtree(ctx.home, ignore_errors=True)
         ctx.log = A.AuditLog(ctx.home)
         return {"ok": True}
+    if path == "/api/webhook":
+        from . import webhook
+        return webhook.handle_event(body.get("event", "ping"), body)
     raise KeyError("unknown endpoint")
 
 

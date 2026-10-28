@@ -100,3 +100,4 @@
 > **Honest Answer**:
 > "RepoBrain can only govern what passes through it. If someone has administrator rights to force-push directly to an unprotected `main` branch, no client-side tool can stop them.
 > That is why RepoBrain's production deployment model relies on GitHub Branch Rulesets: `main` requires linear history, blocks force pushes, restricts workflow edits, and mandates the `RepoBrain` status check to pass before merging. That shifts enforcement to the repository host, making bypasses mathematically impossible for non-admin tokens."
+

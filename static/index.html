@@ -53,7 +53,17 @@ const pill=(t,c)=>`<span class="pill ${c||""}">${esc(t)}</span>`;
 const sev=s=>pill(s,s==="block"?"p-block":"p-warn");
 function nav(){$("#nav").innerHTML=TABS.map(([k,l])=>`<button class="${S.tab===k?"on":""}" onclick="go('${k}')">${l}</button>`).join("")}
 function go(t){S.tab=t;nav();render()}
-async function guard(fn){try{S.busy=true;await fn()}catch(e){alert(e.message)}finally{S.busy=false;render();audit()}}
+function showError(msg){
+  let el=document.getElementById("err-toast");
+  if(!el){
+    el=document.createElement("div");el.id="err-toast";
+    el.style="position:fixed;top:16px;right:16px;background:#ef4444;color:#fff;padding:12px 18px;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.3);z-index:9999;font-weight:500;display:flex;align-items:center;gap:10px;";
+    document.body.appendChild(el);
+  }
+  el.innerHTML=`<span>⚠️ ${esc(msg)}</span><button style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;margin-left:8px" onclick="this.parentElement.remove()">✕</button>`;
+  setTimeout(()=>{if(el.parentElement)el.remove()},6000);
+}
+async function guard(fn){try{S.busy=true;render();await fn()}catch(e){showError(e.message)}finally{S.busy=false;render();audit()}}
 async function loadState(){S.state=await api("/api/state");const r=S.state.repo;
   $("#meta").textContent=`${r.branch} @ ${r.head.slice(0,8)}  vs  ${r.base}`;
   const scenLabels = {"risky": "A · risky AI PR", "pricing": "B · messy AI PR", "orders": "C · AI refactor"};
@@ -82,7 +92,7 @@ function waive(){guard(async()=>{await api("/api/waive",{actor:$("#wactor").valu
 function diffHtml(d){return d.split("\n").map(l=>`<div class="${l[0]==="+"&&!l.startsWith("+++")?"a":l[0]==="-"&&!l.startsWith("---")?"r":l.startsWith("@@")?"h":""}">${esc(l)||" "}</div>`).join("")}
 function vOpt(){const p=S.prop,st=S.state;
   const ai=st&&st.llm.allowed?`<label style="display:inline-flex;gap:6px;align-items:center;margin:0 10px"><input type="checkbox" id="useai" style="width:auto" ${st.llm.available?"":"disabled"}> AI tier ${st.llm.available?"":"(set ANTHROPIC_API_KEY)"}</label>`:`<span class="mut small" style="margin:0 10px">AI tier off (policy allow_llm: false)</span>`;
-  let h=`<div class="card"><div class="row"><div><b>Rule-based, test-gated cleanup</b><div class="mut small">Rewrites only functions in files this PR changed, runs your tests on a copy, and proposes a patch. Nothing is applied until a human approves.</div></div><div style="flex:none">${ai}<button class="b" onclick="runOpt()">Run optimizer</button></div></div></div>`;
+  let h=`<div class="card"><div class="row"><div><b>Rule-based, test-gated cleanup</b><div class="mut small">Rewrites only functions in files this PR changed, runs your tests on a copy, and proposes a patch. Nothing is applied until a human approves.</div></div><div style="flex:none">${ai}<button class="b" onclick="runOpt()" ${S.busy?'disabled':''}>${S.busy?'Running tests…':'Run optimizer'}</button></div></div></div>`;
   if(!p)return h;
   const cls=p.status==="verified"?"p-ok":p.status.includes("partial")?"p-warn":p.status==="nothing-to-optimize"?"":"p-block";
   h+=`<div class="card"><h3>Result ${pill(p.status,cls)}</h3>`+(p.tests.ran?`<div class="small">Tests (<code>${esc(p.tests.cmd)}</code>): ${p.tests.ok?'<span class="good">passed</span>':'<span class="err">FAILED</span>'}</div><pre>${esc((p.tests.output||"").trim().split("\n").slice(-6).join("\n"))}</pre>`:'<div class="small mut">no tests found - proposal is unverified</div>');

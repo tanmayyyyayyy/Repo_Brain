@@ -26,6 +26,7 @@ DEFAULT = {
                   "openai", "chatgpt", "bot", "agent"],
     "allow_llm": False,              # optimizer may send function code to an LLM API
     "min_function_coverage": None,   # optional % threshold for test execution of rewritten functions
+    "format_command": None,          # optional command to format rewritten code (e.g. "black -q -")
     "remove_unused_imports": True,
     "allow_comment_loss": False,
     "languages": ["python"],
@@ -64,6 +65,9 @@ def parse(text):
         elif k == "min_function_coverage":
             if v is not None and (not isinstance(v, (int, float)) or isinstance(v, bool)):
                 raise PolicyError("min_function_coverage must be a number or null")
+        elif k == "format_command":
+            if v is not None and not isinstance(v, str):
+                raise PolicyError("format_command must be a string or null")
         elif not isinstance(v, _TYPES[k]) or (_TYPES[k] is int and isinstance(v, bool)):
             raise PolicyError(f"{k} must be of type {_TYPES[k].__name__}")
         if k in _ENUMS and v not in _ENUMS[k]:

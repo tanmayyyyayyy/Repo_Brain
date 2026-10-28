@@ -12,6 +12,9 @@ max_files_per_run: 15       # blast-radius limit for AI-authored change sets
 require_tests: true         # optimizer output is only applicable if the test suite passes
 # test_command: "python -m pytest -q -x"
 
+# min_function_coverage: 80  # optional: optimizer status becomes "verified (partial coverage)" if
+#                              # any rewritten function is below this % branch coverage (needs coverage>=7)
+
 blocked:                    # AI-authored changes to these paths are BLOCKED (humans: warning)
   - .github/workflows/
   - secrets/

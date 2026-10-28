@@ -22,7 +22,16 @@ def pr_comment(rev, prop=None):
     if warns:
         L += ["### Warnings"] + [f"- `{f['file']}` ({f['rule']}): {f['message']}" for f in warns] + [""]
     if prop and prop.get("files"):
-        L += [f"### Proposed cleanup · tests: **{prop['status']}**", "| File | max cognitive | max depth | lines |", "|---|---|---|---|"]
+        cov = prop.get("coverage", {})
+        cov_note = ""
+        if cov.get("available") and cov.get("uncovered_functions"):
+            pct = cov.get("percent", 0)
+            uncov = ", ".join(f"`{fn}`" for fn in cov["uncovered_functions"])
+            cov_note = f" · coverage **{pct:.0f}%** · uncovered rewritten functions: {uncov}"
+        elif cov.get("available"):
+            pct = cov.get("percent", 0)
+            cov_note = f" · coverage **{pct:.0f}%**"
+        L += [f"### Proposed cleanup · tests: **{prop['status']}**{cov_note}", "| File | max cognitive | max depth | lines |", "|---|---|---|---|"]
         for f in prop["files"]:
             b, a = f["metrics"]["before"], f["metrics"]["after"]
             L.append(f"| `{f['path']}` | {b['max_cog']} → {a['max_cog']} | {b['max_depth']} → {a['max_depth']} | {b['loc']} → {a['loc']} |")

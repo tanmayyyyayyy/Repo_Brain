@@ -64,3 +64,4 @@ def test_apply_path_traversal_refused(tmp_path):
 
     with pytest.raises(ValueError, match="path escapes repository"):
         optimizer.apply(root, home, fake_prop["id"], "Tester")
+

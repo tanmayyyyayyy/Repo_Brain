@@ -238,6 +238,31 @@ def textwrap_dedent(s):
     return textwrap.dedent(s)
 
 
+def format_source(src, policy):
+    """Optionally run an external formatter (e.g. 'black -q -'). Degrades gracefully on error/absence."""
+    cmd = policy.get("format_command")
+    if not cmd or not src:
+        return src
+    has_crlf = "\r\n" in src
+    try:
+        proc = subprocess.run(
+            cmd,
+            input=src,
+            capture_output=True,
+            text=True,
+            shell=True,
+            timeout=10,
+        )
+        if proc.returncode == 0 and proc.stdout:
+            out = proc.stdout
+            if has_crlf and "\r\n" not in out:
+                out = out.replace("\n", "\r\n")
+            return out
+    except Exception:
+        pass
+    return src
+
+
 def propose(root, policy, files, home, use_llm=False, ask=None, head=None):
     """Build + verify a proposal for `files` (relative .py paths). Persists it under home/proposals."""
     pid = time.strftime("%Y%m%d-%H%M%S") + "-" + hashlib.sha1(os.urandom(8)).hexdigest()[:6]
@@ -252,6 +277,8 @@ def propose(root, policy, files, home, use_llm=False, ask=None, head=None):
             skipped_all.append({"file": rel, "reason": f"unreadable/invalid python: {e}"})
             continue
         new, notes, skipped = rewrite.optimize_source(src, policy)
+        if new != src and policy.get("format_command"):
+            new = format_source(new, policy)
         originals[rel] = src
         results.append({"path": rel, "before_sha": sha(src), "before": src, "after": new,
                         "notes": notes, "skipped": skipped, "ai_functions": []})
@@ -290,6 +317,8 @@ def propose(root, policy, files, home, use_llm=False, ask=None, head=None):
                         if any(f.get("severity") == "block" for f in shield_findings):
                             llm_info["reason"] = f"Proposed LLM refactor for {r['path']} refused: violates Shield policy"
                         else:
+                            if policy.get("format_command"):
+                                new = format_source(new, policy)
                             picked[r["path"]] = (r, new, names)
                 if not picked:
                     break
