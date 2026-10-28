@@ -1,0 +1,50 @@
+# RepoBrain as a required status check on every pull request.
+# Make it REQUIRED in a branch ruleset ("Require status checks" + "Require workflows to pass") so that a PR
+# cannot edit or skip it. repobrain.yml is read from the base branch, never from the PR.
+name: RepoBrain
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  repobrain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0                       # needed for base...head diff and per-commit authors
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          pip install pyyaml pytest
+          # pip install -r requirements.txt   # your project's own deps, so the test gate can run your tests
+          # pip install "git+https://github.com/<you>/repobrain@v0.2.0"   # or vendor the package in the repo
+      - name: RepoBrain review (shield + complexity gate)
+        env:
+          REPOBRAIN_HOME: ${{ runner.temp }}/repobrain
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          BASE_REF: ${{ github.base_ref }}
+        run: python -m repobrain review --base "origin/$BASE_REF" --actor "$PR_AUTHOR" --comment "$RUNNER_TEMP/repobrain.md"
+      - name: Propose a tested cleanup (never auto-applied)
+        if: failure()
+        env:
+          REPOBRAIN_HOME: ${{ runner.temp }}/repobrain
+          BASE_REF: ${{ github.base_ref }}
+        run: python -m repobrain optimize --base "origin/$BASE_REF" --diff | tee "$RUNNER_TEMP/optimize.txt" || true
+      - name: Comment on the PR
+        if: always()
+        continue-on-error: true                # fork PRs get a read-only token
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment "${{ github.event.pull_request.number }}" --body-file "$RUNNER_TEMP/repobrain.md"
+      - name: Upload audit log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-audit
+          path: ${{ runner.temp }}/repobrain
