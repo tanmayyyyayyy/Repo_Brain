@@ -38,7 +38,8 @@ def seed(root):
     _git(root, "config", "user.name", "Demo")
     _git(root, "config", "user.email", "demo@example.com")
     human = ("Priya Sharma", "priya@example.com")
-    _commit(root, {
+    init_files = {
+        ".gitignore": "__pycache__/\n*.pyc\n.pytest_cache/\n.repobrain/\n",
         "repobrain.yml": _read("repobrain.yml"),
         "README.md": "# shop\n\nTiny order-processing service (RepoBrain demo repo).\n",
         "requirements.txt": "pytest\n",
@@ -49,7 +50,18 @@ def seed(root):
         "tests/test_legacy.py": "def test_legacy():\n    assert 1 + 1 == 2\n",
         ".github/workflows/ci.yml": "name: ci\non: [pull_request]\njobs:\n  test:\n    runs-on: ubuntu-latest\n"
                                     "    steps:\n      - uses: actions/checkout@v4\n      - run: pip install pytest && pytest -q\n",
-    }, "Initial import", *human)
+    }
+    wf_path = os.path.join(HERE, ".github", "workflows", "repobrain.yml")
+    if os.path.exists(wf_path):
+        with open(wf_path, encoding="utf-8") as wf:
+            init_files[".github/workflows/repobrain.yml"] = wf.read()
+    rb_dir = os.path.join(HERE, "repobrain")
+    if os.path.exists(rb_dir):
+        for f in os.listdir(rb_dir):
+            if f.endswith(".py"):
+                with open(os.path.join(rb_dir, f), encoding="utf-8") as rbf:
+                    init_files[f"repobrain/{f}"] = rbf.read()
+    _commit(root, init_files, "Initial import", *human)
     # Scenario A: AI agent PR that violates policy
     _git(root, "checkout", "-q", "-b", "ai/risky-pr")
     bot = ("copilot-swe-agent[bot]", "198982749+Copilot@users.noreply.github.com")

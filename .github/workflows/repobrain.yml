@@ -16,16 +16,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0                       # needed for base...head diff and per-commit authors
+      - name: Fetch base branch
+        run: git fetch origin "${{ github.base_ref }}"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install
+      - name: Install dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install pyyaml pytest
-          # pip install -r requirements.txt   # your project's own deps, so the test gate can run your tests
-          # pip install "git+https://github.com/<you>/repobrain@v0.2.0"   # or vendor the package in the repo
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       - name: RepoBrain review (shield + complexity gate)
         env:
+          PYTHONPATH: .
           REPOBRAIN_HOME: ${{ runner.temp }}/repobrain
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           BASE_REF: ${{ github.base_ref }}
@@ -33,6 +36,7 @@ jobs:
       - name: Propose a tested cleanup (never auto-applied)
         if: failure()
         env:
+          PYTHONPATH: .
           REPOBRAIN_HOME: ${{ runner.temp }}/repobrain
           BASE_REF: ${{ github.base_ref }}
         run: python -m repobrain optimize --base "origin/$BASE_REF" --diff | tee "$RUNNER_TEMP/optimize.txt" || true
@@ -41,10 +45,14 @@ jobs:
         continue-on-error: true                # fork PRs get a read-only token
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh pr comment "${{ github.event.pull_request.number }}" --body-file "$RUNNER_TEMP/repobrain.md"
+        run: |
+          if [ -f "$RUNNER_TEMP/repobrain.md" ]; then
+            gh pr comment "${{ github.event.pull_request.number }}" --body-file "$RUNNER_TEMP/repobrain.md"
+          fi
       - name: Upload audit log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: repobrain-audit
           path: ${{ runner.temp }}/repobrain
+          if-no-files-found: ignore
