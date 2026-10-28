@@ -24,6 +24,7 @@ BAD_IN_COMP = (ast.Yield, ast.YieldFrom, ast.Await, ast.NamedExpr)
 def mark_comments(src):
     """Turn standalone comment lines into `__rbc__(n)` statements (same line count) so they
     survive ast.unparse. Returns (marked_src, {n: comment_text})."""
+    nl = "\r\n" if "\r\n" in src else "\n"
     lines = src.splitlines()
     try:
         toks = list(tokenize.generate_tokens(io.StringIO(src).readline))
@@ -45,7 +46,8 @@ def mark_comments(src):
     for n, (ln, text, indent) in enumerate(cand):
         comments[n] = text
         out[ln - 1] = " " * indent + f"__rbc__({n})"
-    return "\n".join(out) + ("\n" if src.endswith("\n") else ""), comments
+    trailing = nl if (src.endswith("\r\n") or src.endswith("\n")) else ""
+    return nl.join(out) + trailing, comments
 
 
 def restore_comments(text, comments):
@@ -310,6 +312,7 @@ def _unused_imports(tree, lines):
 
 def optimize_source(src, policy):
     """-> (new_src, notes{rule: n}, skipped[{function, reason}])  - never raises on valid Python."""
+    nl = "\r\n" if "\r\n" in src else "\n"
     marked, comments = mark_comments(src)
     try:
         tree = ast.parse(marked)
@@ -320,7 +323,7 @@ def optimize_source(src, policy):
     dq = src.count('"') > src.count("'")
     edits, notes, skipped = [], {}, []
     for fn in _outer_functions(tree):
-        orig_seg = "\n".join(lines[fn.lineno - 1:fn.end_lineno])
+        orig_seg = nl.join(lines[fn.lineno - 1:fn.end_lineno])
         work = copy.deepcopy(fn)
         work.decorator_list = []
         rw = Rewriter()
@@ -328,12 +331,12 @@ def optimize_source(src, policy):
         if not rw.notes:
             continue
         ast.fix_missing_locations(work)
-        text = restore_comments(requote(ast.unparse(work), dq), comments).strip("\n")
+        text = restore_comments(requote(ast.unparse(work), dq), comments).strip("\r\n")
         if count_comments(text) < count_comments(orig_seg) and not policy["allow_comment_loss"]:
             skipped.append({"function": fn.name, "reason": "has inline comments that a rewrite would drop"})
             continue
         indent = lines[fn.lineno - 1][:fn.col_offset]
-        new_lines = [(indent + l if l.strip() else l) for l in text.split("\n")]
+        new_lines = [(indent + l if l.strip() else l) for l in text.splitlines()]
         edits.append((fn.lineno, fn.end_lineno, new_lines, rw.notes))
     if policy["remove_unused_imports"]:
         edits.extend(_unused_imports(ast.parse(src), lines))
@@ -342,9 +345,10 @@ def optimize_source(src, policy):
         out[start - 1:end] = new
         for k, v in (info.items() if isinstance(info, dict) else [(info, 1)]):
             notes[k] = notes.get(k, 0) + v
-    new_src = "\n".join(out) + ("\n" if src.endswith("\n") else "")
-    if not src.startswith("\n"):
-        new_src = new_src.lstrip("\n")
+    trailing = nl if (src.endswith("\r\n") or src.endswith("\n")) else ""
+    new_src = nl.join(out) + trailing
+    if not (src.startswith("\r\n") or src.startswith("\n")):
+        new_src = new_src.lstrip("\r\n")
     try:
         ast.parse(new_src)
     except SyntaxError:                      # safety net: never emit broken code

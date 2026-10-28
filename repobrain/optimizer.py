@@ -38,16 +38,21 @@ def run_tests(root, overrides, policy):
     if not has_tests(root, policy):
         return {"ran": False, "ok": None, "output": "no tests found", "cmd": ""}
     cmd = policy.get("test_command") or [sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider"]
-    cmd = shlex.split(cmd) if isinstance(cmd, str) else cmd
+    posix_mode = (os.name == "posix")
+    cmd = shlex.split(cmd, posix=posix_mode) if isinstance(cmd, str) else cmd
     tmp = tempfile.mkdtemp(prefix="repobrain-")
     try:
         work = os.path.join(tmp, "repo")
         shutil.copytree(root, work, ignore=shutil.ignore_patterns(*SKIP_DIRS))
         for rel, text in overrides.items():
-            with open(os.path.join(work, rel), "w", encoding="utf-8", newline="") as f:
+            dest = os.path.join(work, os.path.normpath(rel))
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            with open(dest, "w", encoding="utf-8", newline="") as f:
                 f.write(text)
         env = {k: v for k, v in os.environ.items() if not SECRET_ENV.search(k)}   # tests never see secrets
         env.update(PYTHONDONTWRITEBYTECODE="1", HOME=tmp)
+        if os.name == "nt":
+            env.update(USERPROFILE=tmp, APPDATA=os.path.join(tmp, "AppData"))
         try:
             r = subprocess.run(cmd, cwd=work, capture_output=True, text=True, env=env,
                                timeout=policy.get("test_timeout", 180))
@@ -149,13 +154,15 @@ def _llm_refine(src, policy, funcs, ask, feedback="", path="refactor.py"):
         # Preserve indentation
         indent_match = re.match(r"^\s*", lines[start_line - 1])
         indent = indent_match.group(0) if indent_match else ""
-        new = [(indent + l if l.strip() else "") for l in cleaned_code.split("\n")]
+        new = [(indent + l if l.strip() else "") for l in cleaned_code.splitlines()]
         edits.append((start_line, node.end_lineno, new))
         names.append(target_qname)
 
+    nl = "\r\n" if "\r\n" in src else "\n"
     for s, e, new in sorted(edits, key=lambda x: -x[0]):
         lines[s - 1:e] = new
-    return "\n".join(lines) + ("\n" if src.endswith("\n") else ""), names
+    trailing = nl if (src.endswith("\r\n") or src.endswith("\n")) else ""
+    return nl.join(lines) + trailing, names
 
 
 def textwrap_dedent(s):
@@ -275,8 +282,12 @@ def apply(root, home, pid, actor):
     if prop["head"] and gitutil.head(root) != prop["head"]:
         raise ValueError("repository HEAD moved since this proposal was created - re-run the optimizer")
     for r in prop["files"]:
-        full = os.path.realpath(os.path.join(root, r["path"]))
-        if not full.startswith(os.path.realpath(root) + os.sep):
+        full = os.path.realpath(os.path.join(root, os.path.normpath(r["path"])))
+        root_real = os.path.realpath(root)
+        try:
+            if os.path.commonpath([root_real, full]) != root_real or full == root_real:
+                raise ValueError("path escapes repository")
+        except ValueError:
             raise ValueError("path escapes repository")
         cur = open(full, encoding="utf-8", newline="").read()
         if sha(cur) != r["before_sha"]:

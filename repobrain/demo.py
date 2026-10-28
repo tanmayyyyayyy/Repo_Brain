@@ -18,12 +18,14 @@ def _git(root, *a, env=None):
 
 def _commit(root, files, msg, name, email, delete=()):
     for rel, text in files.items():
-        p = os.path.join(root, rel)
+        p = os.path.join(root, os.path.normpath(rel))
         os.makedirs(os.path.dirname(p), exist_ok=True)
         with open(p, "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
     for rel in delete:
-        os.remove(os.path.join(root, rel))
+        target = os.path.join(root, os.path.normpath(rel))
+        if os.path.exists(target):
+            os.remove(target)
     _git(root, "add", "-A")
     env = {"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email,
            "GIT_COMMITTER_NAME": name, "GIT_COMMITTER_EMAIL": email}
@@ -37,6 +39,7 @@ def seed(root):
     _git(root, "init", "-q", "-b", "main")
     _git(root, "config", "user.name", "Demo")
     _git(root, "config", "user.email", "demo@example.com")
+    _git(root, "config", "core.autocrlf", "false")
     human = ("Priya Sharma", "priya@example.com")
     init_files = {
         ".gitignore": "__pycache__/\n*.pyc\n.pytest_cache/\n.repobrain/\n",
