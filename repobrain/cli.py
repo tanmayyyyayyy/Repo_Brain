@@ -128,7 +128,26 @@ def cmd_explain(a):
 
 def cmd_audit(a):
     _, _, _, _, log = _ctx(a)
-    v = log.verify(a.expect)
+    # Resolve expected head: explicit --expect takes priority, then --anchor-file
+    expect = a.expect
+    if not expect and getattr(a, "anchor_file", None) and os.path.isfile(a.anchor_file):
+        try:
+            expect = open(a.anchor_file, encoding="utf-8").read().strip()
+        except OSError as exc:
+            print(f"repobrain: cannot read anchor file: {exc}", file=sys.stderr)
+            return 2
+    v = log.verify(expect)
+    if getattr(a, "write_anchor", None):
+        # Write current head hash to the anchor file so the *next* run can verify with --anchor-file
+        head = v.get("head") or ""
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(a.write_anchor)), exist_ok=True)
+            with open(a.write_anchor, "w", encoding="utf-8") as f:
+                f.write(head + "\n")
+            print(f"anchor written: {head[:16]}… -> {a.write_anchor}")
+        except OSError as exc:
+            print(f"repobrain: cannot write anchor file: {exc}", file=sys.stderr)
+            return 2
     if a.export:
         print(json.dumps({"verification": v, "entries": log.entries()}, indent=2))
     else:
@@ -191,6 +210,10 @@ def build():
     sp = add("audit", cmd_audit, help="show / verify / export the audit log")
     sp.add_argument("--expect", help="anchored head hash to verify against"); sp.add_argument("--export", action="store_true")
     sp.add_argument("--tail", type=int, default=25)
+    sp.add_argument("--anchor-file", dest="anchor_file",
+                    help="path to a file containing the anchored head hash (written by --write-anchor)")
+    sp.add_argument("--write-anchor", dest="write_anchor",
+                    help="after verification, write the current head hash to this file")
     sp = add("waive", cmd_waive, help="human override of the complexity gate (logged)")
     sp.add_argument("--actor", required=True); sp.add_argument("--reason", required=True)
     sp = add("report", cmd_report, help="compliance report (markdown)"); sp.add_argument("--base"); sp.add_argument("--out")

@@ -98,4 +98,28 @@ To ensure an AI agent or contributor cannot bypass or disable RepoBrain:
 ### Why This Is Tamper-Proof
 1. **Policy from Base**: RepoBrain reads `repobrain.yml` from `origin/$BASE_REF` (the protected default branch). Any edits to `repobrain.yml` inside the PR are completely ignored by the evaluator.
 2. **Workflow from Base**: GitHub Actions evaluates required checks defined on the default branch. Even if a PR modifies `.github/workflows/repobrain.yml`, the required status check must still pass.
+
+---
+
+## 3. Audit Anchoring in CI: What Is and Is Not Detectable
+
+The RepoBrain audit trail is a cryptographically hash-chained append-only JSONL log where each entry contains `hash = SHA256(seq + ts + event + actor + decision + detail + prev_hash)`.
+
+### How CI Anchoring Works
+1. When RepoBrain runs on CI, it appends review and optimization records to the local audit log.
+2. The workflow downloads the previous run's anchor artifact via `actions/download-artifact`.
+3. It executes `python -m repobrain audit --anchor-file <prev_anchor> --write-anchor <new_anchor>`.
+4. The new head hash is uploaded as a workflow artifact (`repobrain-anchor`) that subsequent runs download.
+5. Because GitHub Actions artifacts from prior runs cannot be overwritten or altered by a PR branch without repository admin privileges, the audit chain is securely anchored across PR runs.
+
+### What Is Detectable
+- **In-place record tampering**: Modifying any field (timestamp, actor, decision, detail) in any historical log entry breaks the entry's own SHA-256 hash. `broken_at = #N` is immediately identified.
+- **Entry deletion**: Removing an entry from the middle breaks the `prev` link of the next entry.
+- **Entry insertion or reordering**: Inserting or swapping records invalidates the `prev` pointers.
+- **Log truncation**: Deleting entries from the tail produces a valid internal sub-chain, but the head hash differs from the anchored head hash recorded in CI. `--anchor-file` detects this immediately with `reason: head hash differs from the anchored value`.
+
+### What Is NOT Detectable
+- **Out-of-band bypasses**: Actions taken directly against git (e.g., an administrator pushing directly to `main` with bypass rights or disabling GitHub Actions) never invoke RepoBrain and produce no audit entries. This is why GitHub Branch Rulesets must disable bypass permissions.
+- **Unanchored log substitution**: If an attacker completely deletes the audit log and writes a completely new, internally-valid log starting from `0000...0000`, a standalone `repobrain audit` *without* `--expect` or `--anchor-file` cannot tell it is a substitution. Checking against an externally stored anchor (CI artifact or release tag) is required to detect full rewrites.
 3. **Protected Paths**: Changes to `.github/workflows/` made by AI agents are flagged as `blocked-path` by Shield, automatically failing the required check.
+
