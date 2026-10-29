@@ -69,7 +69,7 @@ def main():
 
             # Optimizer
             print("[5/7] Running optimizer on Scenario B...")
-            page.locator("button:has-text('Run optimizer →')").click()
+            page.locator("button:has-text('Run optimizer')").click()
             page.wait_for_selector(".pill:has-text('verified')", timeout=15000)
             content = page.content()
             assert "cognitive" in content and "15" in content and "10" in content, "Expected cognitive reduction 15->10"
@@ -95,9 +95,36 @@ def main():
             # Audit trail & Tamper detection
             print("[7/7] Verifying audit hash chain & tamper detection...")
             page.locator("#btnTabAudit").click()
-            page.wait_for_selector("#chainStatus:has-text('chain ✓')", timeout=10000)
+            page.wait_for_selector("#chainStatus:has-text('chain verified')", timeout=10000)
             page.locator("button:has-text('Simulate tampering')").click()
             page.wait_for_selector("text=DETECTED", timeout=10000)
+
+            # The server response is the single source of truth for which blocks are invalidated.
+            tamper_response = page.evaluate("() => S.tamper")
+            assert tamper_response and tamper_response.get("ok") is False, f"Expected failed tamper verification, got {tamper_response}"
+            tampered_nodes = page.locator(".audit-node.tampered")
+            downstream_nodes = page.locator(".audit-node.downstream-broken")
+            assert tampered_nodes.count() == 1, f"Expected 1 tampered node, got {tampered_nodes.count()}"
+            tampered_seq = tampered_nodes.first.get_attribute("data-seq")
+            assert tampered_seq is not None, "Tampered node missing data-seq"
+            assert str(tamper_response["tampered_seq"]) == tampered_seq, (
+                f"UI marked block #{tampered_seq}, server reported #{tamper_response['tampered_seq']}"
+            )
+            expected_downstream = [str(s) for s in tamper_response.get("downstream_seqs", [])]
+            actual_downstream = [n.get_attribute("data-seq") for n in downstream_nodes.all()]
+            assert actual_downstream == expected_downstream, (
+                f"UI downstream blocks {actual_downstream} do not match server response {expected_downstream}"
+            )
+            expected_invalidated = [str(s) for s in tamper_response.get("invalidated_seqs", [])]
+            actual_invalidated = [
+                n.get_attribute("data-seq")
+                for n in page.locator(".audit-node[data-tamper-state='tampered'], .audit-node[data-tamper-state='downstream-broken']").all()
+            ]
+            assert actual_invalidated == expected_invalidated, (
+                f"UI invalidated blocks {actual_invalidated} do not match server response {expected_invalidated}"
+            )
+            print(f"  ✓ Dynamic tamper detection from server response: block #{tampered_seq} tampered, {len(expected_downstream)} downstream blocks invalidated")
+
             page.screenshot(path=os.path.join(SCREENSHOTS_DIR, "06_audit_tamper_detected.png"))
             print("  ✓ Hash chain verified, in-memory edit correctly DETECTED by audit engine")
 
@@ -121,4 +148,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-

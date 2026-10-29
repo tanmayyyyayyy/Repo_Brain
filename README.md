@@ -14,13 +14,29 @@ It does not write code. It decides what AI (and humans) may change, cleans up wh
 ```bash
 pip install -r requirements.txt          # pyyaml, pytest, coverage. Python 3.10+, git
 python server.py                         # seeds a REAL git repo with AI-authored PRs and opens the console
-python -m pytest -q tests                # 67 passed, 1 skipped (requires ANTHROPIC_API_KEY)
+python -m pytest -q tests                # 75 passed, 1 skipped (requires ANTHROPIC_API_KEY)
 ```
 
 Console walkthrough (≈3 min):
 - **A · risky AI PR** → BLOCKED (protected workflow file, hardcoded AWS key, prompt-injection text, deleted test)
 - **B · messy AI PR** → CHANGES REQUIRED → *Run optimizer* → real AST diff, your tests run on a copy, coverage tracked, complexity before/after (cognitive 15→10, depth 4→3) → *Approve & apply* (a commit is created with `Approved-by:`) → review passes → *Audit* → *Simulate tampering* → detected.
 - **C · AI refactor** → high-debt legacy code (`shop/orders.py`, cyclomatic complexity 27) decomposed into modular helper functions via test-gated AI tier.
+
+## UI overhaul screenshots
+
+Full 4-view × 2-viewport × 2-theme matrix lives in [`docs/ui/`](docs/ui/); the pre-overhaul baseline from `37b7551^` is in [`docs/ui/before/`](docs/ui/before/).
+
+| Blocked review | File diff with annotations |
+|---|---|
+| ![Blocked review in dark mode](docs/ui/01_blocked_review_1440_dark.png) | ![File diff with inline Shield annotations](docs/ui/02_file_diff_annotations_1440_dark.png) |
+| **Optimizer result** | **Audit chain with a tampered block** |
+| ![Optimizer verified result](docs/ui/03_optimizer_verified_1440_dark.png) | ![Audit chain showing the tampered block and broken downstream links](docs/ui/04_audit_chain_tampered_1440_dark.png) |
+
+**Before / after — blocked review (1440×900, dark)**
+
+| Before (`37b7551^`, original console) | After (Mission Control) |
+|---|---|
+| ![Original blocked review](docs/ui/before/01_blocked_review_before.png) | ![Redesigned blocked review](docs/ui/01_blocked_review_1440_dark.png) |
 
 ## What is real
 
@@ -73,6 +89,6 @@ python -m repobrain serve    [--demo] [--repo PATH --base main]
 ```
 repobrain/  policy · metrics · gitutil · shield · rewrite · optimizer · llm · review · explainer · audit · report · demo · server · cli
 static/index.html   console UI            demo_assets/   files for the seeded demo repo
-tests/              65 tests incl. old-vs-new behaviour checks, tamper detection, e2e on a real git repo, server security, AI tier, coverage
+tests/              75 tests incl. old-vs-new behaviour checks, tamper detection, e2e on a real git repo, server security, AI tier, coverage, UI a11y
 scripts/demo_check.py   Playwright-based headless verification of full console walkthrough
 ```

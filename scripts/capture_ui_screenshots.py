@@ -91,7 +91,7 @@ def main():
             page.wait_for_selector(".v-CHANGES_REQUIRED", timeout=10000)
 
             print("Running Optimizer on Scenario B...")
-            page.locator("button:has-text('Run optimizer →')").click()
+            page.locator("button:has-text('Run optimizer')").click()
             page.wait_for_selector(".pill:has-text('verified')", timeout=15000)
             page.wait_for_timeout(400)
             print("Capturing 03: Optimizer Verified (1440 Dark)...")

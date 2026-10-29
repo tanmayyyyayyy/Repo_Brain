@@ -65,6 +65,18 @@ def test_audit_chain_detects_edit_delete_and_truncation(tmp_path):
     assert log.verify()["ok"] and not log.verify(expect_head=head)["ok"]         # needs the anchor
 
 
+def test_simulate_tamper_reports_edited_block_and_downstream(tmp_path):
+    log = audit.AuditLog(str(tmp_path))
+    for i in range(5):
+        log.append("e", "a", "ALLOWED", f"d{i}")
+    seqs = [e["seq"] for e in log.entries()]
+    res = audit.simulate_tamper(log.entries())
+    assert res["ok"] is False
+    assert res["tampered_seq"] == seqs[len(seqs) // 2]
+    assert res["downstream_seqs"] == seqs[len(seqs) // 2 + 1:]
+    assert res["invalidated_seqs"] == seqs[len(seqs) // 2:]
+
+
 # ───── explainer
 def test_explainer():
     r = explainer.explain("ModuleNotFoundError: No module named 'requests'\n  File \"app/x.py\", line 7, in f")

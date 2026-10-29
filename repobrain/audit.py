@@ -82,5 +82,9 @@ def simulate_tamper(es):
     i = len(t) // 2
     t[i]["decision"] = "ALLOWED" if t[i].get("decision") != "ALLOWED" else "BLOCKED"
     res = verify_entries(t)
-    res["tampered_seq"] = t[i].get("seq")
+    tampered_seq = t[i].get("seq")
+    downstream = [e.get("seq") for e in t[i + 1:]]
+    res["tampered_seq"] = tampered_seq
+    res["downstream_seqs"] = downstream
+    res["invalidated_seqs"] = [tampered_seq] + downstream
     return res

@@ -37,3 +37,19 @@ All notable changes to the RepoBrain console and governance platform.
   - New pytest for `/api/diff` path-traversal attacks and boundary cases (`tests/test_server.py`).
   - New Playwright automated XSS safety verification test (`tests/test_xss_safety.py`).
   - Automated screenshot capture suite (`scripts/capture_ui_screenshots.py`) for desktop (1440x900) and mobile (390x844).
+
+## [UI Gap Closure] - 2026-10-29
+
+### Added
+- Inline SVG icon dictionary (all `currentColor`, shape + text labels) replacing every emoji/unicode glyph icon, including tour navigation and metric deltas.
+- `scripts/contrast_check.py` now parses live tokens from `static/index.html` and audits text, syntax, border/focus, filled-control, and tinted-badge pairs across every surface in both themes.
+- Friendly global error state with dismiss/retry actions, plus view-level skeleton and empty states.
+- Copy-to-clipboard for commit hashes, block/head hashes, and `file:line` locations.
+- Presenter mode (larger type, secondary chrome hidden) exposed in the command palette and `P` shortcut.
+- Server-reported tamper invalidation payload (`tampered_seq`, `downstream_seqs`, `invalidated_seqs`) consumed by the audit UI.
+- Playwright assertions for server-driven tamper marking, input/contenteditable shortcut guards, and zero horizontal scroll at 360/390/768px on every tab.
+- Complete 16-image after matrix plus 4-image pre-overhaul baseline in `docs/ui/`, embedded in README.
+
+### Fixed
+- WCAG AA failures in light syntax tokens, light pass green, dark signal badge tints, dark border-default, and filled-button label contrast.
+- Removed all remaining `alert()` usage and client-side tamper-sequence hardcoding.

@@ -1,8 +1,9 @@
 # RepoBrain Status Report
 
-**Timestamp**: 2026-10-29T02:22:00+05:30  
-**Test Suite**: 67 passed, 1 skipped (live API skip)  
-**Demo Status**: 7/7 automated headless browser verification steps PASSED  
+**Timestamp**: 2026-10-29T23:02:38+05:30
+**Test Suite**: 75 passed, 1 skipped (live API skip)
+**Demo Status**: 7/7 automated headless browser verification steps PASSED
+**UI Gap Closure**: SVG-only icons, expanded WCAG AA checks, toasts/skeletons/empty+error states, server-driven tamper marking, input-safe shortcuts, 20 screenshots, mobile overflow assertions
 
 ---
 
@@ -11,6 +12,7 @@
 | Item | Done | Verified How | Evidence (Command + Output) | Known Gaps |
 |---|---|---|---|---|
 | **UI/UX Redesign: Flight Recorder Mission Control** | Yes | Replaced generic dashboard with custom "flight recorder / mission control" UI in `static/index.html`. Implemented asymmetric layout with persistent 290px telemetry rail & 5-stage stepper, verdict hero with 4-gate checklist, PR map with AI authorship chips, token-protected `/api/diff` endpoint with path-traversal guards, interactive unified diff viewer with hand-written syntax highlighting and inline Shield annotations, horizontal complexity bars with policy thresholds, vertical timeline audit hash chain with animated sweep and tamper detection, `Cmd+K` command palette, keyboard shortcuts (`1-6`, `O`, `A`, `Esc`, `?`), presenter mode tour, and dark/light themes. Added `tests/test_xss_safety.py` and diff endpoint tests in `tests/test_server.py`. Captured complete 1440x900 and 390x844 screenshot suite in `docs/ui/`. | `pytest tests/test_server.py tests/test_xss_safety.py`<br>`4 passed in 4.10s`<br>`python scripts/demo_check.py`<br>`ALL DEMO CHECK PASSES SUCCESSFULLY! REPOBRAIN IS GREEN.` | None. All behavior verified, zero external dependencies (strict CSP). |
+| **UI Overhaul Gap Closure** | Yes | Replaced all emoji/unicode glyph icons with `currentColor` inline SVGs; expanded `scripts/contrast_check.py` to parse live tokens and check every text/syntax token, border/focus ring, filled control, and tinted badge across all surfaces; fixed all sub-AA pairs. Added global error state, skeleton/empty states, clipboard copy for hashes and `file:line`, verdict `aria-live`, focus-visible rings, and command-palette presenter mode. Audit tamper UI now consumes `tampered_seq`/`downstream_seqs`/`invalidated_seqs` from `/api/audit/tamper`. Added Playwright coverage for tamper marking, shortcut input guards, and 360/390/768px horizontal overflow. Captured 16 after images + 4 before images and embedded them in README. | `python scripts/contrast_check.py`<br>`ALL CONTRAST CHECKS PASSED WCAG 2.1 AA SPECIFICATIONS!`<br>`pytest -v tests/test_mobile_responsiveness.py tests/test_ui_shortcuts.py tests/test_tamper_ui.py tests/test_ui_gap_closure.py`<br>`7 passed in 11.78s`<br>`python scripts/capture_full_matrix.py`<br>`ALL 20 SCREENSHOTS (16 AFTER + 4 BEFORE) CAPTURED SUCCESSFULLY!` | Original console (`37b7551^`) had no dedicated diff inspector; the "before" diff image is its optimizer diff, the closest equivalent. Contrast is token-based, not browser pixel sampling. |
 | **P0-1: Validate AI refactor tier against live API** | Yes | Unit & integration tests in `tests/test_ai_tier.py` verifying model string override (`claude-3-5-sonnet-20241022`), 401/404 HTTP error handling, qualified name resolution (`_map_functions`), untrusted code Shield scanning, and Scenario C end-to-end refactor of `shop/orders.py` (cyclomatic 27). Live API test skipped gracefully when key absent. | `pytest -v tests/test_ai_tier.py`<br>`8 passed, 1 skipped in 0.45s` | Live API calls require `ANTHROPIC_API_KEY` set in environment; marked UNVERIFIED against live remote endpoint, verified against local API mock contracts. |
 | **P0-2: Run GitHub Actions workflow on real repo** | Yes | Created live throwaway repo [`tanmayyyyayyy/repobrain-demo-eval`](https://github.com/tanmayyyyayyy/repobrain-demo-eval), pushed branches (`main`, `ai/risky-pr`, `ai/pricing`), opened PR #1 and PR #2. Verified blocking on PR #1, complexity gate & optimizer proposal on PR #2, comments posted, artifacts uploaded. Documented in `docs/GITHUB_ACTIONS.md`. | Live GitHub PR runs: [PR #1](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/1), [PR #2](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/2). Screenshots saved to `docs/screenshots/github_pr*.png`. | None. Fully verified on real GitHub infrastructure. |
 | **P0-3: Cross-platform and line-ending correctness** | Yes | Unit tests in `tests/test_cross_platform.py` validating that CRLF (`\r\n`) files retain `\r\n` byte-for-byte across AST rewrites (`optimize_source`, `mark_comments`, `apply`), path traversal prevention via `os.path.commonpath`, and platform-aware `shlex.split`. | `pytest -v tests/test_cross_platform.py`<br>`6 passed in 0.45s` | Verified on macOS. Native Windows runner execution not tested directly on a physical Windows host, but CRLF and path-separator semantics are strictly tested. |
@@ -29,8 +31,9 @@
 ### Final Test Run: `python -m pytest -q tests`
 
 ```text
-.......s............................................................     [100%]
-67 passed, 1 skipped in 14.45s
+.......s................................................................ [ 94%]
+....                                                                     [100%]
+75 passed, 1 skipped in 30.75s
 ```
 
 *(Note: 1 skipped test is `test_live_anthropic_api_tier` in `tests/test_ai_tier.py` because `ANTHROPIC_API_KEY` is not set in the local development environment).*
@@ -39,7 +42,7 @@
 
 ```text
 [1/7] Launching RepoBrain demo server on port 8798...
-Server ready at: http://127.0.0.1:8798/?t=Rhi7ED2AFKtq7dfiyzOSdbo2OzjQzu8V
+Server ready at: http://127.0.0.1:8798/?t=V9efPf6vp7fuoH0Ttc9RrEGVhA5iJRIO
 [2/7] Launching headless browser...
 [3/7] Verifying Scenario A (risky AI PR)...
   ✓ Scenario A correctly blocked with policy, secret, and injection findings
@@ -51,6 +54,7 @@ Server ready at: http://127.0.0.1:8798/?t=Rhi7ED2AFKtq7dfiyzOSdbo2OzjQzu8V
   ✓ Proposal applied to repo with Approved-by trailer
   ✓ Re-run PR review: verdict is now ALLOWED
 [7/7] Verifying audit hash chain & tamper detection...
+  ✓ Dynamic tamper detection from server response: block #8 tampered, 6 downstream blocks invalidated
   ✓ Hash chain verified, in-memory edit correctly DETECTED by audit engine
 
 =======================================================
@@ -58,6 +62,43 @@ ALL DEMO CHECK PASSES SUCCESSFULLY! REPOBRAIN IS GREEN.
 Screenshots saved to /Users/tanmayjain/Downloads/repobrain-prototype/docs/screenshots/
 =======================================================
 ```
+
+### Contrast Audit: `python scripts/contrast_check.py`
+
+```text
+...
+| `--signal-block` | `--signal-block-bg` | 4.90:1 | 4.59:1 | 5.29:1 | 5.04:1 | 4.70:1 | 5.29:1 | 4.5:1 | PASS |
+| `--signal-ai` | `--signal-ai-bg` | 6.73:1 | 6.31:1 | 7.25:1 | 6.97:1 | 6.49:1 | 7.25:1 | 4.5:1 | PASS |
+
+=======================================================
+ALL CONTRAST CHECKS PASSED WCAG 2.1 AA SPECIFICATIONS!
+=======================================================
+```
+
+The full per-token, per-surface tables are recorded in `docs/UI_BRIEF.md`.
+
+### Targeted UI/Accessibility Tests
+
+```text
+$ pytest -v tests/test_mobile_responsiveness.py tests/test_ui_shortcuts.py tests/test_tamper_ui.py tests/test_ui_gap_closure.py
+tests/test_mobile_responsiveness.py::test_no_horizontal_scroll_on_mobile_viewports PASSED
+tests/test_ui_shortcuts.py::test_single_key_shortcuts_ignored_in_inputs_and_contenteditable PASSED
+tests/test_tamper_ui.py::test_tamper_ui_marks_server_reported_blocks PASSED
+tests/test_ui_gap_closure.py::test_no_emoji_or_unicode_glyph_icons_remain PASSED
+tests/test_ui_gap_closure.py::test_status_icons_are_inline_svg_with_current_color PASSED
+tests/test_ui_gap_closure.py::test_required_ui_behaviors_are_wired PASSED
+tests/test_ui_gap_closure.py::test_tamper_ui_consumes_server_invalidation_payload PASSED
+============================== 7 passed in 11.78s ==============================
+```
+
+### Screenshot Matrix: `python scripts/capture_full_matrix.py`
+
+```text
+ALL 20 SCREENSHOTS (16 AFTER + 4 BEFORE) CAPTURED SUCCESSFULLY!
+Artifacts saved in /Users/tanmayjain/Downloads/repobrain-prototype/docs/ui/
+```
+
+Verified dimensions: 16 after images at 1440x900 or 390x844 in light/dark, plus 4 before images at 1440x900 dark.
 
 ---
 
@@ -83,13 +124,31 @@ Screenshots saved to /Users/tanmayjain/Downloads/repobrain-prototype/docs/screen
      pytest -q tests
      ```
 
+3. **Original-UI "before" diff view**:
+   - **Status**: PARTIAL. Commit `37b7551^` had no dedicated file diff inspector; `docs/ui/before/02_file_diff_before.png` captures the original optimizer's unified diff, which is the closest equivalent.
+   - **Why**: The historical UI simply did not contain that view.
+   - **How a human can verify**: Inspect `git show 37b7551^:static/index.html` and compare with `docs/ui/before/02_file_diff_before.png`.
+
+4. **Pixel-level color rendering / color-blind simulation**:
+   - **Status**: UNVERIFIED. WCAG ratios are computed from design tokens, not sampled from browser-rendered pixels, and no protanopia/deuteranopia simulation was run.
+   - **Why**: The automated check validates the source palette; OS color profiles and anti-aliasing are out of scope.
+   - **How a human can verify**: Run a browser accessibility/color-blind emulator or screenshot sampler against both themes.
+
+5. **Screen-reader live announcement**:
+   - **Status**: PARTIAL. The `aria-live="polite"` region and verdict text updates are asserted in static/Playwright tests, but not verified with a physical screen reader.
+   - **How a human can verify**: Use VoiceOver/NVDA while switching scenarios and running the optimizer.
+
+6. **Visual design review of generated screenshots**:
+   - **Status**: PARTIAL. All 20 screenshots were generated by the automated script and dimension-checked; content is asserted only through the same selectors used to drive capture.
+   - **How a human can verify**: Open `docs/ui/` and the README embeds for a final visual pass.
+
 ---
 
 ## 4. Deliverables Checklist
 
-- [x] All 67 unit and integration tests passing (+ 1 skipped live API test).
+- [x] All 75 unit and integration tests passing (+ 1 skipped live API test).
 - [x] `scripts/demo_check.py` passing end-to-end with fresh screenshots in `docs/screenshots/`.
 - [x] Full UI/UX redesign implemented in `static/index.html` with zero external dependencies and strict CSP compliance.
-- [x] High-resolution desktop (1440x900) and mobile (390x844) screenshots in dark and light modes saved in `docs/ui/`.
+- [x] Full 16-image desktop/mobile dark/light matrix plus 4-image pre-overhaul baseline saved in `docs/ui/`.
 - [x] Real GitHub Actions workflow tested on live PRs with comment, gate, and artifact upload.
 - [x] README and CHANGELOG updated with honest limits and feature documentation.
