@@ -148,7 +148,7 @@ def state(ctx):
     return {"repo": {"path": ctx.root, "branch": gitutil.branch(ctx.root), "head": gitutil.head(ctx.root),
                      "base": ctx.base, "demo": ctx.demo, "scenarios": list(demo.SCENARIOS) if ctx.demo else []},
             "policy": {k: v for k, v in pol.items() if not k.startswith("_")}, "policy_source": pol.get("_source"),
-            "policy_yaml": yml, "llm": {"available": llm.available(), "allowed": pol["allow_llm"]}}
+            "policy_yaml": yml, "llm": {**llm.describe(), "allowed": pol["allow_llm"]}}
 
 
 def route(ctx, path, body):

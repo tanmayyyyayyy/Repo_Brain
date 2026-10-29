@@ -4,33 +4,40 @@ from repobrain import demo, gitutil, llm, metrics, optimizer, policy, shield
 
 
 def test_llm_error_when_no_key(monkeypatch):
+    # New multi-provider llm: with no keys set it falls back to anthropic
+    # and raises LLMError (RuntimeError subclass) mentioning ANTHROPIC_API_KEY
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY environment variable is not set"):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("REPOBRAIN_LLM_PROVIDER", raising=False)
+    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY not set"):
         llm.ask("hello")
 
 
 def test_llm_error_messages_clear(monkeypatch):
-    import urllib.error
     import io
+    import urllib.error
 
+    # Force anthropic provider with a dummy key so the request goes through
+    monkeypatch.setenv("REPOBRAIN_LLM_PROVIDER", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy-key")
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
 
-    # Simulate 401 Invalid Key
+    # Simulate 401 Invalid Key — new llm.py maps to "HTTP 401 - check the API key"
     def mock_urlopen_401(*args, **kwargs):
         fp = io.BytesIO(b'{"error": {"type": "authentication_error", "message": "invalid x-api-key"}}')
         raise urllib.error.HTTPError("https://api.anthropic.com", 401, "Unauthorized", {}, fp)
 
     monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_401)
-    with pytest.raises(RuntimeError, match="Invalid Anthropic API key"):
+    with pytest.raises(RuntimeError, match="401.*check the API key"):
         llm.ask("hello")
 
-    # Simulate 404 Invalid Model
+    # Simulate 404 model not found — new llm.py maps to "HTTP 404 - model name not found"
     def mock_urlopen_404(*args, **kwargs):
         fp = io.BytesIO(b'{"error": {"type": "not_found_error", "message": "model: invalid-model"}}')
         raise urllib.error.HTTPError("https://api.anthropic.com", 404, "Not Found", {}, fp)
 
     monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_404)
-    with pytest.raises(RuntimeError, match="Invalid Anthropic model"):
+    with pytest.raises(RuntimeError, match="404.*model name not found"):
         llm.ask("hello")
 
 

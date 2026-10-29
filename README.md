@@ -14,7 +14,7 @@ It does not write code. It decides what AI (and humans) may change, cleans up wh
 ```bash
 pip install -r requirements.txt          # pyyaml, pytest, coverage. Python 3.10+, git
 python server.py                         # seeds a REAL git repo with AI-authored PRs and opens the console
-python -m pytest -q tests                # 75 passed, 1 skipped (requires ANTHROPIC_API_KEY)
+python -m pytest -q tests                # 80 passed, 1 skipped (requires ANTHROPIC_API_KEY)
 ```
 
 Console walkthrough (≈3 min):
@@ -46,7 +46,7 @@ Full 4-view × 2-viewport × 2-theme matrix lives in [`docs/ui/`](docs/ui/); the
 | **Policy** | `repobrain.yml`, validated, read from the **trusted base branch** — a PR (or an agent) cannot loosen its own rules. Supports `min_function_coverage` to enforce test execution of rewritten functions. |
 | **Complexity gate** | cyclomatic + cognitive + nesting depth, only on functions the PR touched (legacy debt doesn't block). `repobrain scan` lists the legacy debt separately. |
 | **Optimizer** | AST rewrites that are semantics-preserving (else-after-return, guard clauses, merge nested ifs, bool returns, loop→comprehension, `== None`, unused imports). Only changed functions are re-emitted; **everything else stays byte-identical** with original CRLF/LF line endings preserved, comments are kept, functions whose inline comments would be lost are skipped. Result is run against **your test suite on a copy** with optional coverage.py verification (secrets stripped from the env); failing tests ⇒ proposal rejected. Applying needs a named human, refuses stale proposals, commits with `Approved-by:`. |
-| **Optimizer – AI tier** *(optional)* | For functions still over limits: prompts Claude (`claude-3-5-sonnet-20241022`) to refactor *one function*, scans the reply with Shield before accepting, then test-gates it (one retry with the failure output). Off unless `allow_llm: true` **and** `--ai` **and** `ANTHROPIC_API_KEY`. Never sends files that have Shield findings. |
+| **Optimizer – AI tier** *(optional)* | For functions still over limits: prompts an LLM (Groq free tier `openai/gpt-oss-120b` or Anthropic `claude-sonnet-5-5`, selectable via `REPOBRAIN_LLM_PROVIDER`) to refactor *one function*, scans the reply with Shield before accepting, then test-gates it (one retry with the failure output). Off unless `allow_llm: true` **and** `--ai` **and** API key (`GROQ_API_KEY` or `ANTHROPIC_API_KEY`). Never sends files that have Shield findings. |
 | **Failure Explainer** | 18 rule-based patterns (Python/Node/CI/infra) → cause, fix, file:line, failed tests. Optional LLM summary with secrets redacted. |
 | **Audit** | Append-only JSONL, SHA-256 hash chain, `verify`, `--expect <anchored head>`, `--anchor-file <path>`, `--write-anchor <path>`, JSON export, markdown compliance report. One entry per AI-authored file + one per review/approval/waiver. |
 | **Console** | Localhost only; per-run token, Host check, JSON-only POSTs (a governance tool must not be a CSRF target); all repo-derived text is HTML-escaped. |
@@ -78,7 +78,7 @@ python -m repobrain serve    [--demo] [--repo PATH --base main]
   cyclomatic complexity — that needs real refactors (the AI tier, or a human). In the demo: cognitive 15→10, depth 4→3, 69→47 lines.
 - Rewritten functions are re-formatted by `ast.unparse` (float literals like `0.10` print as `0.1`; run your formatter after).
 - **The test suite is the safety net.** Weak tests ⇒ weak guarantee. RepoBrain integrates with coverage.py to flag proposals where rewritten functions were never executed by tests (`min_function_coverage`).
-- The **AI tier is fully implemented and tested with mock API responses and Claude 3.5 Sonnet payload validation**, but live API execution requires `ANTHROPIC_API_KEY` (skipped in CI when absent).
+- The **AI tier is fully implemented and tested with mock API responses and multi-provider validation (Groq free tier + Anthropic)**, but live API execution requires `GROQ_API_KEY` or `ANTHROPIC_API_KEY` (skipped in CI when absent).
 - RepoBrain only governs what passes through it. A direct push to an unprotected branch bypasses it — enforce via branch rulesets.
 - A hash chain proves *edits* happened; detecting a fully rewritten log needs the anchored head (`--anchor-file` stored in CI artifacts).
 - Prompt-injection detection combines single-line and adjacent-line scanning (across comments); it raises the bar significantly, but cannot guarantee protection against all adversarial linguistic permutations.
@@ -89,6 +89,6 @@ python -m repobrain serve    [--demo] [--repo PATH --base main]
 ```
 repobrain/  policy · metrics · gitutil · shield · rewrite · optimizer · llm · review · explainer · audit · report · demo · server · cli
 static/index.html   console UI            demo_assets/   files for the seeded demo repo
-tests/              75 tests incl. old-vs-new behaviour checks, tamper detection, e2e on a real git repo, server security, AI tier, coverage, UI a11y
+tests/              80 tests incl. multi-provider LLM support, old-vs-new behaviour checks, tamper detection, e2e on a real git repo, server security, AI tier, coverage, UI a11y
 scripts/demo_check.py   Playwright-based headless verification of full console walkthrough
 ```

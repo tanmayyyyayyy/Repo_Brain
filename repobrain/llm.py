@@ -1,46 +1,99 @@
-"""Optional LLM tier (stdlib only). Used ONLY when policy.allow_llm is true AND the caller opts in,
-never on files with Shield findings, and every result is test-gated like any other change."""
+"""Optional LLM tier (stdlib only). Providers: Groq (free tier, OpenAI-compatible) or Anthropic.
+
+Selection:  REPOBRAIN_LLM_PROVIDER=groq|anthropic   (default: groq if GROQ_API_KEY is set, else anthropic)
+Model:      REPOBRAIN_MODEL                          (default per provider; check your provider's model list)
+Used ONLY when policy.allow_llm is true AND the caller opts in, never on files with Shield findings, and
+every result is test-gated and human-approved like any other change."""
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 
-API = "https://api.anthropic.com/v1/messages"
-DEFAULT_MODEL = "claude-3-5-sonnet-20241022"
+PROVIDERS = {
+    "groq": {"key_env": "GROQ_API_KEY", "base": "https://api.groq.com/openai/v1",
+             "model": "openai/gpt-oss-120b"},      # free-tier model at time of writing; override with REPOBRAIN_MODEL
+    "anthropic": {"key_env": "ANTHROPIC_API_KEY", "base": "https://api.anthropic.com",
+                  "model": "claude-sonnet-5-5"},
+}
+UA = "repobrain/0.2 (+local)"        # Groq sits behind Cloudflare, which can reject Python's default User-Agent
+
+
+class LLMError(RuntimeError):
+    pass
+
+
+def provider():
+    p = os.environ.get("REPOBRAIN_LLM_PROVIDER", "").lower()
+    if p in PROVIDERS:
+        return p
+    if os.environ.get("GROQ_API_KEY"):
+        return "groq"
+    return "anthropic"
+
+
+def key_env():
+    return PROVIDERS[provider()]["key_env"]
 
 
 def available():
-    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+    return bool(os.environ.get(key_env()))
 
 
-def ask(prompt, system="", max_tokens=2000):
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY environment variable is not set")
-    model = os.environ.get("REPOBRAIN_MODEL", DEFAULT_MODEL)
-    body = {"model": model, "max_tokens": max_tokens,
-            "system": system, "messages": [{"role": "user", "content": prompt}]}
-    req = urllib.request.Request(API, json.dumps(body).encode(), {
-        "content-type": "application/json", "anthropic-version": "2023-06-01",
-        "x-api-key": api_key})
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            data = json.load(r)
-    except urllib.error.HTTPError as e:
-        err_body = ""
+def missing_key_hint():
+    return f"{key_env()} not set (provider: {provider()})"
+
+
+def describe():
+    return {"provider": provider(), "model": os.environ.get("REPOBRAIN_MODEL", PROVIDERS[provider()]["model"]),
+            "available": available(), "key_env": key_env()}
+
+
+def _post(url, headers, body, retries=3):
+    data = json.dumps(body).encode()
+    for attempt in range(retries + 1):
+        req = urllib.request.Request(url, data, {"content-type": "application/json", "user-agent": UA, **headers})
         try:
-            err_body = e.read().decode("utf-8", errors="replace")
-            err_data = json.loads(err_body)
-            err_msg = err_data.get("error", {}).get("message", err_body)
-        except Exception:
-            err_msg = err_body or str(e)
-        if e.code == 401:
-            raise RuntimeError(f"Invalid Anthropic API key: {err_msg}") from e
-        elif e.code in (400, 404) and ("model" in err_msg.lower() or "not_found" in err_msg.lower()):
-            raise RuntimeError(f"Invalid Anthropic model '{model}': {err_msg}") from e
-        else:
-            raise RuntimeError(f"Anthropic API error ({e.code}): {err_msg}") from e
-    except urllib.error.URLError as e:
-        raise RuntimeError(f"Network error contacting Anthropic API: {e.reason}") from e
+            with urllib.request.urlopen(req, timeout=90) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")[:300]
+            if e.code in (429, 503) and attempt < retries:        # free tiers rate-limit: honour Retry-After
+                try:
+                    wait = float(e.headers.get("retry-after") or 0)
+                except ValueError:
+                    wait = 0
+                time.sleep(min(max(wait, 2 ** attempt), 30))
+                continue
+            hint = {401: " - check the API key", 403: " - blocked or key lacks access", 404: " - model name not found for this provider",
+                    429: " - free-tier rate limit hit, wait a minute or pick another model"}.get(e.code, "")
+            raise LLMError(f"HTTP {e.code}{hint}: {detail}") from None
+        except urllib.error.URLError as e:
+            raise LLMError(f"network error: {e.reason}") from None
 
-    return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+
+def ask(prompt, system="", max_tokens=None):
+    p = provider()
+    cfg = PROVIDERS[p]
+    key = os.environ.get(cfg["key_env"])
+    if not key:
+        raise LLMError(missing_key_hint())
+    model = os.environ.get("REPOBRAIN_MODEL", cfg["model"])
+    base = os.environ.get("REPOBRAIN_LLM_BASE_URL", cfg["base"]).rstrip("/")
+    if p == "groq":
+        msgs = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": prompt}]
+        data = _post(base + "/chat/completions", {"authorization": f"Bearer {key}"},
+                     {"model": model, "messages": msgs, "temperature": 0.1,
+                      "max_tokens": max_tokens or 4096})           # reasoning models spend tokens thinking
+        try:
+            text = data["choices"][0]["message"]["content"] or ""
+        except (KeyError, IndexError, TypeError):
+            raise LLMError(f"unexpected response shape: {str(data)[:200]}") from None
+    else:
+        data = _post(base + "/v1/messages", {"x-api-key": key, "anthropic-version": "2023-06-01"},
+                     {"model": model, "max_tokens": max_tokens or 2000, "system": system,
+                      "messages": [{"role": "user", "content": prompt}]})
+        text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    if not text.strip():
+        raise LLMError("model returned an empty reply (reasoning models may need a larger max_tokens)")
+    return text

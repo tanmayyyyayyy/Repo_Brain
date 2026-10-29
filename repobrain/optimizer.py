@@ -287,7 +287,7 @@ def propose(root, policy, files, home, use_llm=False, ask=None, head=None):
         if not policy["allow_llm"]:
             llm_info["reason"] = "disabled by policy (allow_llm: false)"
         elif not (llm.available() or ask is not llm.ask):
-            llm_info["reason"] = "ANTHROPIC_API_KEY not set"
+            llm_info["reason"] = llm.missing_key_hint()
         else:
             llm_info["used"] = True
     # tests on rule-based result first
