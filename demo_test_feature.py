@@ -1,16 +1,12 @@
 """Live PR feature test."""
 
 def calculate_discount(price, user_tier):
-    if price > 100:
-        if user_tier == "vip":
-            if price > 200:
-                if price > 300:
-                    return price * 0.5
-                else:
-                    return price * 0.6
-            else:
-                return price * 0.7
-        else:
-            return price * 0.9
-    else:
+    if not price > 100:
         return price
+    if user_tier != "vip":
+        return price * 0.9
+    if not price > 200:
+        return price * 0.7
+    if price > 300:
+        return price * 0.5
+    return price * 0.6
