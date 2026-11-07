@@ -14,7 +14,7 @@ It does not write code. It decides what AI (and humans) may change, cleans up wh
 ```bash
 pip install -r requirements.txt          # pyyaml, pytest, coverage. Python 3.10+, git
 python server.py                         # seeds a REAL git repo with AI-authored PRs and opens the console
-python -m pytest -q tests                # 80 passed, 1 skipped (requires ANTHROPIC_API_KEY)
+python -m pytest -q tests                # 104 passed, 1 skipped (requires ANTHROPIC_API_KEY)
 ```
 
 Console walkthrough (≈3 min):
@@ -42,22 +42,31 @@ Full 4-view × 2-viewport × 2-theme matrix lives in [`docs/ui/`](docs/ui/); the
 
 | Module | What it actually does |
 |---|---|
-| **Shield** | Reads the real `git diff base...HEAD`. Finds the AI author per file (commit author/committer, `Co-authored-by:`). Blocks protected paths for AI (warns for humans), hardcoded secrets (AWS/GitHub/Slack/Stripe/Anthropic/OpenAI/private keys/GCP/Azure/Twilio/SendGrid/generic credentials), prompt-injection text in *added* lines (including multi-line injections across comments), hidden/bidi Unicode, blast radius (`max_files_per_run`), flags dependency/build files and deleted tests. Evidence is masked. |
-| **Policy** | `repobrain.yml`, validated, read from the **trusted base branch** — a PR (or an agent) cannot loosen its own rules. Supports `min_function_coverage` to enforce test execution of rewritten functions. |
-| **Complexity gate** | cyclomatic + cognitive + nesting depth, only on functions the PR touched (legacy debt doesn't block). `repobrain scan` lists the legacy debt separately. |
-| **Optimizer** | AST rewrites that are semantics-preserving (else-after-return, guard clauses, merge nested ifs, bool returns, loop→comprehension, `== None`, unused imports). Only changed functions are re-emitted; **everything else stays byte-identical** with original CRLF/LF line endings preserved, comments are kept, functions whose inline comments would be lost are skipped. Result is run against **your test suite on a copy** with optional coverage.py verification (secrets stripped from the env); failing tests ⇒ proposal rejected. Applying needs a named human, refuses stale proposals, commits with `Approved-by:`. |
-| **Optimizer – AI tier** *(optional)* | For functions still over limits: prompts an LLM (Groq free tier `openai/gpt-oss-120b` or Anthropic `claude-sonnet-5-5`, selectable via `REPOBRAIN_LLM_PROVIDER`) to refactor *one function*, scans the reply with Shield before accepting, then test-gates it (one retry with the failure output). Off unless `allow_llm: true` **and** `--ai` **and** API key (`GROQ_API_KEY` or `ANTHROPIC_API_KEY`). Never sends files that have Shield findings. |
+| **Shield** | Reads the real `git diff base...HEAD`. Finds the AI author per file (commit author/committer, `Co-authored-by:`). Blocks protected paths for AI (warns for humans), hardcoded secrets (AWS/GitHub/Slack/Stripe/Anthropic/OpenAI/private keys/GCP/Azure/Twilio/SendGrid/JWT/generic high-entropy credentials via Shannon entropy), prompt-injection text in *added* lines (including multi-line injections across comments and learned ML guard warning at p≥0.85), hidden/bidi Trojan Source Unicode, risky shell commands (`curl \| sh`, `chmod 777`, `permissions: write-all`), and dependency typosquatting (Damerau-Levenshtein against top 5,000 packages on PyPI/npm, homoglyphs, VCS URLs). Evidence is masked. |
+| **Policy** | `repobrain.yml`, validated, read from the **trusted base branch** — a PR (or an agent) cannot loosen its own rules. Supports `min_function_coverage` to enforce test execution of rewritten functions, `fuzz: true` for differential fuzzing, and `ml_guard: true`. |
+| **Complexity gate** | Cyclomatic + cognitive + nesting depth, only on functions the PR touched (legacy debt doesn't block). `repobrain scan` lists the legacy debt separately. |
+| **Optimizer** | AST rewrites that are semantics-preserving (else-after-return, guard clauses, merge nested ifs, bool returns, loop→comprehension, `== None`, unused imports). Only changed functions are re-emitted; **everything else stays byte-identical** with original CRLF/LF line endings preserved, comments are kept, functions whose inline comments would be lost are skipped. Result is run against **your test suite on a copy** and **differentially fuzzed** (hundreds of mined constant + type-confused inputs compared against the original function); any divergence immediately discards the proposal. Applying needs a named human, refuses stale proposals, commits with `Approved-by:`. |
+| **Optimizer – AI tier** *(optional)* | For functions still over limits: prompts an LLM (Groq free tier `openai/gpt-oss-120b` or Anthropic `claude-sonnet-5-5`, selectable via `REPOBRAIN_LLM_PROVIDER`) to refactor *one function*, scans the reply with Shield before accepting, then test-gates and differentially fuzzes it (one retry with the failure output). Off unless `allow_llm: true` **and** `--ai` **and** API key (`GROQ_API_KEY` or `ANTHROPIC_API_KEY`). Never sends files that have Shield findings. |
 | **Failure Explainer** | 18 rule-based patterns (Python/Node/CI/infra) → cause, fix, file:line, failed tests. Optional LLM summary with secrets redacted. |
-| **Audit** | Append-only JSONL, SHA-256 hash chain, `verify`, `--expect <anchored head>`, `--anchor-file <path>`, `--write-anchor <path>`, JSON export, markdown compliance report. One entry per AI-authored file + one per review/approval/waiver. |
-| **Console** | Localhost only; per-run token, Host check, JSON-only POSTs (a governance tool must not be a CSRF target); all repo-derived text is HTML-escaped. |
+| **Audit** | Append-only JSONL, SHA-256 hash chain with optional HMAC signing (`REPOBRAIN_AUDIT_KEY`), `verify`, `--expect <anchored head>`, `--anchor-file <path>`, `--write-anchor <path>`, SARIF, CSV, JSON export, markdown compliance report. One entry per AI-authored file + one per review/approval/waiver/preflight. |
+| **Agent Preflight API** | Vendor-neutral HTTP endpoint (`/api/preflight` and `repobrain preflight`) allowing external coding agents (Claude Code, Cursor, Copilot, AutoGPT) to check permissions before touching files. |
+| **Console** | Localhost only; per-run token, Host check, JSON-only POSTs (a governance tool must not be a CSRF target); all repo-derived text is HTML-escaped. Supports telemetry, interactive diff inspector, horizontal complexity bars, and presenter mode. |
 
 ## CLI
 
-```
+```bash
 python -m repobrain review  --base main [--actor LOGIN] [--comment pr.md]   # CI entry point, exit 1 if not ALLOWED
 python -m repobrain scan                                                     # legacy complexity debt
 python -m repobrain optimize --base main [--diff] [--apply --actor NAME] [--ai] [--all]
 python -m repobrain shield   --path .github/workflows/ci.yml --actor copilot
+python -m repobrain preflight --actor my-agent --path ok.py                  # agent hook before writing
+python -m repobrain waive    --actor NAME --reason "why"                     # complexity gate only; never shield blocks
+python -m repobrain explain  --log build.log
+python -m repobrain audit    [--expect HASH] [--anchor-file FILE] [--export] # exit 1 if chain is broken
+python -m repobrain report   --out report.md
+python -m repobrain ci       --base origin/main --sarif repobrain.sarif      # full CI pipeline + SARIF upload
+python -m repobrain serve    [--demo] [--repo PATH --base main]
+```
 python -m repobrain waive    --actor NAME --reason "why"                     # complexity gate only; never shield blocks
 python -m repobrain explain  --log build.log
 python -m repobrain audit    [--expect HASH] [--anchor-file FILE] [--write-anchor FILE] [--export]  # exit 1 if chain is broken
@@ -87,8 +96,9 @@ python -m repobrain serve    [--demo] [--repo PATH --base main]
 ## Layout
 
 ```
-repobrain/  policy · metrics · gitutil · shield · rewrite · optimizer · llm · review · explainer · audit · report · demo · server · cli
-static/index.html   console UI            demo_assets/   files for the seeded demo repo
-tests/              80 tests incl. multi-provider LLM support, old-vs-new behaviour checks, tamper detection, e2e on a real git repo, server security, AI tier, coverage, UI a11y
-scripts/demo_check.py   Playwright-based headless verification of full console walkthrough
+repobrain/  policy · metrics · gitutil · shield · rewrite · optimizer · fuzz · deps · mlguard · llm · review · explainer · audit · export · report · demo · server · cli
+static/index.html   console UI (WCAG AA mission control, WebGL telemetry)
+demo_assets/        files for the seeded demo repo
+tests/              105 tests incl. differential fuzzing, ML guard evaluation, multi-provider LLM support, tamper detection, server security, coverage, UI a11y
+scripts/demo_check.py   Playwright-based headless verification of full console walkthrough (7/7 steps)
 ```

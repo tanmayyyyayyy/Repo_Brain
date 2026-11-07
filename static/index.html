@@ -2318,6 +2318,7 @@ function vOpt() {
   h += `<div class="telemetry-card">
     <h3>Optimizer Execution Telemetry <span class="pill ${cls}">${statusIcon} ${esc(p.status)}</span></h3>
     ${p.tests.ran ? `<div class="small" style="margin-bottom:6px">Test Execution: <code>${esc(p.tests.cmd)}</code> ${ICONS.arrowRight} ${p.tests.ok ? '<span class="good">' + ICONS.check + ' PASSED</span>' : '<span class="err">' + ICONS.block + ' FAILED</span>'}</div><pre>${esc((p.tests.output || "").trim().split("\n").slice(-8).join("\n"))}</pre>` : '<div class="small mut">No tests detected in sandbox - proposal is unverified</div>'}
+    ${p.fuzz ? `<div class="small mut" style="margin-top:6px">Differential Fuzzing: <code>${p.fuzz.inputs}</code> inputs tested across ${p.fuzz.checked_functions} function(s) · ${p.fuzz.diverged === 0 ? '<span class="good">' + ICONS.check + ' 0 divergences</span>' : '<span class="err">' + ICONS.block + ' ' + p.fuzz.diverged + ' divergences</span>'}</div>` : ''}
     ${p.llm.requested ? `<div class="small mut" style="margin-top:6px">AI Tier Telemetry: ${p.llm.used ? "used" : "not used"} · ${esc(p.llm.reason)}</div>` : ''}
   </div>`;
 
@@ -2608,6 +2609,8 @@ function vAudit() {
         <button class="b" onclick="verifyChainAnimation()">Verify Chain</button>
         <button class="b s" onclick="tamper()">Simulate tampering</button>
         <button class="b s" onclick="dl('/api/report.md','repobrain-report.md')">Export report (.md)</button>
+        <button class="b s" onclick="dl('/api/export?fmt=sarif','repobrain.sarif')">Export SARIF</button>
+        <button class="b s" onclick="dl('/api/export?fmt=csv','repobrain-audit.csv')">Export CSV</button>
         <button class="b s" onclick="dlj()">Export JSON</button>
       </div>
     </div>
@@ -2683,6 +2686,10 @@ const COMMANDS = [
   { label: "Verify Cryptographic Audit Chain", action: () => { go("audit"); setTimeout(verifyChainAnimation, 200); } },
   { label: "Simulate Log Tampering", action: () => { go("audit"); setTimeout(tamper, 200); } },
   { label: "Go to Policy Inspector", action: () => go("policy") },
+  { label: "Export Report (Markdown)", action: () => dl('/api/report.md','repobrain-report.md') },
+  { label: "Export SARIF (GitHub Code Scanning)", action: () => dl('/api/export?fmt=sarif','repobrain.sarif') },
+  { label: "Export Audit Ledger (CSV)", action: () => dl('/api/export?fmt=csv','repobrain-audit.csv') },
+  { label: "Export Audit Ledger (JSON)", action: dlj },
   { label: "Toggle Dark / Light Theme", action: toggleTheme },
   { label: "Toggle Presenter Mode (Larger Type, Minimal Chrome)", action: togglePresenterMode },
   { label: "Start Guided Tour", action: toggleTour },

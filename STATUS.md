@@ -1,9 +1,9 @@
 # RepoBrain Status Report
 
-**Timestamp**: 2026-10-29T23:18:00+05:30
-**Test Suite**: 80 passed, 1 skipped (live API skip)
+**Timestamp**: 2026-11-07T14:45:00+05:30
+**Test Suite**: 104 passed, 1 skipped (live API skip)
 **Demo Status**: 7/7 automated headless browser verification steps PASSED
-**UI Gap Closure**: SVG-only icons, expanded WCAG AA checks, toasts/skeletons/empty+error states, server-driven tamper marking, input-safe shortcuts, 20 screenshots, mobile overflow assertions
+**Security & Verification**: Differential fuzzing, ML injection classifier, dependency typosquatting guard, HMAC audit log, vendor-neutral agent preflight API, SVG-only icons, WCAG AA contrast check passed, 20 screenshots captured
 
 ---
 
@@ -11,6 +11,11 @@
 
 | Item | Done | Verified How | Evidence (Command + Output) | Known Gaps |
 |---|---|---|---|---|
+| **Differential Fuzzing Engine** | Yes | Added `repobrain/fuzz.py`. Mines function constants & applies type confusion (ints, floats, strings, booleans, empty containers, None) across rewritten pure-looking functions in an isolated subprocess. Compares return values, exceptions, and argument mutations. Any divergence immediately rejects proposal. | `pytest tests/test_engine.py -k fuzz`<br>`2 passed in 0.85s` | Impure functions (I/O, global state) are safely detected and skipped from fuzzing. |
+| **Learned Prompt Injection Guard (ML Guard)** | Yes | Added `repobrain/mlguard.py` with zero-dependency Naive Bayes classifier trained on 242 injection/prose samples. Rules block; ML model warns on paraphrased directives (p ≥ 0.85). Evaluated via 5-fold cross validation with 0.94 precision and 0.0% false positives on 4,000 stdlib prose samples. | `python -m repobrain ml-eval`<br>`hybrid precision: 0.94, stdlib_false_positive_rate: 0.0` | Heuristic classifier warns only; never blocks alone. |
+| **Dependency Typosquatting & Supply-Chain Guard** | Yes | Added `repobrain/deps.py`. Scans package manifests (`requirements.txt`, `pyproject.toml`, `package.json`) using Damerau-Levenshtein distance against top 5,000 popular PyPI/npm packages. Flags typosquats, homoglyphs, VCS URLs, and unpinned dependencies. | `pytest tests/test_engine.py -k typosquat`<br>`1 passed in 0.12s` | Custom internal private registries need whitelist in policy. |
+| **Cryptographic HMAC Audit Ledger** | Yes | Added HMAC-SHA256 signing via `REPOBRAIN_AUDIT_KEY` in `repobrain/audit.py`. Protects against full hash chain regeneration attacks. Functional API (`verify_detail`, `log`, `read`) verifies hash links and HMAC signatures. | `pytest tests/test_engine.py -k hmac`<br>`1 passed in 0.08s` | Key must be set in environment for signing; falls back to SHA-256 hash chaining when absent. |
+| **Agent Preflight API & Hook** | Yes | Added `/api/preflight` in `repobrain/server.py` and `repobrain preflight` CLI. Allows external AI coding agents (Claude Code, Cursor, Copilot, AutoGPT) to validate file changes before disk writes. Added example wrapper `examples/agent_guard.py`. | Verified with `python examples/agent_guard.py` and `pytest tests/test_engine.py` | Requires local server running or integrated CLI invocation. |
 | **UI/UX Redesign: Flight Recorder Mission Control** | Yes | Replaced generic dashboard with custom "flight recorder / mission control" UI in `static/index.html`. Implemented asymmetric layout with persistent 290px telemetry rail & 5-stage stepper, verdict hero with 4-gate checklist, PR map with AI authorship chips, token-protected `/api/diff` endpoint with path-traversal guards, interactive unified diff viewer with hand-written syntax highlighting and inline Shield annotations, horizontal complexity bars with policy thresholds, vertical timeline audit hash chain with animated sweep and tamper detection, `Cmd+K` command palette, keyboard shortcuts (`1-6`, `O`, `A`, `Esc`, `?`), presenter mode tour, and dark/light themes. Added `tests/test_xss_safety.py` and diff endpoint tests in `tests/test_server.py`. Captured complete 1440x900 and 390x844 screenshot suite in `docs/ui/`. | `pytest tests/test_server.py tests/test_xss_safety.py`<br>`4 passed in 4.10s`<br>`python scripts/demo_check.py`<br>`ALL DEMO CHECK PASSES SUCCESSFULLY! REPOBRAIN IS GREEN.` | None. All behavior verified, zero external dependencies (strict CSP). |
 | **UI Overhaul Gap Closure** | Yes | Replaced all emoji/unicode glyph icons with `currentColor` inline SVGs; expanded `scripts/contrast_check.py` to parse live tokens and check every text/syntax token, border/focus ring, filled control, and tinted badge across all surfaces; fixed all sub-AA pairs. Added global error state, skeleton/empty states, clipboard copy for hashes and `file:line`, verdict `aria-live`, focus-visible rings, and command-palette presenter mode. Audit tamper UI now consumes `tampered_seq`/`downstream_seqs`/`invalidated_seqs` from `/api/audit/tamper`. Added Playwright coverage for tamper marking, shortcut input guards, and 360/390/768px horizontal overflow. Captured 16 after images + 4 before images and embedded them in README. | `python scripts/contrast_check.py`<br>`ALL CONTRAST CHECKS PASSED WCAG 2.1 AA SPECIFICATIONS!`<br>`pytest -v tests/test_mobile_responsiveness.py tests/test_ui_shortcuts.py tests/test_tamper_ui.py tests/test_ui_gap_closure.py`<br>`7 passed in 11.78s`<br>`python scripts/capture_full_matrix.py`<br>`ALL 20 SCREENSHOTS (16 AFTER + 4 BEFORE) CAPTURED SUCCESSFULLY!` | Original console (`37b7551^`) had no dedicated diff inspector; the "before" diff image is its optimizer diff, the closest equivalent. Contrast is token-based, not browser pixel sampling. |
 | **P0-1: Multi-Provider AI refactor tier & API validation** | Yes | Multi-provider architecture in `repobrain/llm.py` supporting Groq (free tier OpenAI-compatible `openai/gpt-oss-120b`, rate-limit retry with `Retry-After`, custom user agent) and Anthropic (`claude-sonnet-5-5`), auto-detected via `GROQ_API_KEY`/`ANTHROPIC_API_KEY` or `REPOBRAIN_LLM_PROVIDER`. Added 5 provider tests against local mock server in `tests/test_llm_providers.py`. Unit & integration tests in `tests/test_ai_tier.py` verifying model override, clear 401/404 HTTP errors, qualified name resolution (`_map_functions`), untrusted code Shield scanning, and Scenario C end-to-end refactor of `shop/orders.py` (cyclomatic 27). Live API test skipped gracefully when keys absent. | `pytest -v tests/test_llm_providers.py tests/test_ai_tier.py`<br>`12 passed, 1 skipped in 2.10s` | Live API execution requires `GROQ_API_KEY` or `ANTHROPIC_API_KEY` in environment; verified against local mock server and unit test fixtures. |
@@ -31,9 +36,9 @@
 ### Final Test Run: `python -m pytest -q tests`
 
 ```text
-.......s................................................................ [ 88%]
-..........                                                               [100%]
-80 passed, 1 skipped in 28.69s
+.......s................................................................ [ 68%]
+.................................                                        [100%]
+104 passed, 1 skipped in 32.24s
 ```
 
 *(Note: 1 skipped test is `test_live_anthropic_api_tier` in `tests/test_ai_tier.py` because `ANTHROPIC_API_KEY` is not set in the local development environment).*

@@ -1,4 +1,9 @@
-"""Markdown output: PR comment and compliance report."""
+"""Markdown output: PR comment, compliance report, and HTML audit report."""
+import html
+import json
+import pathlib
+from . import audit
+
 ICON = {"BLOCKED": "⛔", "CHANGES_REQUIRED": "🟠", "ALLOWED": "✅"}
 
 
@@ -12,15 +17,15 @@ def pr_comment(rev, prop=None):
     warns = [f for f in rev["findings"] if f["severity"] == "warn"]
     if blocks:
         L += ["### Blocking", "| File | Line | Rule | Detail |", "|---|---|---|---|"]
-        L += [f"| `{f['file']}` | {f.get('line', '')} | {f['rule']} | {f['message']} |" for f in blocks]
+        L += [f"| `{f['file']}` | {f.get('line', '')} | {f['rule']} | {f.get('msg', f.get('message', ''))} |" for f in blocks]
         L.append("")
     if rev["gate"]:
         L += ["### Complexity gate", "| Function | cyclomatic | cognitive | depth | Why |", "|---|---|---|---|---|"]
-        L += [f"| `{g['file']}::{g['name']}` | {g['cc']} | {g['cog']} | {g['depth']} | {'; '.join(g['why'])} |"
+        L += [f"| `{g['file']}::{g['name']}` | {g.get('cc', g.get('complexity', ''))} | {g.get('cog', g.get('cognitive', ''))} | {g['depth']} | {'; '.join(g.get('why', []))} |"
               for g in rev["gate"]]
         L.append("")
     if warns:
-        L += ["### Warnings"] + [f"- `{f['file']}` ({f['rule']}): {f['message']}" for f in warns] + [""]
+        L += ["### Warnings"] + [f"- `{f['file']}` ({f['rule']}): {f.get('msg', f.get('message', ''))}" for f in warns] + [""]
     if prop and prop.get("files"):
         cov = prop.get("coverage", {})
         cov_note = ""
@@ -34,7 +39,7 @@ def pr_comment(rev, prop=None):
         L += [f"### Proposed cleanup · tests: **{prop['status']}**{cov_note}", "| File | max cognitive | max depth | lines |", "|---|---|---|---|"]
         for f in prop["files"]:
             b, a = f["metrics"]["before"], f["metrics"]["after"]
-            L.append(f"| `{f['path']}` | {b['max_cog']} → {a['max_cog']} | {b['max_depth']} → {a['max_depth']} | {b['loc']} → {a['loc']} |")
+            L.append(f"| `{f['path']}` | {b.get('max_cog', 0)} → {a.get('max_cog', 0)} | {b.get('max_depth', 0)} → {a.get('max_depth', 0)} | {b.get('loc', 0)} → {a.get('loc', 0)} |")
         L.append("")
     L.append("<sub>Policy is read from the trusted base branch. Merge still requires human approval.</sub>")
     return "\n".join(L)
@@ -54,3 +59,24 @@ def compliance(rev, entries, chain, policy):
     L += [f"| {e.get('seq')} | {e.get('ts')} | {e.get('event')} | {e.get('actor')} | {e.get('decision')} | {str(e.get('detail'))[:90]} |"
           for e in entries]
     return "\n".join(L)
+
+
+def build(home):
+    home = pathlib.Path(home)
+    rows, chain = audit.read(home), audit.verify_detail(home)
+    status = ("<b style='color:#2e7d32'>Chain verified</b>" + (" (HMAC-signed)" if chain["signed"] else "")) if chain["ok"] else \
+        f"<b style='color:#c62828'>TAMPERING DETECTED at record #{chain['bad_index']}: {html.escape(chain['reason'])}</b>"
+    body = "".join(
+        f"<tr><td>{r.get('seq', '')}</td><td>{html.escape(str(r.get('ts', '')))}</td><td>{html.escape(str(r.get('event', '')))}</td><td class='d-{html.escape(str(r.get('decision', '')).split('+')[0])}'>{html.escape(str(r.get('decision', '')))}</td>"
+        f"<td>{html.escape(str(r.get('actor', '')))}</td><td><code>{html.escape(json.dumps(r.get('detail', '')))[:300]}</code></td><td><code>{str(r.get('hash', ''))[:10]}</code></td></tr>"
+        for r in reversed(rows))
+    page = f"""<!doctype html><meta charset=utf-8><title>RepoBrain audit report</title>
+<style>body{{font:14px system-ui;margin:40px auto;max-width:1000px;color:#16161d}}table{{border-collapse:collapse;width:100%}}
+td,th{{border-bottom:1px solid #e3e3ea;padding:6px 8px;text-align:left;vertical-align:top}}th{{background:#f4f2fb}}code{{font-size:12px}}
+.d-block,.d-rejected,.d-invalidated{{color:#c62828;font-weight:600}}.d-approved,.d-allow{{color:#2e7d32;font-weight:600}}</style>
+<h1>RepoBrain audit report</h1><p>{status}. {len(rows)} records. Each record commits to the previous one with SHA-256.</p>
+<table><tr><th>#</th><th>Time (UTC)</th><th>Event</th><th>Decision</th><th>Actor</th><th>Detail</th><th>Hash</th></tr>{body}</table>"""
+    out = home / "report.html"
+    home.mkdir(parents=True, exist_ok=True)
+    out.write_text(page)
+    return out

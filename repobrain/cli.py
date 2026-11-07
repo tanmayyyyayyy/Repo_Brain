@@ -2,17 +2,22 @@
 import argparse
 import json
 import os
+import pathlib
 import sys
 
 from . import audit as A
-from . import explainer, gitutil, llm, metrics, optimizer, report, review, shield
+from . import demo, explainer, export, gitutil, hooks, llm, metrics, mlguard, optimizer, report, review, server, shield
 from . import policy as P
 
 TEST_RX = review.TEST_RX
 
 
+def _root(a):
+    return os.path.abspath(getattr(a, "repo", None) or ".")
+
+
 def _ctx(a):
-    root = os.path.abspath(a.repo)
+    root = _root(a)
     base = None
     if gitutil.is_repo(root):
         try:
@@ -78,12 +83,33 @@ def cmd_scan(a):
 
 
 def cmd_shield(a):
-    root, base, pol, _, log = _ctx(a)
-    content = open(a.file, encoding="utf-8").read() if a.file else ""
-    res = shield.check_action({"actor": a.actor, "path": a.path, "content": content}, pol)
-    log.append("shield-check", a.actor, res["decision"], f"{a.path}: " + (", ".join(f["rule"] for f in res["findings"]) or "clean"))
-    print(json.dumps(res, indent=2))
-    return 0 if res["decision"] == "ALLOWED" else 1
+    root, base, pol, home, log = _ctx(a)
+    if getattr(a, "path", None):
+        content = open(a.file, encoding="utf-8").read() if getattr(a, "file", None) else ""
+        res = shield.check_action({"actor": a.actor, "path": a.path, "content": content}, pol)
+        log.append("shield-check", a.actor, res["decision"], f"{a.path}: " + (", ".join(f["rule"] for f in res["findings"]) or "clean"))
+        print(json.dumps(res, indent=2))
+        return 0 if res["decision"] == "ALLOWED" else 1
+
+    files = getattr(a, "files", []) or []
+    if base and not files:
+        files = [p for s, p in gitutil.changed_files(root, base)]
+    added = gitutil.added_lines(root, base) if base else None
+    finds = shield.check(root, files, pol, a.actor, added=added)
+    A.log(home, "shield", "block" if any(f["severity"] == "block" for f in finds) else "pass", a.actor, {"findings": len(finds)})
+    if getattr(a, "sarif", None):
+        pathlib.Path(a.sarif).write_text(json.dumps(export.sarif(finds, []), indent=1))
+    for f in finds:
+        print(f"{f['severity'].upper():5} {f['rule']:18} {f['file']}:{f.get('line') or ''}  {f.get('msg', f.get('message', ''))}")
+    return 1 if any(f["severity"] == "block" for f in finds) else 0
+
+
+def cmd_gate(a):
+    root, base, pol, _, _ = _ctx(a)
+    bad = optimizer.gate(root, pol, base=getattr(a, "base", None))
+    for b in bad:
+        print(f"GATE  {b['file']}::{b['name']}()  {', '.join(b['why'])}")
+    return 1 if bad else 0
 
 
 def cmd_optimize(a):
@@ -116,10 +142,17 @@ def cmd_optimize(a):
 
 
 def cmd_explain(a):
-    log_text = open(a.log, encoding="utf-8", errors="replace").read() if a.log else sys.stdin.read()
+    log_file = getattr(a, "log", None)
+    if log_file and log_file != "-":
+        if os.path.isfile(log_file):
+            log_text = open(log_file, encoding="utf-8", errors="replace").read()
+        else:
+            log_text = log_file
+    else:
+        log_text = sys.stdin.read()
     ask = None
     _, _, pol, _, _ = _ctx(a)
-    if a.ai and pol["allow_llm"] and llm.available():
+    if a.ai and pol.get("allow_llm") and llm.available():
         ask = llm.ask
     res = explainer.explain(log_text, ask)
     print(json.dumps(res, indent=2))
@@ -128,8 +161,7 @@ def cmd_explain(a):
 
 def cmd_audit(a):
     _, _, _, _, log = _ctx(a)
-    # Resolve expected head: explicit --expect takes priority, then --anchor-file
-    expect = a.expect
+    expect = getattr(a, "expect", None)
     if not expect and getattr(a, "anchor_file", None) and os.path.isfile(a.anchor_file):
         try:
             expect = open(a.anchor_file, encoding="utf-8").read().strip()
@@ -138,7 +170,6 @@ def cmd_audit(a):
             return 2
     v = log.verify(expect)
     if getattr(a, "write_anchor", None):
-        # Write current head hash to the anchor file so the *next* run can verify with --anchor-file
         head = v.get("head") or ""
         try:
             os.makedirs(os.path.dirname(os.path.abspath(a.write_anchor)), exist_ok=True)
@@ -148,12 +179,13 @@ def cmd_audit(a):
         except OSError as exc:
             print(f"repobrain: cannot write anchor file: {exc}", file=sys.stderr)
             return 2
-    if a.export:
+    if getattr(a, "export", False):
         print(json.dumps({"verification": v, "entries": log.entries()}, indent=2))
     else:
-        for e in log.entries()[-a.tail:]:
-            print(f"#{e['seq']:<4} {e['ts']}  {e['event']:<10} {e['decision']:<17} {e['actor'][:30]:<30} {e['detail'][:70]}")
-        print("chain:", "VERIFIED" if v["ok"] else f"BROKEN at #{v['broken_at']} - {v['reason']}", f"head={str(v.get('head'))[:16]}")
+        tail_count = getattr(a, "tail", 25)
+        for e in log.entries()[-tail_count:]:
+            print(f"#{e.get('seq', ''):<4} {e.get('ts', '')}  {e.get('event', ''):<10} {e.get('decision', ''):<17} {str(e.get('actor', ''))[:30]:<30} {str(e.get('detail', ''))[:70]}")
+        print("chain:", "VERIFIED" if v["ok"] else f"BROKEN at #{v.get('broken_at')} - {v.get('reason')}", f"head={str(v.get('head'))[:16]}")
     return 0 if v["ok"] else 1
 
 
@@ -169,7 +201,7 @@ def cmd_report(a):
     root, base, pol, home, log = _ctx(a)
     rev = review.run(root, pol, base, home)
     md = report.compliance(rev, log.entries(), log.verify(), {k: v for k, v in pol.items()})
-    if a.out:
+    if getattr(a, "out", None):
         with open(a.out, "w", encoding="utf-8") as f:
             f.write(md)
         print("wrote", a.out)
@@ -179,8 +211,69 @@ def cmd_report(a):
 
 
 def cmd_serve(a):
-    from .server import serve
-    return serve(a)
+    return server.serve(a)
+
+
+def cmd_demo(a):
+    """Run the whole story in the terminal (no browser needed)."""
+    base_dir = os.environ.get("REPOBRAIN_DEMO_DIR") or os.path.join(os.path.expanduser("~"), ".repobrain", "demo")
+    root, home = os.path.join(base_dir, "repo"), os.path.join(base_dir, "home")
+    demo.seed(root)
+    base = "main"
+    print("== 1. Shield + gate on an AI-authored PR ==")
+    st = server.state(root, base)
+    for f in st["files"]:
+        for x in f["findings"]:
+            print(f"  {x['severity'].upper():5} {x['rule']:18} {f['path']}:{x.get('line') or ''}  {x.get('msg', x.get('message', ''))}")
+    print(f"  verdict: {st['verdict'].upper()}   merge risk: {st['risk']['score']}/100 ({st['risk']['level']})")
+    print("== 2. Optimizer (tests + differential fuzz) ==")
+    p = optimizer.propose(root, P.load_for(root, base), [f["path"] for f in st["files"] if f["path"].endswith(".py")], home)
+    fuzz_str = str(p.get("fuzz")) if p.get("fuzz") else "none"
+    print(f"  {p['status']}  tests={p['tests'] and p['tests']['ok']} runner={p['tests'] and p['tests'].get('runner')}  fuzz={fuzz_str}")
+    if getattr(a, "approve", False):
+        print("== 3. Human approval applies the verified simplification ==")
+        if p["files"]:
+            applied = optimizer.apply(root, home, p["id"], "demo-reviewer")
+            print(" ", applied)
+        print("  gate violations now:", len(optimizer.gate(root, P.load_for(root, base))))
+    print("== Audit chain ==", A.verify_detail(home))
+    return 0
+
+
+def cmd_preflight(a):
+    content = pathlib.Path(a.content_file).read_text(encoding="utf-8") if getattr(a, "content_file", None) else ""
+    r = server.preflight(_root(a), a.actor, [{"path": a.path, "content": content}])
+    print(json.dumps(r, indent=2))
+    return 1 if r["decision"] == "block" else 0
+
+
+def cmd_ml_eval(a):
+    print(json.dumps(mlguard.evaluate(shield.injection_rule_hit), indent=2))
+    return 0
+
+
+def cmd_hook(a):
+    print("installed", hooks.install(_root(a)))
+    return 0
+
+
+def cmd_hook_check(a):
+    return hooks.check(_root(a))
+
+
+def cmd_ci(a):
+    """One command for CI: shield + gate + optimizer proposal -> SARIF + Markdown summary + exit code."""
+    root = _root(a)
+    st = server.state(root, getattr(a, "base", "main"))
+    finds = [x for f in st["files"] for x in f["findings"] if not x.get("waived")]
+    if getattr(a, "sarif", None):
+        pathlib.Path(a.sarif).write_text(json.dumps(export.sarif(finds, st["gate"]), indent=1))
+    md = export.markdown(st)
+    if getattr(a, "summary", None):
+        pathlib.Path(a.summary).write_text(md)
+    print(md)
+    A.log(A.home_for(root), "ci", st["verdict"], a.actor, {"risk": st["risk"]["score"], "blocking": st["blocking"]})
+    return 0 if st["verdict"] == "ready" else 1
 
 
 def build():
@@ -199,14 +292,23 @@ def build():
     sp.add_argument("--base"); sp.add_argument("--actor", help="extra identity to treat as the author (e.g. PR opener)")
     sp.add_argument("--comment", help="write PR-comment markdown here"); sp.add_argument("--json", action="store_true")
     add("scan", cmd_scan, help="list over-limit functions across the whole repo (tech debt)")
-    sp = add("shield", cmd_shield, help="check one proposed action"); sp.add_argument("--path", required=True)
-    sp.add_argument("--actor", default="unknown"); sp.add_argument("--file")
+
+    sp = add("shield", cmd_shield, help="check files or a proposed action")
+    sp.add_argument("--path", help="target path for check_action"); sp.add_argument("--actor", default="unknown")
+    sp.add_argument("--file", help="file containing content to check"); sp.add_argument("--base", help="base git ref")
+    sp.add_argument("--sarif", help="write findings to SARIF file"); sp.add_argument("files", nargs="*", default=[])
+
+    sp = add("gate", cmd_gate, help="check complexity gate violations")
+    sp.add_argument("--base")
+
     sp = add("optimize", cmd_optimize, help="propose a test-verified cleanup")
     sp.add_argument("--base"); sp.add_argument("--all", action="store_true"); sp.add_argument("--ai", action="store_true")
     sp.add_argument("--diff", action="store_true"); sp.add_argument("--apply", action="store_true")
     sp.add_argument("--actor", help="approving human (required with --apply)")
+
     sp = add("explain", cmd_explain, help="explain a failing log (stdin or --log)")
-    sp.add_argument("--log"); sp.add_argument("--ai", action="store_true")
+    sp.add_argument("log", nargs="?", default=None); sp.add_argument("--ai", action="store_true")
+
     sp = add("audit", cmd_audit, help="show / verify / export the audit log")
     sp.add_argument("--expect", help="anchored head hash to verify against"); sp.add_argument("--export", action="store_true")
     sp.add_argument("--tail", type=int, default=25)
@@ -214,20 +316,39 @@ def build():
                     help="path to a file containing the anchored head hash (written by --write-anchor)")
     sp.add_argument("--write-anchor", dest="write_anchor",
                     help="after verification, write the current head hash to this file")
+
     sp = add("waive", cmd_waive, help="human override of the complexity gate (logged)")
     sp.add_argument("--actor", required=True); sp.add_argument("--reason", required=True)
+
     sp = add("report", cmd_report, help="compliance report (markdown)"); sp.add_argument("--base"); sp.add_argument("--out")
+
     sp = add("serve", cmd_serve, help="review console (localhost)")
     sp.add_argument("--base"); sp.add_argument("--port", type=int, default=8765)
     sp.add_argument("--demo", action="store_true", help="seed a demo git repo with AI-authored PRs")
     sp.add_argument("--no-browser", action="store_true")
+
+    sp = add("demo", cmd_demo, help="run the full story in the terminal")
+    sp.add_argument("--approve", action="store_true")
+
+    sp = add("preflight", cmd_preflight, help="vendor-neutral preflight check")
+    sp.add_argument("--actor", required=True); sp.add_argument("--path", required=True); sp.add_argument("--content-file")
+
+    add("ml-eval", cmd_ml_eval, help="evaluate learned prompt injection classifier")
+    add("install-hook", cmd_hook, help="install pre-commit hook")
+    add("hook-check", cmd_hook_check, help="check staged changes")
+
+    sp = add("ci", cmd_ci, help="one command for CI: shield + gate + optimizer")
+    sp.add_argument("--base", default="main"); sp.add_argument("--actor", default="ci")
+    sp.add_argument("--sarif"); sp.add_argument("--summary")
+
     return ap
 
 
 def main(argv=None):
     a = build().parse_args(argv)
     try:
-        return a.fn(a)
+        rc = a.fn(a)
+        return rc if isinstance(rc, int) else 0
     except (gitutil.GitError, P.PolicyError, ValueError) as e:
         print(f"repobrain: {e}", file=sys.stderr)
         return 2

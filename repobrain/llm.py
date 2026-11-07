@@ -1,7 +1,7 @@
-"""Optional LLM tier (stdlib only). Providers: Groq (free tier, OpenAI-compatible) or Anthropic.
+"""Optional LLM tier (stdlib only). Providers: Groq (free tier, OpenAI-compatible), OpenAI, or Anthropic.
 
-Selection:  REPOBRAIN_LLM_PROVIDER=groq|anthropic   (default: groq if GROQ_API_KEY is set, else anthropic)
-Model:      REPOBRAIN_MODEL                          (default per provider; check your provider's model list)
+Selection:  REPOBRAIN_LLM_PROVIDER=groq|anthropic|openai  (default: groq if GROQ_API_KEY is set, else anthropic)
+Model:      REPOBRAIN_MODEL                               (default per provider; check your provider's model list)
 Used ONLY when policy.allow_llm is true AND the caller opts in, never on files with Shield findings, and
 every result is test-gated and human-approved like any other change."""
 import json
@@ -12,9 +12,11 @@ import urllib.request
 
 PROVIDERS = {
     "groq": {"key_env": "GROQ_API_KEY", "base": "https://api.groq.com/openai/v1",
-             "model": "openai/gpt-oss-120b"},      # free-tier model at time of writing; override with REPOBRAIN_MODEL
+             "model": "openai/gpt-oss-120b"},
     "anthropic": {"key_env": "ANTHROPIC_API_KEY", "base": "https://api.anthropic.com",
                   "model": "claude-sonnet-5-5"},
+    "openai": {"key_env": "OPENAI_API_KEY", "base": "https://api.openai.com/v1",
+               "model": "gpt-4o-mini"},
 }
 UA = "repobrain/0.2 (+local)"        # Groq sits behind Cloudflare, which can reject Python's default User-Agent
 
@@ -24,11 +26,13 @@ class LLMError(RuntimeError):
 
 
 def provider():
-    p = os.environ.get("REPOBRAIN_LLM_PROVIDER", "").lower()
+    p = (os.environ.get("REPOBRAIN_LLM_PROVIDER") or os.environ.get("REPOBRAIN_LLM") or "").lower()
     if p in PROVIDERS:
         return p
     if os.environ.get("GROQ_API_KEY"):
         return "groq"
+    if os.environ.get("OPENAI_API_KEY"):
+        return "openai"
     return "anthropic"
 
 
@@ -37,7 +41,7 @@ def key_env():
 
 
 def available():
-    return bool(os.environ.get(key_env()))
+    return bool(os.environ.get(key_env()) or os.environ.get("REPOBRAIN_LLM_URL") or os.environ.get("REPOBRAIN_LLM_BASE_URL"))
 
 
 def missing_key_hint():
@@ -76,15 +80,17 @@ def ask(prompt, system="", max_tokens=None):
     p = provider()
     cfg = PROVIDERS[p]
     key = os.environ.get(cfg["key_env"])
+    if not key and (os.environ.get("REPOBRAIN_LLM_URL") or os.environ.get("REPOBRAIN_LLM_BASE_URL")):
+        key = "mock-key"
     if not key:
         raise LLMError(missing_key_hint())
     model = os.environ.get("REPOBRAIN_MODEL", cfg["model"])
-    base = os.environ.get("REPOBRAIN_LLM_BASE_URL", cfg["base"]).rstrip("/")
-    if p == "groq":
+    base = (os.environ.get("REPOBRAIN_LLM_URL") or os.environ.get("REPOBRAIN_LLM_BASE_URL") or cfg["base"]).rstrip("/")
+    if p in ("groq", "openai"):
         msgs = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": prompt}]
         data = _post(base + "/chat/completions", {"authorization": f"Bearer {key}"},
                      {"model": model, "messages": msgs, "temperature": 0.1,
-                      "max_tokens": max_tokens or 4096})           # reasoning models spend tokens thinking
+                      "max_tokens": max_tokens or 4096})
         try:
             text = data["choices"][0]["message"]["content"] or ""
         except (KeyError, IndexError, TypeError):

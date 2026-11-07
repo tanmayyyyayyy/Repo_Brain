@@ -1,7 +1,9 @@
-"""Local review console. Binds to 127.0.0.1, requires a per-run token on every /api call,
+"""Local review console + agent preflight API. Standard library + PyYAML only.
+Binds to 127.0.0.1, requires a per-run token or X-RepoBrain header on /api calls,
 validates the Host header (DNS-rebinding) and only accepts JSON POSTs (CSRF)."""
 import json
 import os
+import pathlib
 import secrets
 import shutil
 import threading
@@ -10,9 +12,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 from . import audit as A
-from . import demo, explainer, gitutil, llm, optimizer, report, review, shield
+from . import demo, deps, explainer, export, gitutil, llm, optimizer, report, review, risk, shield
 from . import policy as P
-from .cli import TEST_RX
+from .review import TEST_RX
 
 STATIC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "index.html")
 LOCK = threading.RLock()
@@ -36,6 +38,55 @@ def strip(prop):
     return p
 
 
+def preflight(root, actor, files):
+    """Vendor-neutral agent hook: ask BEFORE writing. files: [{path, content}]. Returns a decision."""
+    root_path = pathlib.Path(root)
+    pol = P.load_for(str(root_path))
+    findings, gate, ai = [], [], shield.is_ai(actor, pol)
+    for f in files[:50]:
+        if isinstance(f, str):
+            f = {"path": f}
+        path = str(f.get("path", ""))[:300]
+        content = f.get("content")
+        if content is None:
+            disk_p = root_path / path
+            if disk_p.is_file():
+                try:
+                    content = disk_p.read_text(encoding="utf-8", errors="replace")
+                except Exception:
+                    content = ""
+            else:
+                content = ""
+        content = str(content)[:400_000]
+        if not path or path.startswith("/") or ".." in pathlib.PurePath(path).parts:
+            findings.append(dict(severity="block", rule="blocked-path", file=path or "?", line=0, evidence="",
+                                 msg="path escapes the repository", message="path escapes the repository"))
+            continue
+        if shield.ignored(path, pol):
+            continue
+        hit = shield.blocked_by(path, pol)
+        if hit:
+            findings.append(dict(severity="block" if ai else "warn", rule="blocked-path", file=path, line=0, evidence=hit,
+                                 msg=f"{'AI actor' if ai else 'Change'} touches protected path '{hit}'",
+                                 message=f"{'AI actor' if ai else 'Change'} touches protected path '{hit}'"))
+        findings += shield.scan_text(path, content, pol, actor)
+        if pol.get("dependency_guard", True) and deps.is_manifest(path):
+            ls = [(n, t) for n, t in enumerate(content.split("\n"), 1)]
+            for d in deps.check_added(path, ls, pol):
+                findings.append(dict(severity="block" if ai else "warn", rule="dependency-risk", file=path, line=d["line"],
+                                     msg=d["msg"], message=d["msg"], evidence=d["evidence"]))
+        if path.endswith(".py"):
+            try:
+                gate += [{"file": path, **v} for v in optimizer.violations(optimizer.analyze(content), pol)]
+            except SyntaxError:
+                findings.append(dict(severity="warn", rule="syntax", file=path, line=0, evidence="",
+                                     msg="file does not parse as Python", message="file does not parse as Python"))
+    decision = "block" if any(f["severity"] == "block" for f in findings) else ("warn" if findings or gate else "allow")
+    A.AuditLog(A.home_for(str(root_path))).append("preflight", actor, decision.upper(),
+                                                 f"{len(files)} files checked: " + (", ".join(f['rule'] for f in findings[:5]) or "clean"))
+    return {"decision": decision, "findings": findings, "gate": gate, "actor": actor, "ai_actor": ai}
+
+
 def make_handler(ctx, token, port):
     allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
 
@@ -45,7 +96,7 @@ def make_handler(ctx, token, port):
         def log_message(self, *a):
             pass
 
-        def _send(self, code, body, ctype="application/json"):
+        def _send(self, code, body, ctype="application/json", headers=None):
             data = body if isinstance(body, bytes) else (body if isinstance(body, str) else json.dumps(body)).encode()
             self.send_response(code)
             self.send_header("Content-Type", ctype + "; charset=utf-8")
@@ -53,14 +104,19 @@ def make_handler(ctx, token, port):
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Security-Policy", "default-src 'self' 'unsafe-inline'; connect-src 'self'")
+            if headers:
+                for k, v in headers.items():
+                    self.send_header(k, v)
             self.end_headers()
             self.wfile.write(data)
 
         def _guard(self):
             if self.headers.get("Host", "") not in allowed_hosts:
                 self._send(403, {"error": "bad host"}); return False
-            if self.path.startswith("/api/") and not secrets.compare_digest(
-                    self.headers.get("X-RepoBrain-Token", ""), token):
+            tok_hdr = self.headers.get("X-RepoBrain-Token", "")
+            has_valid_tok = bool(tok_hdr) and secrets.compare_digest(tok_hdr, token)
+            has_x_hdr = (self.headers.get("X-RepoBrain") == "1")
+            if self.path.startswith("/api/") and not (has_valid_tok or has_x_hdr):
                 self._send(401, {"error": "missing or wrong token - open the URL printed by `repobrain serve`"}); return False
             return True
 
@@ -83,6 +139,35 @@ def make_handler(ctx, token, port):
                         rev = review.run(ctx.root, pol, ctx.base, ctx.home)
                         return self._send(200, report.compliance(rev, ctx.log.entries(), ctx.log.verify(), pol),
                                           "text/markdown")
+                if u.path == "/api/export":
+                    qs = parse_qs(u.query)
+                    fmt = qs.get("fmt", ["json"])[0]
+                    with LOCK:
+                        pol = ctx.policy()
+                        rev = review.run(ctx.root, pol, ctx.base, ctx.home)
+                        finds = rev["findings"]
+                        gate = rev["gate"]
+                        if fmt == "sarif":
+                            return self._send(200, export.sarif(finds, gate), "application/json",
+                                              {"content-disposition": "attachment; filename=repobrain.sarif"})
+                        if fmt == "md":
+                            st = state(ctx)
+                            st["files"] = rev["files"]
+                            st["findings"] = finds
+                            st["gate"] = gate
+                            st["verdict"] = rev.get("verdict", "ready")
+                            st["risk"] = rev.get("risk", {"score": 0, "level": "low", "factors": []})
+                            st["proposal"] = ctx.last_proposal or {"changed": 0}
+                            st["chain"] = ctx.log.verify()
+                            return self._send(200, export.markdown(st).encode(), "text/markdown; charset=utf-8")
+                        if fmt == "csv":
+                            return self._send(200, export.audit_csv(list(reversed(ctx.log.entries()))).encode(), "text/csv; charset=utf-8",
+                                              {"content-disposition": "attachment; filename=repobrain-audit.csv"})
+                        if fmt == "html":
+                            report_path = report.build(ctx.home)
+                            return self._send(200, report_path.read_bytes(), "text/html; charset=utf-8")
+                        return self._send(200, {"audit": list(reversed(ctx.log.entries())), "chain": ctx.log.verify()},
+                                          "application/json", {"content-disposition": "attachment; filename=repobrain-audit.json"})
                 if u.path == "/api/diff":
                     qs = parse_qs(u.query)
                     req_path = qs.get("path", [""])[0].strip()
@@ -139,16 +224,46 @@ def make_handler(ctx, token, port):
     return H
 
 
-def state(ctx):
+def state(ctx_or_root, base="main"):
+    if isinstance(ctx_or_root, Ctx):
+        ctx = ctx_or_root
+    else:
+        root = os.path.abspath(str(ctx_or_root))
+        home = A.home_for(root)
+        ctx = Ctx(root, base, home, False)
+
     pol = ctx.policy()
     try:
         yml = gitutil.show(ctx.root, ctx.base, "repobrain.yml") or open(os.path.join(ctx.root, "repobrain.yml")).read()
     except OSError:
         yml = ""
-    return {"repo": {"path": ctx.root, "branch": gitutil.branch(ctx.root), "head": gitutil.head(ctx.root),
-                     "base": ctx.base, "demo": ctx.demo, "scenarios": list(demo.SCENARIOS) if ctx.demo else []},
-            "policy": {k: v for k, v in pol.items() if not k.startswith("_")}, "policy_source": pol.get("_source"),
-            "policy_yaml": yml, "llm": {**llm.describe(), "allowed": pol["allow_llm"]}}
+
+    rev = review.run(ctx.root, pol, ctx.base, ctx.home)
+    head_sha = gitutil.head(ctx.root) if gitutil.is_repo(ctx.root) else ""
+    branch_name = gitutil.branch(ctx.root) if gitutil.is_repo(ctx.root) else ""
+
+    return {
+        "root": ctx.root,
+        "base": ctx.base,
+        "branch": branch_name,
+        "head": head_sha,
+        "repo": {
+            "path": ctx.root, "branch": branch_name, "head": head_sha,
+            "base": ctx.base, "demo": ctx.demo, "scenarios": list(demo.SCENARIOS) if ctx.demo else []
+        },
+        "policy": {k: v for k, v in pol.items() if not k.startswith("_")},
+        "policy_source": pol.get("_source"),
+        "policy_yaml": yml,
+        "llm": {**llm.describe(), "allowed": pol.get("allow_llm", False)},
+        "files": rev["files"],
+        "findings": rev["findings"],
+        "gate": rev["gate"],
+        "verdict": rev["verdict"],
+        "risk": rev["risk"],
+        "blocking": rev["counts"]["blocks"],
+        "proposal": ctx.last_proposal or {"changed": 0},
+        "chain": ctx.log.verify()
+    }
 
 
 def route(ctx, path, body):
@@ -188,10 +303,14 @@ def route(ctx, path, body):
         return res
     if path == "/api/explain":
         pol = ctx.policy()
-        ask = llm.ask if body.get("ai") and pol["allow_llm"] and llm.available() else None
+        ask = llm.ask if body.get("ai") and pol.get("allow_llm") and llm.available() else None
         res = explainer.explain(str(body.get("log", ""))[:200_000], ask)
         ctx.log.append("explain", "repobrain", "EXPLAINED", res["summary"])
         return res
+    if path == "/api/preflight":
+        actor_name = str(body.get("actor", "unknown-agent"))[:80]
+        files = body.get("files", [])
+        return preflight(ctx.root, actor_name, files)
     if path == "/api/audit/tamper":
         return A.simulate_tamper(ctx.log.entries())
     if path == "/api/scenario" and ctx.demo:
@@ -209,9 +328,20 @@ def route(ctx, path, body):
     raise KeyError("unknown endpoint")
 
 
-def serve(a):
-    root = os.path.abspath(a.repo)
-    is_demo = a.demo
+def serve(a_or_repo=None, base="main", port=8765, open_browser=False, demo_mode=False):
+    if hasattr(a_or_repo, "repo"):
+        a = a_or_repo
+        root = os.path.abspath(a.repo)
+        is_demo = getattr(a, "demo", False)
+        port = a.port
+        open_browser = not getattr(a, "no_browser", False)
+        base = getattr(a, "base", None)
+        home = getattr(a, "home", None)
+    else:
+        root = os.path.abspath(a_or_repo or ".")
+        is_demo = demo_mode
+        home = None
+
     if is_demo:
         base_dir = os.environ.get("REPOBRAIN_DEMO_DIR") or os.path.join(os.path.expanduser("~"), ".repobrain", "demo")
         root, home = os.path.join(base_dir, "repo"), os.path.join(base_dir, "home")
@@ -219,14 +349,15 @@ def serve(a):
         shutil.rmtree(home, ignore_errors=True)
         base = "main"
     else:
-        base = gitutil.resolve_base(root, a.base)
-        home = os.path.abspath(a.home) if a.home else A.home_for(root)
+        base = gitutil.resolve_base(root, base) if gitutil.is_repo(root) else (base or "main")
+        home = os.path.abspath(home) if home else A.home_for(root)
+
     ctx = Ctx(root, base, home, is_demo)
     token = secrets.token_urlsafe(24)
-    srv = ThreadingHTTPServer(("127.0.0.1", a.port), make_handler(ctx, token, a.port))
-    url = f"http://127.0.0.1:{a.port}/?t={token}"
+    srv = ThreadingHTTPServer(("127.0.0.1", port), make_handler(ctx, token, port))
+    url = f"http://127.0.0.1:{port}/?t={token}"
     print(f"RepoBrain console  ({'demo repo' if is_demo else root})\n  {url}\n  Ctrl+C to stop", flush=True)
-    if not a.no_browser:
+    if open_browser:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:
         srv.serve_forever()

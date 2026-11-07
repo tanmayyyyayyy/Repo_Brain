@@ -4,7 +4,7 @@ import os
 import re
 import time
 
-from . import gitutil, metrics, shield
+from . import deps, gitutil, metrics, risk, shield
 from . import policy as P
 
 TEST_RX = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$)")
@@ -46,8 +46,14 @@ def run(root, policy, base=None, home=None, extra_actor=None):
                  "violations": [], "added": len(added.get(path, {}))}
         if status != "D":
             text = gitutil.show(root, "HEAD", path)
-            ff += shield.scan_text(path, text, policy, only_lines=added.get(path, {}).keys())
-            if path.endswith(".py") and "python" in policy["languages"] and not TEST_RX.search(path):
+            actor_name = sorted(ids)[0] if ids else (extra_actor or "unknown")
+            ff += shield.scan_text(path, text, policy, actor=actor_name, only_lines=added.get(path, {}).keys())
+            if policy.get("dependency_guard", True) and deps.is_manifest(path):
+                ls = [(n, t) for n, t in enumerate(text.split("\n"), 1) if not added.get(path) or n in added.get(path, {})]
+                for d in deps.check_added(path, ls, policy):
+                    ff.append(shield.finding("block" if ai else "warn", "dependency-risk", path,
+                                            d["msg"], line=d["line"], evidence=d["evidence"], kind=d.get("kind")))
+            if path.endswith(".py") and "python" in policy.get("languages", ["python"]) and not TEST_RX.search(path):
                 try:
                     funcs = metrics.analyze(text)
                     entry["metrics"] = metrics.summarize(funcs, text.count("\n"))
@@ -57,29 +63,43 @@ def run(root, policy, base=None, home=None, extra_actor=None):
         findings += ff
         gate += [dict(v, file=path) for v in entry["violations"]]
         files.append(entry)
+
     ai_files = [f for f in files if f["ai"]]
-    if ai_files and len(files) > policy["max_files_per_run"]:
+    max_f = policy.get("max_files_per_run", policy.get("max_files_changed", 15))
+    if ai_files and len(files) > max_f:
         findings.append(shield.finding("block", "blast-radius", "(change set)",
                                        f"AI-authored change touches {len(files)} files "
-                                       f"(policy max_files_per_run = {policy['max_files_per_run']})"))
+                                       f"(policy max_files_per_run = {max_f})"))
     if gitutil.git(root, "status", "--porcelain", check=False).strip():
         findings.append(shield.finding("warn", "dirty-tree", "(working tree)",
                                        "uncommitted changes present - review covers committed changes only"))
+
     blocks = [f for f in findings if f["severity"] == "block"]
+    warns = [f for f in findings if f["severity"] == "warn"]
     waiver = _waivers(home).get(head) if home else None
     if blocks:
         decision, why = "BLOCKED", f"{len(blocks)} blocking finding(s) - not waivable, fix and push"
-    elif gate and policy["optimize"] == "required":
+        verdict = "blocked"
+    elif gate and policy.get("optimize") == "required":
         if waiver:
             decision, why = "ALLOWED", f"complexity gate waived by {waiver['actor']}: {waiver['reason']}"
+            verdict = "ready"
         else:
             decision, why = "CHANGES_REQUIRED", f"{len(gate)} function(s) over complexity limits - run the optimizer or waive with a reason"
+            verdict = "changes"
     else:
         decision, why = "ALLOWED", "no blocking findings"
-    return {"base": base, "head": head, "branch": gitutil.branch(root), "decision": decision, "reason": why,
+        verdict = "ready"
+
+    large = len(files) > max_f
+    risk_info = risk.score(files, gate, None, len(blocks), len(warns), large)
+
+    return {"base": base, "head": head, "branch": gitutil.branch(root), "decision": decision,
+            "verdict": verdict, "reason": why,
             "files": files, "findings": findings, "gate": gate, "waiver": waiver,
+            "risk": risk_info,
             "counts": {"files": len(files), "ai_files": len(ai_files), "blocks": len(blocks),
-                       "warnings": sum(1 for f in findings if f["severity"] == "warn"), "gate": len(gate)},
+                       "warnings": len(warns), "gate": len(gate)},
             "policy_source": policy.get("_source", "")}
 
 
@@ -98,4 +118,3 @@ def log_review(log, rev, actor="repobrain"):
                    f"{f['status']} {f['path']}: " + ("; ".join(x["rule"] for x in f["findings"]) or "clean"),
                    head=rev["head"])
     log.append("review", actor, rev["decision"], rev["reason"], head=rev["head"])
-    return True
