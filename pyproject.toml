@@ -18,4 +18,4 @@ repobrain = "repobrain.cli:main"
 include = ["repobrain*"]
 
 [tool.setuptools.package-data]
-repobrain = ["web/*", "data/*"]
+repobrain = ["web/*.html", "data/*.json", "data/*.txt"]

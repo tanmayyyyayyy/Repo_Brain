@@ -80,3 +80,14 @@ def test_diff_endpoint_and_path_traversal_guards(srv):
     # Non-existent file / not in change set
     assert call("/api/diff?path=does_not_exist.py", srv)[0] == 404
 
+
+def test_find_index_html_and_root_delivery(srv):
+    from repobrain.server import find_index_html
+    html_path = find_index_html()
+    assert os.path.isfile(html_path)
+    assert html_path.endswith(os.path.join("repobrain", "web", "index.html"))
+    s, b = call("/", srv)
+    assert s == 200
+    assert b"<!doctype html>" in b.lower()
+    assert b"RepoBrain" in b
+

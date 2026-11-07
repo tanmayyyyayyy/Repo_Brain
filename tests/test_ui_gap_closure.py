@@ -1,8 +1,9 @@
 from pathlib import Path
+from repobrain.server import find_index_html
 
 
 ROOT = Path(__file__).resolve().parent.parent
-HTML = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+HTML = Path(find_index_html()).read_text(encoding="utf-8")
 
 
 def test_no_emoji_or_unicode_glyph_icons_remain():

@@ -16,7 +16,25 @@ from . import demo, deps, explainer, export, gitutil, llm, optimizer, report, re
 from . import policy as P
 from .review import TEST_RX
 
-STATIC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "index.html")
+def find_index_html():
+    """Locate the packaged index.html console, checking package directory, importlib.resources, and dev static fallback."""
+    pkg_web = pathlib.Path(__file__).resolve().parent / "web" / "index.html"
+    if pkg_web.is_file():
+        return str(pkg_web)
+    try:
+        import importlib.resources as pkg_resources
+        res = pkg_resources.files("repobrain.web").joinpath("index.html")
+        if res.is_file():
+            return str(res)
+    except Exception:
+        pass
+    legacy = pathlib.Path(__file__).resolve().parent.parent / "static" / "index.html"
+    if legacy.is_file():
+        return str(legacy)
+    return str(pkg_web)
+
+
+STATIC = find_index_html()
 LOCK = threading.RLock()
 
 
@@ -126,7 +144,7 @@ def make_handler(ctx, token, port):
             u = urlparse(self.path)
             try:
                 if u.path == "/":
-                    with open(STATIC, "rb") as f:
+                    with open(find_index_html(), "rb") as f:
                         return self._send(200, f.read(), "text/html")
                 if u.path == "/api/state":
                     return self._send(200, state(ctx))

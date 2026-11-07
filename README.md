@@ -14,7 +14,7 @@ It does not write code. It decides what AI (and humans) may change, cleans up wh
 ```bash
 pip install -r requirements.txt          # pyyaml, pytest, coverage. Python 3.10+, git
 python server.py                         # seeds a REAL git repo with AI-authored PRs and opens the console
-python -m pytest -q tests                # 119 passed, 1 skipped (requires ANTHROPIC_API_KEY)
+python -m pytest -q tests                # 120 passed, 1 skipped (requires ANTHROPIC_API_KEY)
 ```
 
 Console walkthrough (≈3 min):
@@ -97,8 +97,8 @@ python -m repobrain demo                                                     # r
 
 ```
 repobrain/  policy · metrics · gitutil · shield · rewrite · optimizer · fuzz · deps · mlguard · llm · review · explainer · audit · export · report · demo · server · cli
-static/index.html   console UI (WCAG AA mission control, WebGL telemetry)
+repobrain/web/index.html   console UI (WCAG AA mission control, WebGL telemetry)
 demo_assets/        files for the seeded demo repo
-tests/              105 tests incl. differential fuzzing, ML guard evaluation, multi-provider LLM support, tamper detection, server security, coverage, UI a11y
+tests/              120 tests incl. differential fuzzing, ML guard evaluation, multi-provider LLM support, tamper detection, server security, coverage, UI a11y
 scripts/demo_check.py   Playwright-based headless verification of full console walkthrough (7/7 steps)
 ```

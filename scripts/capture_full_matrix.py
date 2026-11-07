@@ -16,7 +16,7 @@ from playwright.sync_api import sync_playwright
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UI_DIR = os.path.join(ROOT, "docs", "ui")
 BEFORE_DIR = os.path.join(UI_DIR, "before")
-INDEX_PATH = os.path.join(ROOT, "static", "index.html")
+INDEX_PATH = os.path.join(ROOT, "repobrain", "web", "index.html")
 
 
 def start_server(port, env):

@@ -15,7 +15,7 @@
 
 ## Automated WCAG 2.1 AA Contrast Verification Table
 
-`scripts/contrast_check.py` parses the live tokens from `static/index.html` and checks every
+`scripts/contrast_check.py` parses the live tokens from `repobrain/web/index.html` and checks every
 semantic text/syntax token, UI border/focus ring, filled-control label, and tinted badge
 against every surface background in both themes. Text must be >= 4.5:1 and UI components >= 3.0:1.
 Current result: **ALL CHECKS PASS**.

@@ -2,7 +2,7 @@
 """
 Automated WCAG 2.1 AA contrast checker for RepoBrain design tokens.
 
-Tokens are parsed directly from static/index.html so the report cannot drift
+Tokens are parsed directly from repobrain/web/index.html so the report cannot drift
 away from the shipped palette. The checker covers:
 
   * every text / syntax token against every surface background
@@ -16,9 +16,11 @@ import os
 import re
 import sys
 
-
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-INDEX_PATH = os.path.join(ROOT, "static", "index.html")
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+from repobrain.server import find_index_html
+INDEX_PATH = find_index_html()
 
 SURFACES = [
     ("App", "bg-app"),
