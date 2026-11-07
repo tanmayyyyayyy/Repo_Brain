@@ -1,0 +1,8 @@
+# Example pre-commit configuration for RepoBrain
+# Install pre-commit: pip install pre-commit
+# Install hooks: pre-commit install
+repos:
+  - repo: https://github.com/tanmayyyyayyy/Repo_Brain
+    rev: v1.0.0
+    hooks:
+      - id: repobrain-review

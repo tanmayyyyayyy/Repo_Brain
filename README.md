@@ -1,5 +1,7 @@
 # RepoBrain
 
+[![Test Suite](https://github.com/tanmayyyyayyy/Repo_Brain/actions/workflows/test.yml/badge.svg)](https://github.com/tanmayyyyayyy/Repo_Brain/actions/workflows/test.yml)
+
 **A vendor-neutral safety, cleanup and audit layer for repos that AI agents write to.**
 It does not write code. It decides what AI (and humans) may change, cleans up what they wrote
 (with your tests as the judge), and keeps tamper-evident proof of everything.
@@ -14,7 +16,7 @@ It does not write code. It decides what AI (and humans) may change, cleans up wh
 ```bash
 pip install -r requirements.txt          # pyyaml, pytest, coverage. Python 3.10+, git
 python server.py                         # seeds a REAL git repo with AI-authored PRs and opens the console
-python -m pytest -q tests                # 123 passed, 1 skipped (requires ANTHROPIC_API_KEY)
+python -m pytest -q tests                # 124 passed, 1 skipped (requires ANTHROPIC_API_KEY)
 ```
 
 Console walkthrough (≈3 min):
@@ -99,6 +101,13 @@ python -m repobrain demo                                                     # r
 repobrain/  policy · metrics · gitutil · shield · rewrite · optimizer · fuzz · deps · mlguard · llm · review · explainer · audit · export · report · demo · server · cli
 repobrain/web/index.html   console UI (WCAG AA mission control, WebGL telemetry)
 demo_assets/        files for the seeded demo repo
-tests/              120 tests incl. differential fuzzing, ML guard evaluation, multi-provider LLM support, tamper detection, server security, coverage, UI a11y
+tests/              124 tests incl. differential fuzzing, ML guard evaluation, multi-provider LLM support, tamper detection, server security, coverage, UI a11y
 scripts/demo_check.py   Playwright-based headless verification of full console walkthrough (7/7 steps)
 ```
+
+## Roadmap
+
+- **GitHub App & Multi-Repo Dashboard**: Production GitHub App deployment with webhook event listeners (`repobrain/webhook.py`), real-time PR check runs, organization-wide policy management, and SAML SSO.
+- **Multi-Language AST Optimizers**: Expand verified AST complexity reduction, dead code elimination, and comment-preserving refactorings to TypeScript (`@babel/parser` / `swc`) and Go (`go/ast`).
+- **Enterprise Cryptographic Anchoring**: Public audit anchoring using RFC 3161 trusted timestamping authorities and transparency log publishing with Sigstore Rekor to mathematically anchor audit head states without relying solely on CI artifacts.
+- **IDE Extensions**: Native VS Code and JetBrains sidecars connecting directly to `/api/preflight` for real-time save-time policy feedback for human and AI pair programmers.

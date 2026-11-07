@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "bash:python -m repobrain preflight*"
+    ]
+  },
+  "hooks": {
+    "PreToolExecution": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "command": "python -m repobrain preflight --actor claude --path \"${file_path}\" --content-file \"${new_content_file}\""
+      }
+    ]
+  }
+}

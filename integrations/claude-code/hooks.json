@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "preToolExecution": {
+      "commands": [
+        {
+          "tools": ["Edit", "Write", "Replace"],
+          "command": "python -m repobrain preflight --actor claude --path \"$TOOL_INPUT_FILE\" --content-file \"$TOOL_INPUT_CONTENT_TMP\""
+        }
+      ]
+    }
+  }
+}

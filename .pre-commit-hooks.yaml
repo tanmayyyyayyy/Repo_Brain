@@ -1,0 +1,15 @@
+- id: repobrain-review
+  name: RepoBrain Governance Review
+  description: Scan staged changes against Shield policies (secrets, injections, protected paths) and complexity thresholds.
+  entry: repobrain review --base HEAD
+  language: python
+  stages: [pre-commit, pre-push]
+  pass_filenames: false
+  always_run: true
+
+- id: repobrain-preflight
+  name: RepoBrain Preflight Guard
+  description: Vendor-neutral preflight check to validate file edits before committing.
+  entry: repobrain preflight --actor git-commit --path
+  language: python
+  types: [text]
