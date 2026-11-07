@@ -4,8 +4,9 @@ import subprocess
 import sys
 import tempfile
 import time
-from playwright.sync_api import sync_playwright
 import pytest
+pytest.importorskip("playwright")
+from playwright.sync_api import sync_playwright
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
