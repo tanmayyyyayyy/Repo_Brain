@@ -6,10 +6,7 @@
 It does not write code. It decides what AI (and humans) may change, cleans up what they wrote
 (with your tests as the judge), and keeps tamper-evident proof of everything.
 
-```
- PR / agent push ──► Shield ──► Complexity gate ──► Optimizer (tests on a copy) ──► Human approves ──► merge
-                        └────────────── hash-chained audit log + report ◄────────────────┘
-```
+![RepoBrain Architecture](docs/architecture.svg)
 
 ## Run it in 60 seconds
 
@@ -23,6 +20,10 @@ Console walkthrough (≈3 min):
 - **A · risky AI PR** → BLOCKED (protected workflow file, hardcoded AWS key, prompt-injection text, deleted test)
 - **B · messy AI PR** → CHANGES REQUIRED → *Run optimizer* → real AST diff, your tests run on a copy, coverage tracked, complexity before/after (cognitive 15→10, depth 4→3) → *Approve & apply* (a commit is created with `Approved-by:`) → review passes → *Audit* → *Simulate tampering* → detected.
 - **C · AI refactor** → high-debt legacy code (`shop/orders.py`, cyclomatic complexity 27) decomposed into modular helper functions via test-gated AI tier.
+
+## Live Demo Walkthrough
+
+![RepoBrain Workflow Walkthrough](docs/demo.gif)
 
 ## UI overhaul screenshots
 
