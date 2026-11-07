@@ -36,9 +36,9 @@
 ### Final Test Run: `python -m pytest -q tests`
 
 ```text
-.......s................................................................ [ 68%]
-.................................                                        [100%]
-104 passed, 1 skipped in 32.24s
+.......s................................................................ [ 57%]
+.....................................................                    [100%]
+124 passed, 1 skipped in 33.32s
 ```
 
 *(Note: 1 skipped test is `test_live_anthropic_api_tier` in `tests/test_ai_tier.py` because `ANTHROPIC_API_KEY` is not set in the local development environment).*
@@ -151,9 +151,11 @@ Verified dimensions: 16 after images at 1440x900 or 390x844 in light/dark, plus 
 
 ## 4. Deliverables Checklist
 
-- [x] All 75 unit and integration tests passing (+ 1 skipped live API test).
-- [x] `scripts/demo_check.py` passing end-to-end with fresh screenshots in `docs/screenshots/`.
-- [x] Full UI/UX redesign implemented in `repobrain/web/index.html` with zero external dependencies and strict CSP compliance.
-- [x] Full 16-image desktop/mobile dark/light matrix plus 4-image pre-overhaul baseline saved in `docs/ui/`.
-- [x] Real GitHub Actions workflow tested on live PRs with comment, gate, and artifact upload.
-- [x] README and CHANGELOG updated with honest limits and feature documentation.
+- [x] **Phase 1: Credibility and Doc Fixes**: Measured ML metrics (0.938 precision, 0.625 recall, 0.75 F1, 0.03% stdlib FP rate on 4,000 comments); removed all `/Users/` paths; replaced sandbox overclaims with scratch copy resource limits; fixed CLI duplicate block in README.
+- [x] **Phase 2: Closed Shield Evasion Gaps**: Added string concatenation secret normalization, base64-encoded secret scanner, multi-line comment sliding window (2-4 lines), paraphrased injection warning, PowerShell download-and-execute detection; added `tests/test_shield_evasions.py` (15 tests); updated `docs/SHIELD_EVAL.md`.
+- [x] **Phase 3: Clean Packaging**: Moved console UI to `repobrain/web/index.html`; added `find_index_html()` with resource and dev fallbacks; updated `pyproject.toml` package-data; verified install in clean temp dir; all 120 tests green.
+- [x] **Phase 4: Audit Hardening**: Added `require_audit_key` in `action.yml`; displayed HMAC-signed vs hash-only status in UI and CLI with warning note when unsigned; documented CI head anchoring (`--anchor-file`, `--expect <seq>`); added regression tests in `tests/test_audit_anchor.py`.
+- [x] **Phase 5: Proof on Real Data**: Created `scripts/eval_real_prs.py` and evaluated 21 real commits (177 file revisions, 14,500 diff lines) in `docs/REAL_WORLD_EVAL.md` with 0 application logic false positives; authored `docs/COMPARISON.md` and `THREAT_MODEL.md`.
+- [x] **Phase 6: Adoption & Integrations**: Added `.github/workflows/test.yml` (multi-OS, multi-Python matrix); added `.pre-commit-hooks.yaml` and `.pre-commit-config.yaml`; created `integrations/claude-code/` with hook configs and guide; built stdlib MCP stdio server `integrations/mcp_server.py`; created `Dockerfile`; authored `docs/FAQ.md`; added ROADMAP to README.
+- [x] **Phase 7: Presentation Assets**: Authored `docs/VIDEO_SCRIPT.md` (2.5-min script + judge Q&A); created `scripts/make_demo_gif.py` and generated `docs/demo.gif` (261 KB); hand-crafted vector diagram `docs/architecture.svg`; rewrote `SUBMISSION.md` for hackathon submission form.
+- [x] **Phase 8: Final Verification**: 124 passed tests, 1 skipped; WCAG AA contrast check passed; 7/7 demo check steps green; fresh clone test passed; 0 `/Users/` paths; 0 real secrets; compact repository size (18MB .git, largest blob 266KB). Ready to push.

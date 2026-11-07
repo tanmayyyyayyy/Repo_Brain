@@ -110,5 +110,5 @@ scripts/demo_check.py   Playwright-based headless verification of full console w
 
 - **GitHub App & Multi-Repo Dashboard**: Production GitHub App deployment with webhook event listeners (`repobrain/webhook.py`), real-time PR check runs, organization-wide policy management, and SAML SSO.
 - **Multi-Language AST Optimizers**: Expand verified AST complexity reduction, dead code elimination, and comment-preserving refactorings to TypeScript (`@babel/parser` / `swc`) and Go (`go/ast`).
-- **Enterprise Cryptographic Anchoring**: Public audit anchoring using RFC 3161 trusted timestamping authorities and transparency log publishing with Sigstore Rekor to mathematically anchor audit head states without relying solely on CI artifacts.
+- **Enterprise Cryptographic Anchoring**: Public audit anchoring using RFC 3161 trusted timestamping authorities and transparency log publishing with Sigstore Rekor to cryptographically anchor audit head states without relying solely on CI artifacts.
 - **IDE Extensions**: Native VS Code and JetBrains sidecars connecting directly to `/api/preflight` for real-time save-time policy feedback for human and AI pair programmers.

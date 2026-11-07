@@ -1719,7 +1719,7 @@ async function audit() {
       const isSigned = !!(a.chain.hmac_signed || a.chain.signed);
       chainEl.className = a.chain.ok ? (isSigned ? "pill p-ok" : "pill p-warn") : "pill p-block";
       chainEl.innerHTML = a.chain.ok
-        ? `${ICONS.check} ${isSigned ? 'HMAC-signed' : 'hash-only'} (${a.chain.count})`
+        ? `${ICONS.check} chain verified · ${isSigned ? 'HMAC-signed' : 'hash-only'} (${a.chain.count})`
         : `${ICONS.block} chain BROKEN`;
     }
   } catch (_) {}
