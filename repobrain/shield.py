@@ -1,4 +1,5 @@
 """Shield: policy enforcement over paths and content. Pure functions, no I/O."""
+import base64
 import fnmatch
 import json
 import math
@@ -61,6 +62,7 @@ INJECTION_PATTERNS = [
 
 RISKY_COMMANDS = [
     ("pipes a download straight into a shell", re.compile(r"(?:curl|wget)\b[^\n|]*\|\s*(?:sudo\s+)?(?:ba|z)?sh\b")),
+    ("executes unverified PowerShell command or download", re.compile(r"(?i)\b(?:Invoke-Expression\b|iex\b.*?(?:iwr|Invoke-WebRequest|DownloadString|Net\.WebClient|\()|(?:iwr|Invoke-WebRequest)\b[^\n|]*\|\s*iex\b)")),
     ("grants workflow write-all permissions", re.compile(r"permissions:\s*write-all")),
     ("uses pull_request_target (runs untrusted code with secrets)", re.compile(r"\bpull_request_target\b")),
     ("makes files world-writable", re.compile(r"chmod\s+(?:-R\s+)?777")),
@@ -76,6 +78,33 @@ def mask(s):
     if len(s) > 8:
         return s[:4] + "…[" + str(len(s)) + " chars redacted]"
     return "[redacted]"
+
+
+def _normalize_concat(line):
+    prev = None
+    cur = line
+    while cur != prev:
+        prev = cur
+        cur = re.sub(r"""['"]\s*(?:\+\s*)?['"]""", "", cur)
+    return cur
+
+
+def _scan_base64_secret(line):
+    for m in re.finditer(r"""['"]([A-Za-z0-9+/=_-]{16,})['"]""", line):
+        raw = m.group(1)
+        clean = raw.replace("-", "+").replace("_", "/").rstrip("=")
+        pad = (4 - len(clean) % 4) % 4
+        padded = clean + ("=" * pad)
+        try:
+            decoded = base64.b64decode(padded).decode("utf-8", "ignore")
+        except Exception:
+            continue
+        if decoded and len(decoded) >= 8:
+            for rule, rx in SECRET_PATTERNS:
+                m_dec = rx.search(decoded)
+                if m_dec:
+                    return rule, raw, m_dec.group(0)
+    return None
 
 
 def entropy(s):
@@ -165,14 +194,33 @@ def scan_text(path, text, policy, actor=None, only_lines=None):
         if len(line) > 4000:
             continue
 
-        # 1. Known secret patterns
+        # 1. Known secret patterns (direct or normalized string concatenation)
+        matched_rule = None
         for rule, rx in SECRET_PATTERNS:
             m = rx.search(line)
             if m:
-                out.append(finding("block", "secret", path,
-                                   f"possible hardcoded credential ({rule})", n, mask(m.group(0))))
-                reported_lines.add(n)
+                matched_rule = (rule, m.group(0))
                 break
+        if not matched_rule and ("+" in line or re.search(r"""['"]\s+['"]""", line)):
+            norm_line = _normalize_concat(line)
+            for rule, rx in SECRET_PATTERNS:
+                m = rx.search(norm_line)
+                if m:
+                    matched_rule = (rule, m.group(0))
+                    break
+        if matched_rule:
+            out.append(finding("block", "secret", path,
+                               f"possible hardcoded credential ({matched_rule[0]})", n, mask(matched_rule[1])))
+            reported_lines.add(n)
+
+        # 1b. Base64-encoded secret literals (len >= 16)
+        if n not in reported_lines:
+            b64_hit = _scan_base64_secret(line)
+            if b64_hit:
+                rule, raw, _ = b64_hit
+                out.append(finding("block", "secret", path,
+                                   f"possible hardcoded credential (base64-encoded {rule})", n, mask(raw)))
+                reported_lines.add(n)
 
         # 2. Entropy fallback for keyword-less secrets
         if n not in reported_lines and not SKIP_ENTROPY.search(path):
@@ -211,22 +259,29 @@ def scan_text(path, text, policy, actor=None, only_lines=None):
                     reported_lines.add(n)
                     break
 
-    # Multi-line injection pass: join adjacent line pairs and scan the combined text
-    for i in range(len(lines) - 1):
-        n1, n2 = i + 1, i + 2
-        if only is not None and n1 not in only and n2 not in only:
-            continue
-        if n1 in reported_lines or n2 in reported_lines:
-            continue
-        next_clean = re.sub(r"^\s*(?:#+|//+|/\*+|\*+|<!--)\s*", "", lines[i + 1])
-        combined = lines[i].rstrip() + " " + next_clean.lstrip()
-        for rx in INJECTION_PATTERNS:
-            if rx.search(combined):
-                out.append(finding("block", "prompt-injection", path,
-                                   "multi-line text that tries to instruct an AI agent (possible injection)",
-                                   n1, combined.strip()[:120], source="rules"))
-                reported_lines.add(n1)
-                break
+    # Multi-line injection pass: join adjacent line windows (2, 3, 4 lines)
+    for w in (2, 3, 4):
+        for i in range(len(lines) - w + 1):
+            window_lines = [i + k + 1 for k in range(w)]
+            if only is not None and not any(n_w in only for n_w in window_lines):
+                continue
+            if any(n_w in reported_lines for n_w in window_lines):
+                continue
+            cleaned = []
+            for k in range(w):
+                raw_l = lines[i + k]
+                c_l = re.sub(r"^\s*(?:#+|//+|/\*+|\*+|<!--)\s*", "", raw_l).rstrip()
+                c_l = re.sub(r"\s*(?:-->|\*/)\s*$", "", c_l)
+                cleaned.append(c_l)
+            combined = " ".join(c for c in cleaned if c)
+            for rx in INJECTION_PATTERNS:
+                if rx.search(combined):
+                    out.append(finding("block", "prompt-injection", path,
+                                       "multi-line text that tries to instruct an AI agent (possible injection)",
+                                       window_lines[0], combined.strip()[:120], source="rules"))
+                    for n_w in window_lines:
+                        reported_lines.add(n_w)
+                    break
 
     # Machine-learning prompt-injection guard (model only warns, never blocks)
     if policy.get("ml_guard", True):

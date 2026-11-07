@@ -24,7 +24,7 @@ DIRECTIVE = re.compile(r"\b(ignore|disregard|forget|set aside|override|bypass|ci
                        r"copy|share|forward|email|hide|conceal|skip|disable|turn off|approve|merge|execute|run|grant|obey|cancel|void|"
                        r"quietly|silently|secretly|do not (?:tell|inform|notify|alert|mention)|never mention|don't tell|"
                        r"without (?:telling|alerting|notifying|asking)|give me|new instructions|pretend|roleplay|enter admin|you are now|"
-                       r"not to be told|not alert|nobody sees|keep (?:this )?(?:secret|quiet))\b", re.I)
+                       r"not to be told|not alert|nobody sees|keep (?:this )?(?:secret|quiet)|no longer apply|mark (?:this |it )?(?:as )?(?:safe|clean|approved|allowed|valid))\b", re.I)
 
 
 def directive(text):
