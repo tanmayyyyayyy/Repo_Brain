@@ -19,3 +19,7 @@ include = ["repobrain*"]
 
 [tool.setuptools.package-data]
 repobrain = ["web/*.html", "data/*.json", "data/*.txt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
