@@ -31,7 +31,12 @@ def test_tamper_ui_marks_server_reported_blocks():
         assert url is not None, "Server did not launch in time"
 
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            try:
+                browser = p.chromium.launch(headless=True)
+            except Exception as e:
+                if "Executable doesn't exist" in str(e):
+                    pytest.skip(f"Playwright browser executable not installed: {e}")
+                raise
             page = browser.new_page()
             page.goto(url, wait_until="networkidle")
             page.wait_for_selector(".verdict", timeout=10000)

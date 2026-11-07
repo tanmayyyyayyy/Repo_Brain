@@ -102,6 +102,10 @@ def run_tests(root, overrides, policy):
                 f.write(text)
         env = {k: v for k, v in os.environ.items() if not SECRET_ENV.search(k)}
         env.update(PYTHONDONTWRITEBYTECODE="1", HOME=tmp)
+        if "PLAYWRIGHT_BROWSERS_PATH" not in env:
+            pw_cache = os.path.expanduser("~/Library/Caches/ms-playwright" if sys.platform == "darwin" else "~/.cache/ms-playwright")
+            if os.path.isdir(pw_cache):
+                env["PLAYWRIGHT_BROWSERS_PATH"] = pw_cache
         if os.name == "nt":
             env.update(USERPROFILE=tmp, APPDATA=os.path.join(tmp, "AppData"))
 
