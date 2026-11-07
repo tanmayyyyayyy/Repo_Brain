@@ -71,26 +71,49 @@ class AuditLog:
 
 def verify_entries(es, expect_head=None):
     prev = GENESIS
-    signed = bool(_key())
+    key = _key()
+    has_key = bool(key)
+    has_sig = any("sig" in e for e in es)
+    hmac_signed = has_key and (has_sig or len(es) == 0)
+
     for i, e in enumerate(es):
         if "_corrupt" in e:
-            return {"ok": False, "count": len(es), "broken_at": i + 1, "reason": "unparseable line"}
+            return {"ok": False, "count": len(es), "broken_at": i + 1, "reason": "unparseable line",
+                    "signed": hmac_signed, "hmac_signed": hmac_signed}
         if e.get("prev") != prev:
             return {"ok": False, "count": len(es), "broken_at": e.get("seq", i + 1),
-                    "reason": "chain link broken (entry removed, inserted or reordered)"}
+                    "reason": "chain link broken (entry removed, inserted or reordered)",
+                    "signed": hmac_signed, "hmac_signed": hmac_signed}
         h = e.get("hash")
         if _hash(e) != h:
             return {"ok": False, "count": len(es), "broken_at": e.get("seq", i + 1),
-                    "reason": "entry content was modified after being written"}
+                    "reason": "entry content was modified after being written",
+                    "signed": hmac_signed, "hmac_signed": hmac_signed}
         sig = e.get("sig")
-        if signed and (sig is None or not hmac.compare_digest(sig, _sig(h))):
-            return {"ok": False, "count": len(es), "broken_at": e.get("seq", i + 1),
-                    "reason": "signature missing or invalid (wrong key, or chain was rewritten)"}
+        if has_key:
+            if sig is None or not hmac.compare_digest(sig, _sig(h)):
+                return {"ok": False, "count": len(es), "broken_at": e.get("seq", i + 1),
+                        "reason": "signature missing or invalid (wrong key, or chain was rewritten)",
+                        "signed": hmac_signed, "hmac_signed": hmac_signed}
         prev = h
-    if expect_head and prev != expect_head:
-        return {"ok": False, "count": len(es), "broken_at": None, "head": prev,
-                "reason": "head hash differs from the anchored value (log truncated or rewritten)"}
-    return {"ok": True, "count": len(es), "head": prev, "broken_at": None, "reason": ""}
+
+    if expect_head is not None:
+        exp_str = str(expect_head).strip()
+        if exp_str.isdigit():
+            exp_seq = int(exp_str)
+            actual_seq = es[-1].get("seq", len(es)) if es else 0
+            if actual_seq != exp_seq or len(es) != exp_seq:
+                return {"ok": False, "count": len(es), "broken_at": None, "head": prev,
+                        "reason": f"expected sequence #{exp_seq}, found #{actual_seq} (log truncated or entries dropped)",
+                        "signed": hmac_signed, "hmac_signed": hmac_signed}
+        elif exp_str:
+            if prev != exp_str:
+                return {"ok": False, "count": len(es), "broken_at": None, "head": prev,
+                        "reason": "head hash differs from the anchored value (log truncated or rewritten)",
+                        "signed": hmac_signed, "hmac_signed": hmac_signed}
+
+    return {"ok": True, "count": len(es), "head": prev, "broken_at": None, "reason": "",
+            "signed": hmac_signed, "hmac_signed": hmac_signed}
 
 
 def simulate_tamper(es):

@@ -1716,9 +1716,10 @@ async function audit() {
     const a = S.audit;
     const chainEl = $("#chainStatus");
     if (chainEl && a && a.chain) {
-      chainEl.className = a.chain.ok ? "pill p-ok" : "pill p-block";
+      const isSigned = !!(a.chain.hmac_signed || a.chain.signed);
+      chainEl.className = a.chain.ok ? (isSigned ? "pill p-ok" : "pill p-warn") : "pill p-block";
       chainEl.innerHTML = a.chain.ok
-        ? `${ICONS.check} chain verified ${a.chain.count}`
+        ? `${ICONS.check} ${isSigned ? 'HMAC-signed' : 'hash-only'} (${a.chain.count})`
         : `${ICONS.block} chain BROKEN`;
     }
   } catch (_) {}
@@ -2600,10 +2601,18 @@ function vAudit() {
         <h3 style="margin:0 0 6px 0">Cryptographic Hash-Chained Audit Trail</h3>
         <div class="small">
           Chain Status: ${a.chain.ok ? '<span class="good">' + ICONS.check + ' VERIFIED</span>' : `<span class="err">${ICONS.block} BROKEN at #${a.chain.broken_at}: ${esc(a.chain.reason)}</span>`} · ${a.chain.count} entries
+          <span class="pill ${a.chain.hmac_signed || a.chain.signed ? 'p-ok' : 'p-warn'}" style="margin-left:8px">
+            ${a.chain.hmac_signed || a.chain.signed ? ICONS.check + ' HMAC-signed' : ICONS.warn + ' hash-only (unsigned)'}
+          </span>
           <span class="mut copyable" style="margin-left:10px" onclick="copyText('${esc(String(a.chain.head || ""))}', 'Head Hash')" title="Click to copy head hash">
             Head: <code>${esc(String(a.chain.head || "").slice(0, 16))}…</code> ${ICONS.copy}
           </span>
         </div>
+        ${!(a.chain.hmac_signed || a.chain.signed) ? `
+        <div class="small" style="margin-top:8px;padding:8px 12px;background:var(--signal-warn-bg);border:1px solid var(--signal-warn-border);border-radius:6px;display:flex;align-items:center;gap:8px">
+          ${ICONS.warn}
+          <span>Chain is hash-linked (SHA-256) but unsigned; an attacker with write access to the log could recompute hashes. Set REPOBRAIN_AUDIT_KEY to sign entries.</span>
+        </div>` : ""}
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="b" onclick="verifyChainAnimation()">Verify Chain</button>

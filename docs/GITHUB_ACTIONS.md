@@ -101,25 +101,102 @@ To ensure an AI agent or contributor cannot bypass or disable RepoBrain:
 
 ---
 
-## 3. Audit Anchoring in CI: What Is and Is Not Detectable
+---
 
-The RepoBrain audit trail is a cryptographically hash-chained append-only JSONL log where each entry contains `hash = SHA256(seq + ts + event + actor + decision + detail + prev_hash)`.
+## 3. Audit Anchoring in CI & HMAC Signing
 
-### How CI Anchoring Works
-1. When RepoBrain runs on CI, it appends review and optimization records to the local audit log.
-2. The workflow downloads the previous run's anchor artifact via `actions/download-artifact`.
-3. It executes `python -m repobrain audit --anchor-file <prev_anchor> --write-anchor <new_anchor>`.
-4. The new head hash is uploaded as a workflow artifact (`repobrain-anchor`) that subsequent runs download.
-5. Because GitHub Actions artifacts from prior runs cannot be overwritten or altered by a PR branch without repository admin privileges, the audit chain is securely anchored across PR runs.
+The RepoBrain audit trail is a cryptographically hash-chained append-only JSONL log where each entry contains:
+```json
+{
+  "seq": 1,
+  "ts": "2026-11-07T12:00:00+0000",
+  "event": "review",
+  "actor": "claude-bot",
+  "decision": "BLOCKED",
+  "detail": "3 blocking violations",
+  "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+  "hash": "c1a4...",
+  "sig": "f89d..."
+}
+```
 
-### What Is Detectable
+### HMAC Signing vs Hash-Only Logging
+- **Unsigned (hash-only)**: When `REPOBRAIN_AUDIT_KEY` is absent, entries are hash-chained via SHA-256 (`prev -> hash`). Any modification to an existing entry breaks hashes downstream. However, an attacker with write access to the filesystem could recompute SHA-256 hashes for all downstream blocks.
+- **HMAC-signed**: When `REPOBRAIN_AUDIT_KEY` is configured as a GitHub Actions secret (`${{ secrets.REPOBRAIN_AUDIT_KEY }}`), every entry receives an HMAC-SHA256 signature (`sig = HMAC_SHA256(key, hash)`). An attacker without the key cannot forge valid signatures, preventing full-chain recomputation.
+- **Action input `require_audit_key`**: `action.yml` defaults `require_audit_key: "true"`, causing CI to fail if the signing key is missing. Set to `"false"` only if evaluating unsigned logs in local demo environments.
+
+### Complete Anchored CI Workflow (`.github/workflows/repobrain-audit.yml`)
+
+The anchored head verification flow links each CI run to the cryptographic state of the prior run:
+
+```yaml
+name: RepoBrain Audit & Anchoring
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  audit-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e .
+
+      # 1. Download previous head anchor from the default branch
+      - name: Download prior audit anchor
+        uses: dawidd6/action-download-artifact@v3
+        continue-on-error: true
+        with:
+          workflow: repobrain-audit.yml
+          branch: main
+          name: repobrain-anchor
+          path: /tmp/repobrain-anchor
+
+      # 2. Verify chain against previous anchor and write new anchor
+      - name: Verify audit chain & anchor new head
+        env:
+          REPOBRAIN_AUDIT_KEY: ${{ secrets.REPOBRAIN_AUDIT_KEY }}
+          REPOBRAIN_HOME: ${{ runner.temp }}/repobrain
+        run: |
+          if [ -f /tmp/repobrain-anchor/head.sha256 ]; then
+            echo "Verifying chain against previous anchor..."
+            python -m repobrain audit --anchor-file /tmp/repobrain-anchor/head.sha256 --write-anchor /tmp/new_anchor/head.sha256
+          else
+            echo "First run; writing genesis anchor..."
+            python -m repobrain audit --write-anchor /tmp/new_anchor/head.sha256
+          fi
+
+      # 3. Upload updated anchor for future runs
+      - name: Upload new head anchor
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-anchor
+          path: /tmp/new_anchor/head.sha256
+          retention-days: 90
+```
+
+### Catching Silent Truncation with `--expect <seq>`
+
+If an attacker truncates the tail of the audit log (e.g., dropping the last 3 entries to erase a blocked review record), the remaining sub-chain is internally valid (all `prev` hashes match).
+
+1. **Anchored head verification (`--anchor-file`)**: Catches truncation because the resulting head hash does not match the expected 64-character hash of the true head.
+2. **Sequence expectation (`--expect <seq>`)**: By passing an expected entry count or sequence index (e.g., stored in CI state as `14`), `repobrain audit --expect 14` checks `len(entries)` and `entries[-1]["seq"]`. If tail entries are removed, verification immediately fails with:
+   ```
+   chain: BROKEN at #None - expected sequence #14, found #11 (log truncated or entries dropped)
+   ```
+
+### What Is Detectable vs NOT Detectable
+
+#### What Is Detectable
 - **In-place record tampering**: Modifying any field (timestamp, actor, decision, detail) in any historical log entry breaks the entry's own SHA-256 hash. `broken_at = #N` is immediately identified.
 - **Entry deletion**: Removing an entry from the middle breaks the `prev` link of the next entry.
 - **Entry insertion or reordering**: Inserting or swapping records invalidates the `prev` pointers.
-- **Log truncation**: Deleting entries from the tail produces a valid internal sub-chain, but the head hash differs from the anchored head hash recorded in CI. `--anchor-file` detects this immediately with `reason: head hash differs from the anchored value`.
+- **Log truncation**: Deleting entries from the tail produces a valid internal sub-chain, but `--anchor-file` or `--expect <seq>` flags the missing entries immediately.
+- **Recomputed hashes on HMAC chains**: An attacker who rewrites content and updates all SHA-256 hashes still fails verification because `sig` fails without `REPOBRAIN_AUDIT_KEY`.
 
-### What Is NOT Detectable
-- **Out-of-band bypasses**: Actions taken directly against git (e.g., an administrator pushing directly to `main` with bypass rights or disabling GitHub Actions) never invoke RepoBrain and produce no audit entries. This is why GitHub Branch Rulesets must disable bypass permissions.
-- **Unanchored log substitution**: If an attacker completely deletes the audit log and writes a completely new, internally-valid log starting from `0000...0000`, a standalone `repobrain audit` *without* `--expect` or `--anchor-file` cannot tell it is a substitution. Checking against an externally stored anchor (CI artifact or release tag) is required to detect full rewrites.
-3. **Protected Paths**: Changes to `.github/workflows/` made by AI agents are flagged as `blocked-path` by Shield, automatically failing the required check.
+#### What Is NOT Detectable
+- **Out-of-band bypasses**: Actions taken directly against git (e.g., an administrator pushing directly to `main` with bypass rights or disabling GitHub Actions) never invoke RepoBrain and produce no audit entries. Branch rulesets must disallow admin bypasses.
+- **Unanchored log substitution without signing key**: If an unsigned log is replaced entirely and checked without `--expect` or `--anchor-file`, a standalone `audit` command has no anchor to compare against. Always use HMAC signing and CI artifact anchors in production.
 

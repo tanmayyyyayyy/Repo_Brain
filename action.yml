@@ -1,9 +1,10 @@
 name: RepoBrain
 description: Policy, proof and clean code for AI-assisted pull requests (Shield + complexity gate + verified Optimizer)
 inputs:
-  base:    { description: "Base ref to diff against", default: "origin/main" }
-  sarif:   { description: "SARIF output path (upload with github/codeql-action/upload-sarif)", default: "repobrain.sarif" }
-  summary: { description: "Markdown summary path (post as PR comment)", default: "repobrain-summary.md" }
+  base:              { description: "Base ref to diff against", default: "origin/main" }
+  sarif:             { description: "SARIF output path (upload with github/codeql-action/upload-sarif)", default: "repobrain.sarif" }
+  summary:           { description: "Markdown summary path (post as PR comment)", default: "repobrain-summary.md" }
+  require_audit_key: { description: "Fail if REPOBRAIN_AUDIT_KEY is not set (enforces HMAC signing)", default: "true" }
 runs:
   using: composite
   steps:
@@ -11,6 +12,17 @@ runs:
       with: { python-version: "3.12" }
     - shell: bash
       run: pip install pyyaml
+    - shell: bash
+      env:
+        REQUIRE_AUDIT_KEY: "${{ inputs.require_audit_key }}"
+        REPOBRAIN_AUDIT_KEY: "${{ env.REPOBRAIN_AUDIT_KEY }}"
+      run: |
+        if [ "$REQUIRE_AUDIT_KEY" = "true" ] && [ -z "$REPOBRAIN_AUDIT_KEY" ]; then
+          echo "::error::REPOBRAIN_AUDIT_KEY is not set but require_audit_key is true. Add REPOBRAIN_AUDIT_KEY to repository secrets or set require_audit_key: 'false' for unsigned audit logs."
+          exit 1
+        elif [ -z "$REPOBRAIN_AUDIT_KEY" ]; then
+          echo "::warning::REPOBRAIN_AUDIT_KEY is not set. Chain is hash-linked (SHA-256) but unsigned; an attacker with write access to the log could recompute hashes. Set REPOBRAIN_AUDIT_KEY to sign entries."
+        fi
     - shell: bash
       env: { PYTHONPATH: "${{ github.action_path }}" }
       run: python -m repobrain ci --base "${{ inputs.base }}" --sarif "${{ inputs.sarif }}" --summary "${{ inputs.summary }}"

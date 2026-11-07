@@ -185,7 +185,11 @@ def cmd_audit(a):
         tail_count = getattr(a, "tail", 25)
         for e in log.entries()[-tail_count:]:
             print(f"#{e.get('seq', ''):<4} {e.get('ts', '')}  {e.get('event', ''):<10} {e.get('decision', ''):<17} {str(e.get('actor', ''))[:30]:<30} {str(e.get('detail', ''))[:70]}")
-        print("chain:", "VERIFIED" if v["ok"] else f"BROKEN at #{v.get('broken_at')} - {v.get('reason')}", f"head={str(v.get('head'))[:16]}")
+        is_signed = bool(v.get("hmac_signed") or v.get("signed"))
+        mode_str = "HMAC-signed" if is_signed else "hash-only (unsigned)"
+        print("chain:", "VERIFIED" if v["ok"] else f"BROKEN at #{v.get('broken_at')} - {v.get('reason')}", f"[{mode_str}]", f"head={str(v.get('head'))[:16]}")
+        if not is_signed:
+            print("note: Chain is hash-linked (SHA-256) but unsigned; an attacker with write access to the log could recompute hashes. Set REPOBRAIN_AUDIT_KEY to sign entries.")
     return 0 if v["ok"] else 1
 
 
