@@ -31,11 +31,11 @@ PR / Agent Push ──► Shield ──► Complexity Gate ──► Optimizer (
 | Feature | Description | Engineering Implementation |
 |---|---|---|
 | **Multi-Layered Shield** | Zero false-positive safety scanner focused exclusively on added git hunks. | Regex + Shannon entropy for secrets (AWS, GitHub, Slack, Stripe, Anthropic, OpenAI, JWT, GCP, Azure, Twilio, SendGrid); Trojan Source hidden Unicode; risky shell invocations (`curl \| sh`, `chmod 777`); and Damerau-Levenshtein package typosquatting against top 5,000 PyPI/npm packages. |
-| **Learned Prompt Injection Guard (ML Guard)** | Catches paraphrased agent instructions and system prompt overrides that escape rigid regex. | Pure-Python Naive Bayes classifier trained on 242 injection/prose samples with 5-fold cross-validation (**0.94 hybrid precision**, **0.0% false-positive rate** on 4,000 stdlib prose samples). Rules block; ML model warns. |
-| **Differential Fuzzing Optimizer** | Flattens cognitive complexity and nesting through semantics-preserving AST rewrites. | Rewrites only touched functions (leaving untouched code byte-identical with CRLF preserved); executes full test suite on an isolated scratch clone; then **differentially fuzzes** original vs. rewritten functions with 750+ mined constants and type-confused inputs. Any behavioral divergence immediately rejects the proposal. |
+| **Learned Prompt Injection Guard (ML Guard)** | Catches paraphrased agent instructions and system prompt overrides that escape rigid regex. | Pure-Python Naive Bayes classifier evaluated via 5-fold cross-validation on a 242-sample team-written corpus: precision 0.938, recall 0.625, F1 0.750 (hybrid: precision 0.940, recall 0.653, F1 0.770) with 0.03% false-positive rate on 4,000 stdlib prose comments. The corpus is small and team-written (not a production claim); rules can block, but the ML model can only warn. |
+| **Differential Fuzzing Optimizer** | Flattens cognitive complexity and nesting through semantics-preserving AST rewrites. | Rewrites only touched functions (leaving untouched code byte-identical with CRLF preserved); executes full test suite on a scratch copy with resource limits; then **differentially fuzzes** original vs. rewritten functions with 750+ mined constants and type-confused inputs. Any behavioral divergence immediately rejects the proposal. |
 | **Cryptographic HMAC Audit Ledger** | Append-only proof of all reviews, preflights, and human approvals. | SHA-256 hash chaining committed to previous records with optional HMAC-SHA256 signing (`REPOBRAIN_AUDIT_KEY`) and CI anchor verification (`--expect <hash>`, `--anchor-file`). Instantly detects record modification, reordering, or history truncation. |
 | **Vendor-Neutral Agent Preflight API** | Universal hook enabling agents to check permissions *before* disk write. | Local HTTP endpoint (`/api/preflight`) and CLI (`repobrain preflight`) consumable by any AI agent in 3 lines of standard Python. |
-| **Mission Control Console** | High-density developer review UI with dark/light themes and full accessibility. | Custom single-page cockpit with persistent 290px telemetry rail, interactive unified diff viewer with syntax highlighting and inline Shield annotations, horizontal complexity threshold bars, animated audit timeline, and presenter mode (100% WCAG 2.1 AA compliant). |
+| **Mission Control Console** | High-density developer review UI with dark/light themes and full accessibility. | Custom single-page cockpit with persistent 290px telemetry rail, interactive unified diff viewer with syntax highlighting and inline Shield annotations, horizontal complexity threshold bars, animated audit timeline, and presenter mode (WCAG 2.1 AA compliant). |
 | **CI/CD Integration & GitHub Actions** | Production-ready CI automation. | Composite GitHub Action (`action.yml`) uploading SARIF alerts to GitHub Code Scanning, posting sticky PR verdict summaries, and verifying audit anchors. |
 
 ---
@@ -70,7 +70,7 @@ PR / Agent Push ──► Shield ──► Complexity Gate ──► Optimizer (
 ┌────────────────────────────────────────────────────────────────────────┐
 │ 3. OPTIMIZER                                                           │
 │    • Semantics-preserving AST rewrites (flatten guards, loops, etc.)   │
-│    • Test suite executed on sandboxed scratch directory copy           │
+│    • Test suite executed on scratch copy with resource limits          │
 │    • Differential Fuzzing: 750+ inputs mined & type-mutated           │
 │    • Optional LLM refactor tier (Groq free tier / Claude 3.5 Sonnet)   │
 └───────────────────────────────────┬────────────────────────────────────┘
@@ -155,9 +155,9 @@ All high-resolution screenshots are located in [`docs/ui/`](docs/ui/) and [`docs
 
 - **[0:00 - 0:15] Hook:** "AI agents are opening PRs directly to your codebase. But how do you know what they touched, whether they leaked secrets, or if their rewrites broke subtle behaviors? Meet RepoBrain — the vendor-neutral governance and audit layer for AI-written code."
 - **[0:15 - 0:35] Shield & Risk Index:** [Show Scenario A] "An AI agent attempts to push a PR. RepoBrain's Shield intercepts it: 97/100 critical risk. It caught a hardcoded AWS key, an unauthorized CI workflow modification, and a prompt injection hidden in a markdown comment. Verdict: BLOCKED. Not waivable."
-- **[0:35 - 0:55] Complexity Gate & Verified Optimizer:** [Show Scenario B] "Here's a messy AI PR with deeply nested logic. The complexity gate flags `discount_for`. We click *Run Optimizer*: RepoBrain flattens nested conditions, runs your tests on a sandboxed clone, and runs differential fuzzing with 750 inputs. Everything passes, cognitive complexity drops from 15 to 10. A named human approves, and it merges."
+- **[0:35 - 0:55] Complexity Gate & Verified Optimizer:** [Show Scenario B] "Here's a messy AI PR with deeply nested logic. The complexity gate flags `discount_for`. We click *Run Optimizer*: RepoBrain flattens nested conditions, runs your tests on a scratch copy with resource limits, and runs differential fuzzing with 750 inputs. Everything passes, cognitive complexity drops from 15 to 10. A named human approves, and it merges."
 - **[0:55 - 1:15] Cryptographic Audit Chain:** [Show Audit Tab] "Every action is hashed into a tamper-evident SHA-256 chain. If anyone tampers with a historical log entry — we click *Simulate Tampering* — the cryptographic chain immediately breaks at block #8, flagging every downstream commit as invalidated."
-- **[1:15 - 1:30] Conclusion:** "One policy file, zero vendor lock-in, mathematically verifiable proof. That's RepoBrain."
+- **[1:15 - 1:30] Conclusion:** "One policy file, zero vendor lock-in, tamper-evident proof. That's RepoBrain."
 
 ---
 
@@ -165,8 +165,8 @@ All high-resolution screenshots are located in [`docs/ui/`](docs/ui/) and [`docs
 
 We believe in engineering transparency:
 1. **Language Scope:** The Complexity Gate and AST Optimizer currently analyze Python. The Shield, Audit Ledger, Failure Explainer, and Agent Preflight API are completely language-agnostic.
-2. **Safety Net Dependency:** The Optimizer's guarantee depends on the project's test suite and differential fuzzing. For untested pure functions, RepoBrain flags proposals as partial coverage.
-3. **Defense-in-Depth:** Prompt injection detection uses a hybrid approach (multi-line regex rules + trained ML guard). Rules block; the ML model warns to avoid false positives.
+2. **Safety Net Dependency:** The Optimizer's guarantee depends on the project's test suite and differential fuzzing. The optimizer runs tests on a scratch copy with resource limits (timeout and rlimits), but without OS network/filesystem isolation — execute only code you trust to run in CI.
+3. **Defense-in-Depth & ML Guard Limits:** Prompt injection detection uses a hybrid approach (multi-line regex rules + trained Naive Bayes classifier). Cross-validation on our 242-sample team-written corpus reports precision 0.938, recall 0.625, F1 0.750 (hybrid: precision 0.940, recall 0.653, F1 0.770) and a 0.03% false-positive rate on 4,000 Python stdlib comments. These figures are not a production accuracy claim. Rules block; the ML model only warns.
 4. **Governance Boundary:** RepoBrain governs what passes through it (CI workflows, pre-commit hooks, and preflight APIs). Direct un-gated pushes must be restricted using GitHub branch rulesets.
 
 ---
@@ -176,3 +176,4 @@ We believe in engineering transparency:
 - **GitHub Repository:** [https://github.com/tanmayyyyayyy/Repo_Brain](https://github.com/tanmayyyyayyy/Repo_Brain)
 - **License:** MIT License
 - **Status:** Complete Functional Prototype (Round 2 Ready)
+

@@ -46,7 +46,7 @@
    - "Notice RepoBrain only gates functions *this PR touched*. Legacy tech debt in the rest of the repo doesn't block developers."
 4. Click **Run optimizer →**.
 5. Click **Run optimizer** button.
-   - Watch the optimizer execute semantics-preserving AST rewrites on a temporary sandbox copy and run the test suite (`26 passed`).
+   - Watch the optimizer execute semantics-preserving AST rewrites on a temporary scratch copy with resource limits and run the test suite (`26 passed`).
    - Show the metrics diff: cognitive **15 → 10**, nesting depth **4 → 3**, lines **69 → 47**.
    - Show the unified diff: else-after-return stripped, loop converted to list comprehension, inline comments preserved.
 6. **The Human In The Loop**:
@@ -94,10 +94,10 @@
 > **Honest Answer**:
 > "SonarQube and CodeRabbit are advisory linters and bot reviewers—they comment on PRs with suggestions or static analysis warnings, but they don't safely fix complexity or enforce immutable blast-radius boundaries based on AI author identity.
 > Copilot writes code; RepoBrain governs the agent.
-> RepoBrain is vendor-neutral, reads policy strictly from the base branch so agents cannot game it, performs semantics-preserving AST cleanups verified by running your real test suite on isolated copies, and produces a SHA-256 hash-chained audit trail suitable for SOC2 / ISO compliance."
+> RepoBrain is vendor-neutral, reads policy strictly from the base branch so agents cannot game it, performs semantics-preserving AST cleanups verified by running your real test suite on scratch copies with resource limits, and produces a SHA-256 hash-chained audit trail suitable for SOC2 / ISO compliance."
 
 ### Question 3: "What if a rogue developer or agent bypasses the PR and pushes directly to main?"
 > **Honest Answer**:
 > "RepoBrain can only govern what passes through it. If someone has administrator rights to force-push directly to an unprotected `main` branch, no client-side tool can stop them.
-> That is why RepoBrain's production deployment model relies on GitHub Branch Rulesets: `main` requires linear history, blocks force pushes, restricts workflow edits, and mandates the `RepoBrain` status check to pass before merging. That shifts enforcement to the repository host, making bypasses mathematically impossible for non-admin tokens."
+> That is why RepoBrain's production deployment model relies on GitHub Branch Rulesets: `main` requires linear history, blocks force pushes, restricts workflow edits, and mandates the `RepoBrain` status check to pass before merging. That shifts enforcement to the repository host, making bypasses blocked for non-admin tokens."
 

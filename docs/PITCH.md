@@ -31,5 +31,5 @@
 ## Hard questions
 - *"Why not just prompt the model to be safe?"* A prompt is not enforceable or auditable; a policy file + signed log is.
 - *"Can an agent bypass it?"* If it bypasses CI, the hook and the preflight API, yes, and we say so. Branch protection closes the loop.
-- *"Is the ML good?"* Small, team-labelled corpus; we report precision/recall and false-positive rate and never let it block.
-- *"Is the optimizer safe?"* Tests + differential fuzz, comments never deleted, nothing pushed without a human.
+- *"Is the ML good?"* Evaluated via 5-fold cross-validation on a small 242-sample team-written corpus: precision 0.938, recall 0.625, F1 0.750 (hybrid: precision 0.940, recall 0.653, F1 0.770) and 0.03% false-positive rate on 4,000 Python stdlib documentation comments. This shows feasibility on our sample, not a production accuracy claim. Rules can block; the model can only warn.
+- *"Is the optimizer safe?"* Tests executed on a scratch copy with resource limits + differential fuzzing (750+ inputs), comments never deleted, nothing pushed without a named human.

@@ -55,23 +55,23 @@ Full 4-view × 2-viewport × 2-theme matrix lives in [`docs/ui/`](docs/ui/); the
 ## CLI
 
 ```bash
+python -m repobrain init                                                     # write starter repobrain.yml
 python -m repobrain review  --base main [--actor LOGIN] [--comment pr.md]   # CI entry point, exit 1 if not ALLOWED
 python -m repobrain scan                                                     # legacy complexity debt
+python -m repobrain shield   --path .github/workflows/ci.yml --actor copilot # check files or proposed action
+python -m repobrain gate     --base main                                     # check complexity gate violations
 python -m repobrain optimize --base main [--diff] [--apply --actor NAME] [--ai] [--all]
-python -m repobrain shield   --path .github/workflows/ci.yml --actor copilot
-python -m repobrain preflight --actor my-agent --path ok.py                  # agent hook before writing
-python -m repobrain waive    --actor NAME --reason "why"                     # complexity gate only; never shield blocks
-python -m repobrain explain  --log build.log
+python -m repobrain explain  --log build.log                                 # rule-based + LLM log explanation
 python -m repobrain audit    [--expect HASH] [--anchor-file FILE] [--export] # exit 1 if chain is broken
-python -m repobrain report   --out report.md
+python -m repobrain waive    --actor NAME --reason "why"                     # complexity gate override (logged)
+python -m repobrain report   --out report.md                                 # compliance report (markdown)
+python -m repobrain preflight --actor my-agent --path ok.py                  # agent hook before writing
+python -m repobrain ml-eval                                                  # cross-validate learned prompt injection guard
+python -m repobrain install-hook                                             # install local git pre-commit hook
+python -m repobrain hook-check                                               # pre-commit check on staged changes
 python -m repobrain ci       --base origin/main --sarif repobrain.sarif      # full CI pipeline + SARIF upload
-python -m repobrain serve    [--demo] [--repo PATH --base main]
-```
-python -m repobrain waive    --actor NAME --reason "why"                     # complexity gate only; never shield blocks
-python -m repobrain explain  --log build.log
-python -m repobrain audit    [--expect HASH] [--anchor-file FILE] [--write-anchor FILE] [--export]  # exit 1 if chain is broken
-python -m repobrain report   --out report.md
-python -m repobrain serve    [--demo] [--repo PATH --base main]
+python -m repobrain serve    [--demo] [--repo PATH --base main]              # launch review console (localhost)
+python -m repobrain demo                                                     # run full console demo in terminal
 ```
 
 ## Put it on a real repo
@@ -90,7 +90,7 @@ python -m repobrain serve    [--demo] [--repo PATH --base main]
 - The **AI tier is fully implemented and tested with mock API responses and multi-provider validation (Groq free tier + Anthropic)**, but live API execution requires `GROQ_API_KEY` or `ANTHROPIC_API_KEY` (skipped in CI when absent).
 - RepoBrain only governs what passes through it. A direct push to an unprotected branch bypasses it — enforce via branch rulesets.
 - A hash chain proves *edits* happened; detecting a fully rewritten log needs the anchored head (`--anchor-file` stored in CI artifacts).
-- Prompt-injection detection combines single-line and adjacent-line scanning (across comments); it raises the bar significantly, but cannot guarantee protection against all adversarial linguistic permutations.
+- **Prompt injection and ML Guard limits**: Prompt-injection detection combines multi-line regex rules with a lightweight learned Naive Bayes classifier. Evaluated on a 242-sample team-written corpus via 5-fold cross-validation, the classifier achieves precision 0.938, recall 0.625, F1 0.75 (hybrid: precision 0.940, recall 0.653, F1 0.770) with a measured 0.03% false-positive rate on 4,000 Python stdlib documentation comments. Because the corpus is small and team-written, these figures are not a production accuracy claim. Architectural safeguard: rules can block, but the ML model can only warn.
 - Not a GitHub App yet (webhooks, multi-repo dashboard, SSO) — that is the roadmap, not the demo.
 
 ## Layout

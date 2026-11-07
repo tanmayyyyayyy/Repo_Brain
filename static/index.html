@@ -1347,7 +1347,7 @@ pre {
             <span class="node-name">3. Optimizer</span>
             <span class="pill" id="pipeOptBadge">ready</span>
           </div>
-          <div class="node-desc" id="pipeOptDesc">AST rewrite + sandboxed tests</div>
+          <div class="node-desc" id="pipeOptDesc">AST rewrite + tests on scratch copy</div>
         </div>
       </button>
 
@@ -1783,7 +1783,7 @@ function updatePipelineTelemetry() {
     oIcon.className = "node-status-icon status-pending";
     oBadge.className = "pill";
     oBadge.textContent = "ready";
-    oDesc.textContent = "AST rewrite & test sandbox";
+    oDesc.textContent = "AST rewrite & tests on scratch copy";
   }
 
   // 4. Human Approval
@@ -2174,7 +2174,7 @@ function vReview() {
         </div>
         <div class="gate-info">
           <div class="gate-label">3. Safety Net Tests</div>
-          <div class="gate-detail">${testsOk ? 'Verified on sandboxed copy' : 'Pending optimizer evaluation'}</div>
+          <div class="gate-detail">${testsOk ? 'Verified on scratch copy with resource limits' : 'Pending optimizer evaluation'}</div>
         </div>
       </div>
 
@@ -2284,7 +2284,7 @@ function diffHtml(d) {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   VIEW: OPTIMIZER (AST REWRITE + TEST SANDBOX)
+   VIEW: OPTIMIZER (AST REWRITE + TESTS ON SCRATCH COPY)
    ───────────────────────────────────────────────────────────── */
 function vOpt() {
   const p = S.prop, st = S.state;
@@ -2296,7 +2296,7 @@ function vOpt() {
     <div class="row">
       <div>
         <b>Semantics-Preserving AST Optimizer</b>
-        <div class="mut small">Rewrites only functions changed by this PR, executes full test suite on an isolated copy with secrets scrubbed, and computes complexity reduction deltas. Nothing is committed without explicit human approval.</div>
+        <div class="mut small">Rewrites only functions changed by this PR, executes full test suite on a scratch copy with resource limits and secrets scrubbed, and computes complexity reduction deltas. Nothing is committed without explicit human approval.</div>
       </div>
       <div style="flex:none">${ai}<button class="b" onclick="runOpt()" ${S.busy ? 'disabled' : ''}>${S.busy ? 'Running tests…' : 'Run optimizer'}</button></div>
     </div>
@@ -2317,7 +2317,7 @@ function vOpt() {
 
   h += `<div class="telemetry-card">
     <h3>Optimizer Execution Telemetry <span class="pill ${cls}">${statusIcon} ${esc(p.status)}</span></h3>
-    ${p.tests.ran ? `<div class="small" style="margin-bottom:6px">Test Execution: <code>${esc(p.tests.cmd)}</code> ${ICONS.arrowRight} ${p.tests.ok ? '<span class="good">' + ICONS.check + ' PASSED</span>' : '<span class="err">' + ICONS.block + ' FAILED</span>'}</div><pre>${esc((p.tests.output || "").trim().split("\n").slice(-8).join("\n"))}</pre>` : '<div class="small mut">No tests detected in sandbox - proposal is unverified</div>'}
+    ${p.tests.ran ? `<div class="small" style="margin-bottom:6px">Test Execution: <code>${esc(p.tests.cmd)}</code> ${ICONS.arrowRight} ${p.tests.ok ? '<span class="good">' + ICONS.check + ' PASSED</span>' : '<span class="err">' + ICONS.block + ' FAILED</span>'}</div><pre>${esc((p.tests.output || "").trim().split("\n").slice(-8).join("\n"))}</pre>` : '<div class="small mut">No tests detected on scratch copy - proposal is unverified</div>'}
     ${p.fuzz ? `<div class="small mut" style="margin-top:6px">Differential Fuzzing: <code>${p.fuzz.inputs}</code> inputs tested across ${p.fuzz.checked_functions} function(s) · ${p.fuzz.diverged === 0 ? '<span class="good">' + ICONS.check + ' 0 divergences</span>' : '<span class="err">' + ICONS.block + ' ' + p.fuzz.diverged + ' divergences</span>'}</div>` : ''}
     ${p.llm.requested ? `<div class="small mut" style="margin-top:6px">AI Tier Telemetry: ${p.llm.used ? "used" : "not used"} · ${esc(p.llm.reason)}</div>` : ''}
   </div>`;
@@ -2820,8 +2820,8 @@ const TOUR_STEPS = [
     action: () => { closeDiffModal(); scenario("pricing"); }
   },
   {
-    title: "AST Optimizer & Test Sandbox",
-    desc: "Semantics-preserving rewrites flatten nested ifs and hoist guard clauses, verified on an isolated test copy (Cognitive drops 15 to 10).",
+    title: "AST Optimizer & Tests on Scratch Copy",
+    desc: "Semantics-preserving rewrites flatten nested ifs and hoist guard clauses, verified on a scratch copy with resource limits (Cognitive drops 15 to 10).",
     action: () => { go("optimizer"); runOpt(); }
   },
   {
