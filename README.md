@@ -23,6 +23,8 @@ Console walkthrough (≈3 min):
 
 ## Live Demo Walkthrough
 
+> 📹 **Watch the Full Master Demo Video (1080p 60fps, 2m 31s)**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) — includes cinematic focus zooms, live GitHub Actions PR enforcement, AST refactoring, and tamper-evident audit ledger.
+
 ![RepoBrain Workflow Walkthrough](docs/demo.gif)
 
 ## UI overhaul screenshots

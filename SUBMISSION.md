@@ -4,6 +4,8 @@
 
 - **Track / Category**: Developer Tools & Infrastructure / AI Safety & Governance / Cyber Security / Open Innovation
 - **GitHub Repository**: [https://github.com/tanmayyyyayyy/Repo_Brain](https://github.com/tanmayyyyayyy/Repo_Brain)
+- **Live Demo Video (2m 31s)**: [docs/demo/repobrain_demo_edited.mp4](docs/demo/repobrain_demo_edited.mp4) *(Full HD 1080p 60fps with dynamic zoom focus and feature overlays)*
+- **Live Pull Request Proof**: [tanmayyyyayyy/Repo_Brain#1](https://github.com/tanmayyyyayyy/Repo_Brain/pull/1)
 - **License**: MIT
 - **Status**: Production-Grade Working MVP (124 passed tests, 1 skipped)
 
