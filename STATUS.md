@@ -1,7 +1,7 @@
 # RepoBrain Status Report
 
-**Timestamp**: 2026-11-07T16:05:00+05:30
-**Test Suite**: 124 passed, 1 skipped (live API skip)
+**Timestamp**: 2026-11-11T00:40:00+05:30
+**Test Suite**: 126 passed, 1 skipped (live API skip)
 **Demo Status**: 7/7 automated headless browser verification steps PASSED
 **Security & Verification**: Differential fuzzing, ML injection classifier, dependency typosquatting guard, HMAC audit log, vendor-neutral agent preflight API, SVG-only icons, WCAG AA contrast check passed, 20 screenshots captured
 
@@ -13,7 +13,7 @@
 |---|---|---|---|---|
 | **Differential Fuzzing Engine** | Yes | Added `repobrain/fuzz.py`. Mines function constants & applies type confusion (ints, floats, strings, booleans, empty containers, None) across rewritten pure-looking functions in a resource-limited subprocess. Compares return values, exceptions, and argument mutations. Any divergence immediately rejects proposal. | `pytest tests/test_engine.py -k fuzz`<br>`2 passed in 0.85s` | Impure functions (I/O, global state) are safely detected and skipped from fuzzing. |
 | **Learned Prompt Injection Guard (ML Guard)** | Yes | Added `repobrain/mlguard.py` with zero-dependency Naive Bayes classifier. Rules block; ML model warns on paraphrased directives (p ≥ 0.90). Evaluated via 5-fold cross validation on 242-sample team-written corpus: precision 0.938, recall 0.625, F1 0.750 (hybrid: precision 0.940, recall 0.653, F1 0.770); measured 0.03% false-positive rate on 4,000 stdlib prose comments. The corpus is small and team-written (not a production claim); rules can block, model only warns. | `python -m repobrain ml-eval`<br>`ml: precision 0.938, recall 0.625, f1 0.750; hybrid: precision 0.940, recall 0.653, f1 0.770; stdlib_fp: 0.03%` | Heuristic classifier warns only; never blocks alone. |
-| **Dependency Typosquatting & Supply-Chain Guard** | Yes | Added `repobrain/deps.py`. Scans package manifests (`requirements.txt`, `pyproject.toml`, `package.json`) using Damerau-Levenshtein distance against top 5,000 popular PyPI/npm packages. Flags typosquats, homoglyphs, VCS URLs, and unpinned dependencies. | `pytest tests/test_engine.py -k typosquat`<br>`1 passed in 0.12s` | Custom internal private registries need whitelist in policy. |
+| **Dependency Typosquatting & Supply-Chain Guard** | Yes | Added `repobrain/deps.py`. Scans package manifests (`requirements.txt`, `pyproject.toml`, `package.json`) using Damerau-Levenshtein distance against a curated list of 289 popular packages (198 PyPI, 91 npm). Flags typosquats, homoglyphs, VCS URLs, and unpinned dependencies. | `pytest tests/test_engine.py -k typosquat`<br>`1 passed in 0.12s` | Custom internal private registries need whitelist in policy. |
 | **Cryptographic HMAC Audit Ledger** | Yes | Added HMAC-SHA256 signing via `REPOBRAIN_AUDIT_KEY` in `repobrain/audit.py`. Protects against full hash chain regeneration attacks. Functional API (`verify_detail`, `log`, `read`) verifies hash links and HMAC signatures. | `pytest tests/test_engine.py -k hmac`<br>`1 passed in 0.08s` | Key must be set in environment for signing; falls back to SHA-256 hash chaining when absent. |
 | **Agent Preflight API & Hook** | Yes | Added `/api/preflight` in `repobrain/server.py` and `repobrain preflight` CLI. Allows external AI coding agents (Claude Code, Cursor, Copilot, AutoGPT) to validate file changes before disk writes. Added example wrapper `examples/agent_guard.py`. | Verified with `python examples/agent_guard.py` and `pytest tests/test_engine.py` | Requires local server running or integrated CLI invocation. |
 | **UI/UX Redesign: Flight Recorder Mission Control** | Yes | Replaced generic dashboard with custom "flight recorder / mission control" UI in `repobrain/web/index.html`. Implemented asymmetric layout with persistent 290px telemetry rail & 5-stage stepper, verdict hero with 4-gate checklist, PR map with AI authorship chips, token-protected `/api/diff` endpoint with path-traversal guards, interactive unified diff viewer with hand-written syntax highlighting and inline Shield annotations, horizontal complexity bars with policy thresholds, vertical timeline audit hash chain with animated sweep and tamper detection, `Cmd+K` command palette, keyboard shortcuts (`1-6`, `O`, `A`, `Esc`, `?`), presenter mode tour, and dark/light themes. Added `tests/test_xss_safety.py` and diff endpoint tests in `tests/test_server.py`. Captured complete 1440x900 and 390x844 screenshot suite in `docs/ui/`. | `pytest tests/test_server.py tests/test_xss_safety.py`<br>`4 passed in 4.10s`<br>`python scripts/demo_check.py`<br>`ALL DEMO CHECK PASSES SUCCESSFULLY! REPOBRAIN IS GREEN.` | None. All behavior verified, zero external dependencies (strict CSP). |
@@ -36,9 +36,9 @@
 ### Final Test Run: `python -m pytest -q tests`
 
 ```text
-.......s................................................................ [ 57%]
-.....................................................                    [100%]
-124 passed, 1 skipped in 33.32s
+.......s................................................................ [ 56%]
+.......................................................                  [100%]
+126 passed, 1 skipped in 41.63s
 ```
 
 *(Note: 1 skipped test is `test_live_anthropic_api_tier` in `tests/test_ai_tier.py` because `ANTHROPIC_API_KEY` is not set in the local development environment).*
@@ -47,7 +47,7 @@
 
 ```text
 [1/7] Launching RepoBrain demo server on port 8798...
-Server ready at: http://127.0.0.1:8798/?t=V9efPf6vp7fuoH0Ttc9RrEGVhA5iJRIO
+Server ready at: http://127.0.0.1:8798/?t=<per-run-token>
 [2/7] Launching headless browser...
 [3/7] Verifying Scenario A (risky AI PR)...
   ✓ Scenario A correctly blocked with policy, secret, and injection findings
@@ -151,11 +151,11 @@ Verified dimensions: 16 after images at 1440x900 or 390x844 in light/dark, plus 
 
 ## 4. Deliverables Checklist
 
-- [x] **Phase 1: Credibility and Doc Fixes**: Measured ML metrics (0.938 precision, 0.625 recall, 0.75 F1, 0.03% stdlib FP rate on 4,000 comments); removed all `/Users/` paths; replaced sandbox overclaims with scratch copy resource limits; fixed CLI duplicate block in README.
+- [x] **Phase 1: Credibility and Doc Fixes**: Measured ML metrics (0.938 precision, 0.625 recall, 0.75 F1, 0.03% stdlib FP rate on 4,000 comments); removed all local user-home paths; replaced sandbox overclaims with scratch copy resource limits; fixed CLI duplicate block in README.
 - [x] **Phase 2: Closed Shield Evasion Gaps**: Added string concatenation secret normalization, base64-encoded secret scanner, multi-line comment sliding window (2-4 lines), paraphrased injection warning, PowerShell download-and-execute detection; added `tests/test_shield_evasions.py` (15 tests); updated `docs/SHIELD_EVAL.md`.
 - [x] **Phase 3: Clean Packaging**: Moved console UI to `repobrain/web/index.html`; added `find_index_html()` with resource and dev fallbacks; updated `pyproject.toml` package-data; verified install in clean temp dir; all 120 tests green.
 - [x] **Phase 4: Audit Hardening**: Added `require_audit_key` in `action.yml`; displayed HMAC-signed vs hash-only status in UI and CLI with warning note when unsigned; documented CI head anchoring (`--anchor-file`, `--expect <seq>`); added regression tests in `tests/test_audit_anchor.py`.
 - [x] **Phase 5: Proof on Real Data**: Created `scripts/eval_real_prs.py` and evaluated 21 real commits (177 file revisions, 14,500 diff lines) in `docs/REAL_WORLD_EVAL.md` with 0 application logic false positives; authored `docs/COMPARISON.md` and `THREAT_MODEL.md`.
 - [x] **Phase 6: Adoption & Integrations**: Added `.github/workflows/test.yml` (multi-OS, multi-Python matrix); added `.pre-commit-hooks.yaml` and `.pre-commit-config.yaml`; created `integrations/claude-code/` with hook configs and guide; built stdlib MCP stdio server `integrations/mcp_server.py`; created `Dockerfile`; authored `docs/FAQ.md`; added ROADMAP to README.
 - [x] **Phase 7: Presentation Assets**: Authored `docs/VIDEO_SCRIPT.md` (2.5-min script + judge Q&A); created `scripts/make_demo_gif.py` and generated `docs/demo.gif` (261 KB); hand-crafted vector diagram `docs/architecture.svg`; rewrote `SUBMISSION.md` for hackathon submission form.
-- [x] **Phase 8: Final Verification**: 124 passed tests, 1 skipped; WCAG AA contrast check passed; 7/7 demo check steps green; fresh clone test passed; 0 `/Users/` paths; 0 real secrets; compact repository size (18MB .git, largest blob 266KB). Ready to push.
+- [x] **Phase 8: Final Verification**: 126 passed tests, 1 skipped; WCAG AA contrast check passed; 7/7 demo check steps green; fresh clone test passed; 0 local home-directory paths; 0 real secrets; 0 leaked highlight tags; HMAC-signed audit chain in `--demo`; narrated 1080p60 demo video with captions built (`docs/demo/repobrain_demo_edited.mp4`). Ready for submission.

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Automated Demo Walkthrough for Screen Recording RepoBrain in Google Chrome."""
+import os
 import subprocess
 import time
 import json
 import urllib.request
 import sys
 
-URL = "http://127.0.0.1:8765/?t=G6havEKhhbVA93CWKYwOH4J0m445BEih"
+URL = os.environ.get("REPOBRAIN_URL") or (sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8765/")
 API = "http://127.0.0.1:8765"
 
 def run_js(code):

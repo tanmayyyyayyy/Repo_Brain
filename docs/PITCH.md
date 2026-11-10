@@ -1,35 +1,26 @@
-# Submission kit
+# RepoBrain Presentation & Pitch Outline
 
-## Round 2: idea deck (≤ 10 slides)
-1. **Problem**: AI agents now commit to real repos. Each vendor's controls are separate; companies can't answer "what did AI change, who allowed it, can we prove it?" Users: engineering leads, agencies handing AI-written code to clients, compliance teams.
-2. **Solution**: RepoBrain = one policy file, one audit trail, any AI. (Hero screenshot.)
-3. **USP & features**: Shield · Optimizer with proof · Failure Explainer · tamper-evident audit · Agent Preflight API.
-4. **Demo moment**: AI PR blocked → learned guard catches a paraphrased injection → optimizer proof (tests + 750 fuzz inputs) → typosquats → tampered log breaks the chain.
-5. **Tech stack**: Python stdlib + PyYAML; raw WebGL2; GitHub Actions + SARIF; optional Anthropic/OpenAI/Ollama.
-6. **Architecture**: the mermaid diagram from the README.
-7. **Novelty**: differential fuzzing as a safety net for AI refactors; approval pinned to a commit; rules-block/model-warns design; vendor-neutral preflight.
-8. **Differentiation**: vs CodeRabbit (reviews) / SonarQube (static gate) / Socket (deps) / Copilot (writes). Be honest: "their controls are separate and tool-specific; we are the common layer."
-9. **Feasibility & scalability**: already running; added-lines-only scanning; cached analysis; GitHub App + queue is the scale path; BYO key / local Ollama for privacy.
-10. **Impact & roadmap**: refactor our own hotspots (we found them with our own tool), JS support, GitHub App, real agent connectors.
-*Optional 2-min video:* use **play autopilot demo** (footer link) and narrate the on-screen captions.
+## 5-Slide Deck Plan (Round 3 / Finals)
 
-## Round 3: deliverables checklist
-- [x] Working prototype + GitHub repo + README (stack, setup)
-- [x] GitHub tools: Actions PR check, SARIF code scanning, sticky PR comment, composite action, dependabot, PR template
-- [x] Screenshots in `docs/screenshots/`
-- [ ] **You:** record the demo video (autopilot), push to GitHub, enable Pages/hosting if you want a live link
-- [ ] **You:** adapt the AI-disclosure paragraph in the README to what your team actually did
+1. **Problem**: Coding agents open PRs across many vendors, but traditional controls are fragmented. Linters only warn, single-line secret scanners miss concatenated/base64 leaks, multi-line prompt injections slip through comments, and compliance teams cannot prove what an agent changed or who approved it.
+2. **Solution**: **RepoBrain** — one vendor-neutral policy file (`repobrain.yml` loaded from the trusted base branch), deterministic security blocking, test-verified AST complexity cleanup, and an HMAC-SHA256 hash-chained audit ledger.
+3. **Features & Live Demo**:
+   - **Pre-flight Shield & Agent Hooks**: Blocks protected workflows, hardcoded/split/base64 secrets, multi-line prompt injections, risky commands, and curated dependency typosquats (`repobrain preflight`, MCP server, Claude Code hook).
+   - **AST Complexity Gate & Optimizer**: Flattens nested `if/else` blocks via guard clauses and early exits, executes your tests on a scratch copy with resource limits, differentially fuzzes pure functions, and requires a named human approver (`Approved-by:` trailer).
+   - **Cryptographic Audit Ledger**: Hash-chained JSONL with `REPOBRAIN_AUDIT_KEY` HMAC signing and CI head anchoring (`--anchor-file`).
+4. **Technical Approach**: Zero heavy runtime dependencies (Python stdlib + PyYAML). Deterministic rules can block; the zero-dependency Naive Bayes ML guard warns only (5-fold CV on 242 samples: precision 0.938, recall 0.625, F1 0.750; 0.03% FP rate on 4,000 stdlib prose lines). Single-file WCAG 2.1 AA Mission Control UI (`repobrain/web/index.html`) with per-run tokens and host/CSRF guards.
+5. **Impact & Future Scope**:
+   - **Measured Evaluation**: 21 commits / 14,500 diff lines scanned with 0% false positives on runtime production code ([`REAL_WORLD_EVAL.md`](REAL_WORLD_EVAL.md)), and 0 false positives across 51,781 LoC of stdlib/OSS Python ([`SHIELD_EVAL.md`](SHIELD_EVAL.md)).
+   - **Roadmap**: Hosted GitHub App (`webhook.py`), TypeScript/Go AST optimizers, Sigstore Rekor timestamping, and IDE preflight integrations.
 
-## 90-second live script
-1. Open console → "An AI agent opened this PR. 98/100 risk, blocked." (click `ci.yml`, point at the constellation turning red)
-2. `AGENTS.md` → "Rules missed this paraphrased injection; the learned guard flagged it. Rules can block, the model can only warn."
-3. `orders.py` → "Simpler code, proven: tests pass, 750 fuzz inputs agree." **Approve optimization**: the brain calms.
-4. **Simulate an agent → lookalike packages** → three typosquats caught.
-5. Audit → **Simulate tampering** → "the chain breaks at record #0". Restore.
-6. Agents tab → **Hidden instruction** → blocked before it was written.
+## Deliverables Status
+- [x] Working prototype + public GitHub repo (`tanmayyyyayyy/Repo_Brain`)
+- [x] GitHub tools: Actions PR workflow, SARIF code scanning upload, sticky PR comments, composite `action.yml`, head hash anchoring artifacts, Dependabot, PR template, pre-commit hook
+- [x] Edited narrated demo video with overlays ([`docs/demo/repobrain_demo_edited.mp4`](demo/repobrain_demo_edited.mp4))
+- [x] AI assistance & third-party disclosures ([`README.md`](../README.md), [`THIRD_PARTY.md`](../THIRD_PARTY.md))
 
-## Hard questions
-- *"Why not just prompt the model to be safe?"* A prompt is not enforceable or auditable; a policy file + signed log is.
-- *"Can an agent bypass it?"* If it bypasses CI, the hook and the preflight API, yes, and we say so. Branch protection closes the loop.
-- *"Is the ML good?"* Evaluated via 5-fold cross-validation on a small 242-sample team-written corpus: precision 0.938, recall 0.625, F1 0.750 (hybrid: precision 0.940, recall 0.653, F1 0.770) and 0.03% false-positive rate on 4,000 Python stdlib documentation comments. This shows feasibility on our sample, not a production accuracy claim. Rules can block; the model can only warn.
-- *"Is the optimizer safe?"* Tests executed on a scratch copy with resource limits + differential fuzzing (750+ inputs), comments never deleted, nothing pushed without a named human.
+## Hard Questions (Honest Answers)
+- *"Why not just prompt the model to be safe?"* Prompts are non-deterministic and un-auditable; a base-branch policy file + signed audit log is enforceable.
+- *"Can an agent bypass it?"* Yes, if pushed directly without CI branch protection, pre-commit hooks, or preflight checks—which is why `repobrain.yml` and GitHub rulesets are paired.
+- *"Is the ML guard accurate?"* Evaluated via 5-fold cross-validation on a 242-sample team-written corpus: precision 0.938, recall 0.625, F1 0.750 (hybrid: precision 0.940, recall 0.653, F1 0.770) and 0.03% FP rate on 4,000 Python stdlib prose lines. Rules block; the ML guard warns only.
+- *"Is the optimizer safe?"* Executes unit tests on a scratch copy with CPU/memory rlimits and runs differential fuzzing (constants + type mutations). Comments are preserved and rewrites apply only on named human approval.

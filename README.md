@@ -5,7 +5,7 @@
 > **Judges start here:**
 > - **Pitch**: Vendor-neutral safety, AST complexity cleanup, and HMAC-signed audit layer for repos touched by AI coding agents—enforcing policy from the trusted base branch.
 > - **Live Demo**: **[repobrain-demo.onrender.com](https://repobrain-demo.onrender.com)** — no install, opens the seeded Mission Control console.
-> - **Demo Video (2m 31s, narrated 1080p60)**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) · **Live Public PRs**: [`repobrain-demo-eval#1`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/1), [`#2`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/2) & [`Repo_Brain#1`](https://github.com/tanmayyyyayyy/Repo_Brain/pull/1)
+> - **Demo Video (2m 05s, narrated 1080p60)**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) · **Live Public PRs**: [`repobrain-demo-eval#1`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/1), [`#2`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/2) & [`Repo_Brain#1`](https://github.com/tanmayyyyayyy/Repo_Brain/pull/1)
 > - **Quick Run**: `pip install -r requirements.txt && python server.py` (or Docker CLI: `docker build -t repobrain . && docker run --rm -v "$(pwd)":/repo repobrain review --base origin/main`)
 > - **Measured Impact**: 21 commits / 14,500 diff lines scanned with 0 runtime FPs ([`REAL_WORLD_EVAL.md`](docs/REAL_WORLD_EVAL.md)); 51,781 OSS Python LoC scanned with 0 FPs ([`SHIELD_EVAL.md`](docs/SHIELD_EVAL.md)).
 > - **Limits**: AST optimizer targets Python only (Shield/Audit are language-agnostic); ML guard warns only (0.625 recall); optional `--ai` refactor tier requires `GROQ_API_KEY` or `ANTHROPIC_API_KEY`.
@@ -21,7 +21,7 @@ It does not write code. It decides what AI (and humans) may change, cleans up wh
 ```bash
 pip install -r requirements.txt          # pyyaml (+ pytest, coverage, playwright in requirements-dev.txt). Python 3.10+, git
 python server.py                         # seeds a demo git repo with HMAC signing enabled and opens the console
-python -m pytest -q tests                # 124 passed, 1 skipped (live Anthropic API test skipped when key unset)
+python -m pytest -q tests                # 126 passed, 1 skipped (live Anthropic API test skipped when key unset)
 ```
 
 Console walkthrough (≈3 min):

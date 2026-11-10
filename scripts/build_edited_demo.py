@@ -9,7 +9,7 @@ FFMPEG = "/opt/homebrew/bin/ffmpeg"
 INPUT_VIDEO = "docs/demo/raw_screen_recording.mov"
 CLIPS_DIR = "/tmp/demo_clips"
 OVERLAYS_DIR = "/tmp/video_overlays"
-FINAL_OUTPUT = "/Users/tanmayjain/Downloads/repobrain_demo_edited.mp4"
+FINAL_OUTPUT = os.path.expanduser("~/Downloads/repobrain_demo_edited.mp4")
 REPO_OUTPUT = "docs/demo/repobrain_demo_edited.mp4"
 
 os.makedirs(CLIPS_DIR, exist_ok=True)

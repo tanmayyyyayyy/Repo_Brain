@@ -11,6 +11,7 @@ ACTOR = "claude-bot"
 # ─────────────────────────────────────────────────────────────
 
 def test_plain_aws_key():
+    # Synthetic AWS published placeholder example key (not a real credential)
     text = 'aws_key = "AKIAIOSFODNN7EXAMPLE"\n'
     findings = shield.scan_text("config.py", text, P, actor=ACTOR)
     secrets = [f for f in findings if f["rule"] == "secret"]
@@ -21,6 +22,7 @@ def test_plain_aws_key():
 
 
 def test_plain_github_token():
+    # Synthetic GitHub PAT format fixture for regression testing (not a real token)
     text = 'token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"\n'
     findings = shield.scan_text("auth.py", text, P, actor=ACTOR)
     secrets = [f for f in findings if f["rule"] == "secret"]

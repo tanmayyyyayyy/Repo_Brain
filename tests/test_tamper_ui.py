@@ -41,8 +41,20 @@ def test_tamper_ui_marks_server_reported_blocks():
             page.goto(url, wait_until="networkidle")
             page.wait_for_selector(".verdict", timeout=10000)
 
+            # Verify diff inspector syntax highlighter produces clean markup on ci.yml (no class="syn-*" leak)
+            page.locator("tr:has-text('.github/workflows/ci.yml')").first.click()
+            page.wait_for_selector(".diff-viewer .diff-code", timeout=10000)
+            diff_text = "\n".join(el.inner_text() for el in page.locator(".diff-viewer .diff-code").all())
+            assert "curl" in diff_text and 'class="syn-' not in diff_text and 'syn-str">' not in diff_text, (
+                f"Broken highlight markup leaked into rendered diff: {diff_text[:300]}"
+            )
+            page.keyboard.press("Escape")
+            page.wait_for_timeout(150)
+
             page.locator("#btnTabAudit").click()
             page.wait_for_selector(".audit-timeline", timeout=10000)
+            assert "hmac-signed" in page.locator("#chainStatus").inner_text().lower()
+            assert "hmac-signed" in page.locator("#main").inner_text().lower()
             page.locator("button:has-text('Simulate tampering')").click()
             page.wait_for_selector("text=DETECTED", timeout=10000)
 

@@ -1,8 +1,8 @@
 # RepoBrain Video Demo Script (2:30 Exact Presentation)
 
 > **Theme**: Flight recorder & mission control for repositories touched by AI coding agents.
-> **Length**: 2 minutes 30 seconds.
-> **Screen Setup**: Terminal on left, browser open to `http://127.0.0.1:8765/?t=...` on right (Dark Mode, 1440x900).
+> **Length**: ~2 minutes 05 seconds (`docs/demo/repobrain_demo_edited.mp4`).
+> **Screen Setup**: Full-frame 1600×900 dark mode scaled cleanly to 1920×1080 60fps with narrated AAC audio and large lower-third captions.
 
 ---
 

@@ -33,3 +33,19 @@ def test_required_ui_behaviors_are_wired():
 def test_tamper_ui_consumes_server_invalidation_payload():
     assert "downstream_seqs" in HTML
     assert "invalidated_seqs" in HTML
+
+
+def test_highlight_code_uses_single_pass_tokenizer():
+    assert "const KW = new Set([" in HTML
+    assert "while ((m = re.exec(raw)))" in HTML
+    # Must not chain sequential .replace() passes over inserted <span class="..."> attributes
+    assert 's.replace(/(#[^\\n]*)/g' not in HTML
+
+
+def test_demo_uses_fictional_agent_identities():
+    demo_src = (ROOT / "repobrain" / "demo.py").read_text(encoding="utf-8")
+    assert "copilot-swe-agent" not in demo_src
+    assert "noreply@anthropic.com" not in demo_src
+    assert "demo-agent[bot]" in demo_src
+    assert "refactor-bot[bot]" in demo_src
+
