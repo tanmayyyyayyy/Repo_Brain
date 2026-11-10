@@ -74,7 +74,7 @@ jobs:
           fi
       - name: Upload audit log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-audit
           path: ${{ runner.temp }}/repobrain
@@ -83,7 +83,7 @@ jobs:
       # The next run downloads it above and uses --anchor-file to detect log rewrites.
       - name: Upload audit anchor
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-anchor
           path: ${{ runner.temp }}/audit-anchor.txt
