@@ -4,6 +4,7 @@
 
 > **Judges start here:**
 > - **Pitch**: Vendor-neutral safety, AST complexity cleanup, and HMAC-signed audit layer for repos touched by AI coding agents—enforcing policy from the trusted base branch.
+> - **Live Demo**: **[repobrain-demo.onrender.com](https://repobrain-demo.onrender.com)** — no install, opens the seeded Mission Control console.
 > - **Demo Video (2m 31s, narrated 1080p60)**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) · **Live Public PRs**: [`repobrain-demo-eval#1`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/1), [`#2`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/2) & [`Repo_Brain#1`](https://github.com/tanmayyyyayyy/Repo_Brain/pull/1)
 > - **Quick Run**: `pip install -r requirements.txt && python server.py` (or Docker CLI: `docker build -t repobrain . && docker run --rm -v "$(pwd)":/repo repobrain review --base origin/main`)
 > - **Measured Impact**: 21 commits / 14,500 diff lines scanned with 0 runtime FPs ([`REAL_WORLD_EVAL.md`](docs/REAL_WORLD_EVAL.md)); 51,781 OSS Python LoC scanned with 0 FPs ([`SHIELD_EVAL.md`](docs/SHIELD_EVAL.md)).
@@ -29,6 +30,8 @@ Console walkthrough (≈3 min):
 - **C · AI refactor** *(optional tier, requires API key)* → high-debt `shop/orders.py` (cyclomatic 27) branch; provider routing and Shield checks are verified against local mock API servers in [`tests/test_ai_tier.py`](tests/test_ai_tier.py).
 
 ## Deploy the live demo
+
+**Live instance:** [https://repobrain-demo.onrender.com](https://repobrain-demo.onrender.com)
 
 The console stays localhost-only by default. To host the seeded demo publicly:
 
