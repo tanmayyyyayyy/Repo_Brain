@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: repobrain-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: REPOBRAIN_HOST
+        value: 0.0.0.0
+      - key: REPOBRAIN_OPEN_DEMO
+        value: "1"
+      - key: REPOBRAIN_ALLOWED_HOSTS
+        value: "*"
+      - key: REPOBRAIN_AUDIT_KEY
+        generateValue: true

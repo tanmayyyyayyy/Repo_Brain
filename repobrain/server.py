@@ -1,6 +1,8 @@
-"""Local review console + agent preflight API. Standard library + PyYAML only.
-Binds to 127.0.0.1, requires a per-run token or X-RepoBrain header on /api calls,
-validates the Host header (DNS-rebinding) and only accepts JSON POSTs (CSRF)."""
+"""Review console + agent preflight API. Standard library + PyYAML only.
+Binds to 127.0.0.1 by default and requires a per-run token or X-RepoBrain header on
+/api calls. Set REPOBRAIN_HOST=0.0.0.0 (and REPOBRAIN_OPEN_DEMO=1) to serve the
+sandboxed demo publicly. Host header is validated (DNS-rebinding), allowed hosts can
+be extended with REPOBRAIN_ALLOWED_HOSTS (`*` for any), and POSTs must be JSON (CSRF)."""
 import json
 import os
 import pathlib
@@ -105,8 +107,29 @@ def preflight(root, actor, files):
     return {"decision": decision, "findings": findings, "gate": gate, "actor": actor, "ai_actor": ai}
 
 
-def make_handler(ctx, token, port):
-    allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+def _env_allowed_hosts(port):
+    hosts = {f"127.0.0.1:{port}", f"localhost:{port}", f"[::1]:{port}"}
+    raw = os.environ.get("REPOBRAIN_ALLOWED_HOSTS", "").strip()
+    if raw:
+        hosts.update(h.strip() for h in raw.split(",") if h.strip())
+    return hosts
+
+
+def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_hosts=None):
+    allowed_hosts = set(allowed_hosts or _env_allowed_hosts(port))
+    if host and host not in ("0.0.0.0", "::", ""):
+        allowed_hosts.add(f"{host}:{port}")
+
+    def host_ok(value):
+        if "*" in allowed_hosts:
+            return True
+        if not value:
+            return False
+        if value in allowed_hosts:
+            return True
+        # Behind a proxy the port may be omitted from the Host header.
+        bare = value.rsplit(":", 1)[0] if value.count(":") == 1 else value
+        return any(h.rsplit(":", 1)[0] == bare for h in allowed_hosts if not h.startswith("["))
 
     class H(BaseHTTPRequestHandler):
         server_version = "RepoBrain"
@@ -129,8 +152,11 @@ def make_handler(ctx, token, port):
             self.wfile.write(data)
 
         def _guard(self):
-            if self.headers.get("Host", "") not in allowed_hosts:
+            host_hdr = self.headers.get("X-Forwarded-Host") or self.headers.get("Host", "")
+            if not host_ok(host_hdr):
                 self._send(403, {"error": "bad host"}); return False
+            if open_demo:
+                return True
             tok_hdr = self.headers.get("X-RepoBrain-Token", "")
             has_valid_tok = bool(tok_hdr) and secrets.compare_digest(tok_hdr, token)
             has_x_hdr = (self.headers.get("X-RepoBrain") == "1")
@@ -139,9 +165,11 @@ def make_handler(ctx, token, port):
             return True
 
         def do_GET(self):
+            u = urlparse(self.path)
+            if u.path == "/healthz":
+                return self._send(200, {"ok": True})
             if not self._guard():
                 return
-            u = urlparse(self.path)
             try:
                 if u.path == "/":
                     with open(find_index_html(), "rb") as f:
@@ -347,11 +375,16 @@ def route(ctx, path, body):
 
 
 def serve(a_or_repo=None, base="main", port=8765, open_browser=False, demo_mode=False):
+    env_port = os.environ.get("REPOBRAIN_PORT") or os.environ.get("PORT")
+    host = os.environ.get("REPOBRAIN_HOST") or ("0.0.0.0" if env_port else "127.0.0.1")
+    open_demo = os.environ.get("REPOBRAIN_OPEN_DEMO", "").strip().lower() in ("1", "true", "yes", "on")
     if hasattr(a_or_repo, "repo"):
         a = a_or_repo
         root = os.path.abspath(a.repo)
         is_demo = getattr(a, "demo", False)
-        port = a.port
+        port = getattr(a, "port", None) or int(env_port or port or 8765)
+        host = getattr(a, "host", None) or host
+        open_demo = open_demo or bool(getattr(a, "open", False))
         open_browser = not getattr(a, "no_browser", False)
         base = getattr(a, "base", None)
         home = getattr(a, "home", None)
@@ -359,8 +392,12 @@ def serve(a_or_repo=None, base="main", port=8765, open_browser=False, demo_mode=
         root = os.path.abspath(a_or_repo or ".")
         is_demo = demo_mode
         home = None
+        port = int(env_port or port or 8765)
 
     if is_demo:
+        if not os.environ.get("REPOBRAIN_AUDIT_KEY"):
+            # Use an ephemeral key in demo mode so the audit chain demonstrates HMAC-SHA256 signing.
+            os.environ["REPOBRAIN_AUDIT_KEY"] = "repobrain-demo-" + secrets.token_hex(8)
         base_dir = os.environ.get("REPOBRAIN_DEMO_DIR") or os.path.join(os.path.expanduser("~"), ".repobrain", "demo")
         root, home = os.path.join(base_dir, "repo"), os.path.join(base_dir, "home")
         demo.seed(root)
@@ -372,9 +409,12 @@ def serve(a_or_repo=None, base="main", port=8765, open_browser=False, demo_mode=
 
     ctx = Ctx(root, base, home, is_demo)
     token = secrets.token_urlsafe(24)
-    srv = ThreadingHTTPServer(("127.0.0.1", port), make_handler(ctx, token, port))
-    url = f"http://127.0.0.1:{port}/?t={token}"
-    print(f"RepoBrain console  ({'demo repo' if is_demo else root})\n  {url}\n  Ctrl+C to stop", flush=True)
+    srv = ThreadingHTTPServer((host, port), make_handler(ctx, token, port, host, open_demo))
+    display = "127.0.0.1" if host in ("0.0.0.0", "::", "") else host
+    url = f"http://{display}:{port}/?t={token}"
+    mode = "open demo - no token required" if open_demo else "token required"
+    print(f"RepoBrain console  ({'demo repo' if is_demo else root}; {mode})\n"
+          f"  {url}\n  listening on {host}:{port}\n  Ctrl+C to stop", flush=True)
     if open_browser:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:

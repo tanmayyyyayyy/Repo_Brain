@@ -2,6 +2,13 @@
 
 [![Test Suite](https://github.com/tanmayyyyayyy/Repo_Brain/actions/workflows/test.yml/badge.svg)](https://github.com/tanmayyyyayyy/Repo_Brain/actions/workflows/test.yml)
 
+> **Judges start here:**
+> - **Pitch**: Vendor-neutral safety, AST complexity cleanup, and HMAC-signed audit layer for repos touched by AI coding agents—enforcing policy from the trusted base branch.
+> - **Demo Video (2m 31s, narrated 1080p60)**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) · **Live Public PRs**: [`repobrain-demo-eval#1`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/1), [`#2`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/2) & [`Repo_Brain#1`](https://github.com/tanmayyyyayyy/Repo_Brain/pull/1)
+> - **Quick Run**: `pip install -r requirements.txt && python server.py` (or Docker CLI: `docker build -t repobrain . && docker run --rm -v "$(pwd)":/repo repobrain review --base origin/main`)
+> - **Measured Impact**: 21 commits / 14,500 diff lines scanned with 0 runtime FPs ([`REAL_WORLD_EVAL.md`](docs/REAL_WORLD_EVAL.md)); 51,781 OSS Python LoC scanned with 0 FPs ([`SHIELD_EVAL.md`](docs/SHIELD_EVAL.md)).
+> - **Limits**: AST optimizer targets Python only (Shield/Audit are language-agnostic); ML guard warns only (0.625 recall); optional `--ai` refactor tier requires `GROQ_API_KEY` or `ANTHROPIC_API_KEY`.
+
 **A vendor-neutral safety, cleanup and audit layer for repos that AI agents write to.**
 It does not write code. It decides what AI (and humans) may change, cleans up what they wrote
 (with your tests as the judge), and keeps tamper-evident proof of everything.
@@ -11,19 +18,45 @@ It does not write code. It decides what AI (and humans) may change, cleans up wh
 ## Run it in 60 seconds
 
 ```bash
-pip install -r requirements.txt          # pyyaml, pytest, coverage. Python 3.10+, git
-python server.py                         # seeds a REAL git repo with AI-authored PRs and opens the console
-python -m pytest -q tests                # 124 passed, 1 skipped (requires ANTHROPIC_API_KEY)
+pip install -r requirements.txt          # pyyaml (+ pytest, coverage, playwright in requirements-dev.txt). Python 3.10+, git
+python server.py                         # seeds a demo git repo with HMAC signing enabled and opens the console
+python -m pytest -q tests                # 124 passed, 1 skipped (live Anthropic API test skipped when key unset)
 ```
 
 Console walkthrough (≈3 min):
-- **A · risky AI PR** → BLOCKED (protected workflow file, hardcoded AWS key, prompt-injection text, deleted test)
-- **B · messy AI PR** → CHANGES REQUIRED → *Run optimizer* → real AST diff, your tests run on a copy, coverage tracked, complexity before/after (cognitive 15→10, depth 4→3) → *Approve & apply* (a commit is created with `Approved-by:`) → review passes → *Audit* → *Simulate tampering* → detected.
-- **C · AI refactor** → high-debt legacy code (`shop/orders.py`, cyclomatic complexity 27) decomposed into modular helper functions via test-gated AI tier.
+- **A · risky AI PR** (`demo-agent[bot]`) → BLOCKED (protected workflow file, AWS published example key, prompt-injection text, deleted test)
+- **B · messy AI PR** (`refactor-bot[bot]`) → CHANGES REQUIRED → *Run optimizer* → real AST diff, your tests run on a scratch copy, coverage tracked, complexity before/after (cognitive 15→10, depth 4→3) → *Approve & apply* (a commit is created with `Approved-by:`) → review passes → *Audit* (HMAC-signed) → *Simulate tampering* → detected.
+- **C · AI refactor** *(optional tier, requires API key)* → high-debt `shop/orders.py` (cyclomatic 27) branch; provider routing and Shield checks are verified against local mock API servers in [`tests/test_ai_tier.py`](tests/test_ai_tier.py).
+
+## Deploy the live demo
+
+The console stays localhost-only by default. To host the seeded demo publicly:
+
+```bash
+# Render (recommended): push this repo, then New > Blueprint > select render.yaml
+# Railway: New Project > Deploy from GitHub (uses Procfile + the PORT env var)
+
+# Any Docker host:
+docker build -t repobrain .
+docker run --rm -p 8765:8765 repobrain
+# open http://localhost:8765  (public URL is provided by your platform)
+```
+
+Deployment is controlled by environment variables:
+
+| Variable | Purpose |
+|---|---|
+| `REPOBRAIN_HOST` | Bind address (`0.0.0.0` to expose; default `127.0.0.1`). |
+| `PORT` / `REPOBRAIN_PORT` | Port to listen on (platform-assigned on Render/Railway). |
+| `REPOBRAIN_OPEN_DEMO=1` | Skip the per-run token so anyone with the URL can use the sandboxed demo. |
+| `REPOBRAIN_ALLOWED_HOSTS` | Comma-separated Host allowlist; `*` accepts any (needed behind a proxy). |
+| `REPOBRAIN_AUDIT_KEY` | HMAC-SHA256 key for the audit chain (Render generates one). |
+
+> **Security note:** `REPOBRAIN_OPEN_DEMO=1` is only appropriate for the seeded demo repo. For real repositories keep the default token + localhost binding.
 
 ## Live Demo Walkthrough
 
-> 📹 **Watch the Full Master Demo Video (1080p 60fps, 2m 31s)**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) — includes cinematic focus zooms, live GitHub Actions PR enforcement, AST refactoring, and tamper-evident audit ledger.
+> 📹 **Watch the Narrated Master Demo Video (1080p 60fps)**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) — problem intro, clean full-UI framing, fixed diff syntax highlighting, HMAC-signed audit chain, and live GitHub Actions PR proof.
 
 ![RepoBrain Workflow Walkthrough](docs/demo.gif)
 
@@ -47,15 +80,15 @@ Full 4-view × 2-viewport × 2-theme matrix lives in [`docs/ui/`](docs/ui/); the
 
 | Module | What it actually does |
 |---|---|
-| **Shield** | Reads the real `git diff base...HEAD`. Finds the AI author per file (commit author/committer, `Co-authored-by:`). Blocks protected paths for AI (warns for humans), hardcoded secrets (AWS/GitHub/Slack/Stripe/Anthropic/OpenAI/private keys/GCP/Azure/Twilio/SendGrid/JWT/generic high-entropy credentials via Shannon entropy), prompt-injection text in *added* lines (including multi-line injections across comments and learned ML guard warning at p≥0.85), hidden/bidi Trojan Source Unicode, risky shell commands (`curl \| sh`, `chmod 777`, `permissions: write-all`), and dependency typosquatting (Damerau-Levenshtein against top 5,000 packages on PyPI/npm, homoglyphs, VCS URLs). Evidence is masked. |
+| **Shield** | Reads the real `git diff base...HEAD`. Finds the AI author per file (commit author/committer, `Co-authored-by:`). Blocks protected paths for AI (warns for humans), hardcoded secrets (AWS/GitHub/Slack/Stripe/Anthropic/OpenAI/private keys/GCP/Azure/Twilio/SendGrid/JWT/generic high-entropy credentials via Shannon entropy, split string concatenation, and base64-encoded tokens), prompt-injection text in *added* lines (3-4 line multi-line window across comments + warn-only Naive Bayes ML guard at p≥0.85), hidden/bidi Trojan Source Unicode, risky shell/PowerShell commands (`curl \| sh`, `iex (iwr ...)`), and dependency typosquatting (Damerau-Levenshtein against a curated list of 289 popular packages: 198 PyPI, 91 npm, homoglyphs, VCS URLs). Evidence is masked. |
 | **Policy** | `repobrain.yml`, validated, read from the **trusted base branch** — a PR (or an agent) cannot loosen its own rules. Supports `min_function_coverage` to enforce test execution of rewritten functions, `fuzz: true` for differential fuzzing, and `ml_guard: true`. |
 | **Complexity gate** | Cyclomatic + cognitive + nesting depth, only on functions the PR touched (legacy debt doesn't block). `repobrain scan` lists the legacy debt separately. |
-| **Optimizer** | AST rewrites that are semantics-preserving (else-after-return, guard clauses, merge nested ifs, bool returns, loop→comprehension, `== None`, unused imports). Only changed functions are re-emitted; **everything else stays byte-identical** with original CRLF/LF line endings preserved, comments are kept, functions whose inline comments would be lost are skipped. Result is run against **your test suite on a copy** and **differentially fuzzed** (hundreds of mined constant + type-confused inputs compared against the original function); any divergence immediately discards the proposal. Applying needs a named human, refuses stale proposals, commits with `Approved-by:`. |
-| **Optimizer – AI tier** *(optional)* | For functions still over limits: prompts an LLM (Groq free tier `openai/gpt-oss-120b` or Anthropic `claude-sonnet-5-5`, selectable via `REPOBRAIN_LLM_PROVIDER`) to refactor *one function*, scans the reply with Shield before accepting, then test-gates and differentially fuzzes it (one retry with the failure output). Off unless `allow_llm: true` **and** `--ai` **and** API key (`GROQ_API_KEY` or `ANTHROPIC_API_KEY`). Never sends files that have Shield findings. |
+| **Optimizer** | AST rewrites that are semantics-preserving (else-after-return, guard clauses, merge nested ifs, bool returns, loop→comprehension, `== None`, unused imports). Only changed functions are re-emitted; **everything else stays byte-identical** with original CRLF/LF line endings preserved, comments are kept, functions whose inline comments would be lost are skipped. Result is run against **your test suite on a scratch copy with CPU/memory rlimits** and **differentially fuzzed** (constants + type-confused inputs compared against the original function); any divergence immediately discards the proposal. Applying needs a named human, refuses stale proposals, commits with `Approved-by:`. |
+| **Optimizer – AI tier** *(optional)* | For functions still over limits: prompts an LLM (Groq `openai/gpt-oss-120b` or Anthropic `claude-sonnet-5-5`, selectable via `REPOBRAIN_LLM_PROVIDER`) to refactor *one function*, scans the reply with Shield before accepting, then test-gates and differentially fuzzes it. Off unless `allow_llm: true` **and** `--ai` **and** `GROQ_API_KEY` or `ANTHROPIC_API_KEY` is set. Verified against local mock API servers in automated tests. |
 | **Failure Explainer** | 18 rule-based patterns (Python/Node/CI/infra) → cause, fix, file:line, failed tests. Optional LLM summary with secrets redacted. |
-| **Audit** | Append-only JSONL, SHA-256 hash chain with optional HMAC signing (`REPOBRAIN_AUDIT_KEY`), `verify`, `--expect <anchored head>`, `--anchor-file <path>`, `--write-anchor <path>`, SARIF, CSV, JSON export, markdown compliance report. One entry per AI-authored file + one per review/approval/waiver/preflight. |
-| **Agent Preflight API** | Vendor-neutral HTTP endpoint (`/api/preflight` and `repobrain preflight`) allowing external coding agents (Claude Code, Cursor, Copilot, AutoGPT) to check permissions before touching files. |
-| **Console** | Localhost only; per-run token, Host check, JSON-only POSTs (a governance tool must not be a CSRF target); all repo-derived text is HTML-escaped. Supports telemetry, interactive diff inspector, horizontal complexity bars, and presenter mode. |
+| **Audit** | Append-only JSONL, SHA-256 hash chain with HMAC-SHA256 signing (`REPOBRAIN_AUDIT_KEY`, auto-provisioned ephemerally in `--demo`), `verify`, `--expect <anchored head>`, `--anchor-file <path>`, `--write-anchor <path>`, SARIF, CSV, JSON export, markdown compliance report. |
+| **Agent Preflight API** | Vendor-neutral HTTP endpoint (`/api/preflight`), CLI (`repobrain preflight`), MCP server (`integrations/mcp_server.py`), and pre-execution tool hooks (`integrations/claude-code/`) allowing external agents to check permissions before writing files. |
+| **Console** | Localhost-only Mission Control UI (`repobrain/web/index.html`); per-run token, Host check, JSON-only POSTs (CSRF guard); HTML-escaped; WCAG 2.1 AA contrast verified; interactive diff inspector with single-pass syntax highlighting, complexity bars, presenter mode, and `Cmd+K` palette. |
 
 ## CLI
 
@@ -63,7 +96,7 @@ Full 4-view × 2-viewport × 2-theme matrix lives in [`docs/ui/`](docs/ui/); the
 python -m repobrain init                                                     # write starter repobrain.yml
 python -m repobrain review  --base main [--actor LOGIN] [--comment pr.md]   # CI entry point, exit 1 if not ALLOWED
 python -m repobrain scan                                                     # legacy complexity debt
-python -m repobrain shield   --path .github/workflows/ci.yml --actor copilot # check files or proposed action
+python -m repobrain shield   --path .github/workflows/ci.yml --actor bot     # check files or proposed action
 python -m repobrain gate     --base main                                     # check complexity gate violations
 python -m repobrain optimize --base main [--diff] [--apply --actor NAME] [--ai] [--all]
 python -m repobrain explain  --log build.log                                 # rule-based + LLM log explanation
@@ -79,38 +112,54 @@ python -m repobrain serve    [--demo] [--repo PATH --base main]              # l
 python -m repobrain demo                                                     # run full console demo in terminal
 ```
 
+## GitHub tools used
+
+- **GitHub Actions PR Gate** ([`.github/workflows/repobrain.yml`](.github/workflows/repobrain.yml) & [`action.yml`](action.yml)): Runs `repobrain ci` on pull requests against trusted base-branch policy.
+- **Sticky PR Comment**: Automatically posts/updates the governance verdict, blocking findings table, and complexity deltas in PR conversations (verified on [`repobrain-demo-eval#1`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/1) & [`Repo_Brain#1`](https://github.com/tanmayyyyayyy/Repo_Brain/pull/1)).
+- **SARIF Code Scanning**: Exports `repobrain.sarif` for GitHub Code Scanning Alerts integration.
+- **Audit Head Anchoring Artifacts**: Stores the chain head hash outside the working tree via `--anchor-file` / `--write-anchor` to detect log truncation or full history rewrites ([`docs/GITHUB_ACTIONS.md`](docs/GITHUB_ACTIONS.md)).
+- **CI Test Matrix** ([`.github/workflows/test.yml`](.github/workflows/test.yml)): Runs pytest across Ubuntu and macOS on Python 3.10–3.13.
+- **Dependabot & PR Governance** ([`.github/dependabot.yml`](.github/dependabot.yml), [`.github/pull_request_template.md`](.github/pull_request_template.md)): Weekly ecosystem dependency checks and human authorship attestation checklist.
+- **Pre-Commit Hook** ([`.pre-commit-hooks.yaml`](.pre-commit-hooks.yaml)): Local pre-commit gating on staged changes via `repobrain hook-check`.
+
 ## Put it on a real repo
 
 1. Copy `repobrain.yml` to your **default branch** (`python -m repobrain init`).
-2. Add `.github/workflows/repobrain.yml` and make it a **required** check in a branch ruleset (see [docs/GITHUB_ACTIONS.md](docs/GITHUB_ACTIONS.md)).
+2. Add `.github/workflows/repobrain.yml` and make `repobrain` a **required** check in a branch ruleset with admin bypass disabled (see [`docs/GITHUB_ACTIONS.md`](docs/GITHUB_ACTIONS.md)).
 3. Open a PR → the workflow comments the verdict, fails the check when blocked, verifies the audit chain against the anchored head artifact, and uploads the updated audit log and anchor.
 
 ## Honest limits (say these before a judge does)
 
 - **Python only** for complexity + optimizer. Shield, audit and explainer are language-agnostic.
-- Rules reduce **nesting and cognitive complexity** (the thing that hurts readability) but cannot lower
-  cyclomatic complexity — that needs real refactors (the AI tier, or a human). In the demo: cognitive 15→10, depth 4→3, 69→47 lines.
-- Rewritten functions are re-formatted by `ast.unparse` (float literals like `0.10` print as `0.1`; run your formatter after).
-- **The test suite is the safety net.** Weak tests ⇒ weak guarantee. RepoBrain integrates with coverage.py to flag proposals where rewritten functions were never executed by tests (`min_function_coverage`).
-- The **AI tier is fully implemented and tested with mock API responses and multi-provider validation (Groq free tier + Anthropic)**, but live API execution requires `GROQ_API_KEY` or `ANTHROPIC_API_KEY` (skipped in CI when absent).
-- RepoBrain only governs what passes through it. A direct push to an unprotected branch bypasses it — enforce via branch rulesets.
-- A hash chain proves *edits* happened; detecting a fully rewritten log needs the anchored head (`--anchor-file` stored in CI artifacts).
-- **Prompt injection and ML Guard limits**: Prompt-injection detection combines multi-line regex rules with a lightweight learned Naive Bayes classifier. Evaluated on a 242-sample team-written corpus via 5-fold cross-validation, the classifier achieves precision 0.938, recall 0.625, F1 0.75 (hybrid: precision 0.940, recall 0.653, F1 0.770) with a measured 0.03% false-positive rate on 4,000 Python stdlib documentation comments. Because the corpus is small and team-written, these figures are not a production accuracy claim. Architectural safeguard: rules can block, but the ML model can only warn.
-- Not a GitHub App yet (webhooks, multi-repo dashboard, SSO) — that is the roadmap, not the demo.
+- Rules reduce **nesting and cognitive complexity** (the thing that hurts readability) but cannot lower cyclomatic complexity — that needs real refactors (human or LLM tier). In Scenario B: cognitive 15→10, depth 4→3, 69→47 lines.
+- Rewritten functions are re-formatted by `ast.unparse` (float literals like `0.10` print as `0.1`; run `format_command` or your formatter after).
+- **The test suite is the safety net.** Weak tests ⇒ weak guarantee. RepoBrain integrates with `coverage.py` to flag proposals where rewritten functions were never executed (`min_function_coverage`). Tests run on a scratch copy with CPU/memory rlimits rather than full OS/network isolation.
+- The **AI refactor tier (`--ai`)** routes to Groq or Anthropic APIs and is validated against local mock servers in CI (`tests/test_ai_tier.py`, `tests/test_llm_providers.py`); live API execution requires `GROQ_API_KEY` or `ANTHROPIC_API_KEY` and is skipped when keys are absent.
+- RepoBrain only governs what passes through it. A direct push to an unprotected branch bypasses it — enforce via GitHub branch rulesets.
+- A hash chain proves *edits* happened; detecting a fully rewritten log needs HMAC signing (`REPOBRAIN_AUDIT_KEY`) paired with an out-of-band anchored head (`--anchor-file` stored in CI artifacts).
+- **Prompt injection and ML Guard limits**: Combines multi-line regex rules with a lightweight Naive Bayes classifier. Evaluated on a 242-sample team-written corpus via 5-fold cross-validation: precision 0.938, recall 0.625, F1 0.75 (hybrid: precision 0.940, recall 0.653, F1 0.770) with a measured 0.03% false-positive rate on 4,000 Python stdlib documentation comments. Because the corpus is small and team-written, these numbers are not a production accuracy claim. Architectural rule: deterministic rules can block; the ML model can only warn.
+- Not a hosted GitHub App yet (multi-repo web dashboard, SAML SSO) — that is on the roadmap.
+
+## AI assistance & third-party material
+
+- **Originality & Authorship**: RepoBrain was designed and built originally for this project; there was no pre-existing external codebase prior to development.
+- **Use of AI Coding Assistants**: AI assistants were used during development as pair-programming tools for boilerplate scaffolding, test fixture expansion, CSS accessibility token tuning, and documentation formatting. All architecture decisions, threat modeling, AST transformation rules, evaluation runs, and Playwright/pytest verifications were reviewed, executed, and validated by the author.
+- **Third-Party Components & Data**: Listed cleanly in [`THIRD_PARTY.md`](THIRD_PARTY.md) (Python stdlib, `PyYAML` [MIT], dev test tools `pytest`/`coverage`/`playwright`, PSF-licensed stdlib prose samples in `repobrain/data/negative_prose.txt`, and AWS published documentation placeholder keys `AKIAIOSFODNN7EXAMPLE` used strictly in test/demo fixtures).
 
 ## Layout
 
-```
-repobrain/  policy · metrics · gitutil · shield · rewrite · optimizer · fuzz · deps · mlguard · llm · review · explainer · audit · export · report · demo · server · cli
-repobrain/web/index.html   console UI (WCAG AA mission control, WebGL telemetry)
+```text
+repobrain/          policy · metrics · gitutil · shield · rewrite · optimizer · fuzz · deps · mlguard · llm · review · explainer · audit · export · report · demo · server · cli
+repobrain/web/      index.html single-file WCAG 2.1 AA Mission Control UI
 demo_assets/        files for the seeded demo repo
-tests/              124 tests incl. differential fuzzing, ML guard evaluation, multi-provider LLM support, tamper detection, server security, coverage, UI a11y
-scripts/demo_check.py   Playwright-based headless verification of full console walkthrough (7/7 steps)
+integrations/       MCP server and Claude Code pre-execution hook templates
+tests/              124+ tests incl. differential fuzzing, ML guard evaluation, mock LLM tests, tamper detection, server security, Playwright UI & a11y
+scripts/            contrast check, screenshot matrix, headless demo check, real-commit evaluator, video pipeline
 ```
 
 ## Roadmap
 
-- **GitHub App & Multi-Repo Dashboard**: Production GitHub App deployment with webhook event listeners (`repobrain/webhook.py`), real-time PR check runs, organization-wide policy management, and SAML SSO.
-- **Multi-Language AST Optimizers**: Expand verified AST complexity reduction, dead code elimination, and comment-preserving refactorings to TypeScript (`@babel/parser` / `swc`) and Go (`go/ast`).
-- **Enterprise Cryptographic Anchoring**: Public audit anchoring using RFC 3161 trusted timestamping authorities and transparency log publishing with Sigstore Rekor to cryptographically anchor audit head states without relying solely on CI artifacts.
-- **IDE Extensions**: Native VS Code and JetBrains sidecars connecting directly to `/api/preflight` for real-time save-time policy feedback for human and AI pair programmers.
+- **Hosted GitHub App & Multi-Repo Dashboard**: Production GitHub App deployment expanding [`repobrain/webhook.py`](repobrain/webhook.py) with organization-wide policy management and SAML SSO.
+- **Multi-Language AST Optimizers**: Expand verified AST complexity reduction to TypeScript and Go.
+- **Public Cryptographic Anchoring**: Sigstore Rekor / RFC 3161 timestamping for external audit root attestation.
+- **Native IDE Sidecars**: VS Code and JetBrains extensions wired directly to `/api/preflight`.

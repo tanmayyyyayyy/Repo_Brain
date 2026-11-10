@@ -326,8 +326,10 @@ def build():
 
     sp = add("report", cmd_report, help="compliance report (markdown)"); sp.add_argument("--base"); sp.add_argument("--out")
 
-    sp = add("serve", cmd_serve, help="review console (localhost)")
-    sp.add_argument("--base"); sp.add_argument("--port", type=int, default=8765)
+    sp = add("serve", cmd_serve, help="review console (localhost by default)")
+    sp.add_argument("--base"); sp.add_argument("--port", type=int, default=None)
+    sp.add_argument("--host", help="bind address (default 127.0.0.1; use 0.0.0.0 to expose)")
+    sp.add_argument("--open", action="store_true", help="open demo mode: no per-run API token")
     sp.add_argument("--demo", action="store_true", help="seed a demo git repo with AI-authored PRs")
     sp.add_argument("--no-browser", action="store_true")
 
