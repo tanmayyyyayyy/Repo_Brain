@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 from . import audit as A
-from . import demo, deps, explainer, export, gitutil, llm, optimizer, report, review, risk, shield
+from . import auth, demo, deps, explainer, export, gitutil, llm, optimizer, report, review, risk, shield
 from . import policy as P
 from .review import TEST_RX
 
@@ -44,6 +44,7 @@ class Ctx:
     def __init__(self, root, base, home, is_demo):
         self.root, self.base, self.home, self.demo = root, base, home, is_demo
         self.log = A.AuditLog(home)
+        self.auth = auth.AuthManager(home)
         self.last_proposal = None
 
     def policy(self):
@@ -164,6 +165,19 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
                 self._send(401, {"error": "missing or wrong token - open the URL printed by `repobrain serve`"}); return False
             return True
 
+        def _get_user(self):
+            tok = self.headers.get("X-RepoBrain-Session", "").strip()
+            if not tok:
+                auth_hdr = self.headers.get("Authorization", "").strip()
+                if auth_hdr.lower().startswith("bearer "):
+                    tok = auth_hdr[7:].strip()
+            u = ctx.auth.get_user_by_token(tok) if tok else None
+            if not u and (open_demo or ctx.demo):
+                for p in ctx.auth.list_users():
+                    if p.get("role") == "admin":
+                        return p
+            return u
+
         def do_GET(self):
             u = urlparse(self.path)
             if u.path == "/healthz":
@@ -174,8 +188,18 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
                 if u.path == "/":
                     with open(find_index_html(), "rb") as f:
                         return self._send(200, f.read(), "text/html")
+                if u.path == "/api/auth/me":
+                    usr = self._get_user()
+                    return self._send(200, {
+                        "user": usr,
+                        "roles": auth.ROLES,
+                        "demo_personas": auth.DEFAULT_DEMO_USERS,
+                        "users": ctx.auth.list_users()
+                    })
+                if u.path == "/api/auth/users":
+                    return self._send(200, {"users": ctx.auth.list_users()})
                 if u.path == "/api/state":
-                    return self._send(200, state(ctx))
+                    return self._send(200, state(ctx, user=self._get_user()))
                 if u.path == "/api/audit":
                     es = ctx.log.entries()
                     return self._send(200, {"entries": es, "chain": A.verify_entries(es)})
@@ -260,8 +284,11 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
                 return self._send(413, {"error": "body too large"})
             try:
                 body = json.loads(self.rfile.read(n) or b"{}")
+                user = self._get_user()
                 with LOCK:
-                    self._send(200, route(ctx, urlparse(self.path).path, body))
+                    self._send(200, route(ctx, urlparse(self.path).path, body, user=user))
+            except PermissionError as e:
+                self._send(403, {"error": str(e), "code": "FORBIDDEN"})
             except (ValueError, gitutil.GitError, P.PolicyError, KeyError) as e:
                 self._send(400, {"error": str(e)})
             except Exception as e:
@@ -270,13 +297,19 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
     return H
 
 
-def state(ctx_or_root, base="main"):
+def state(ctx_or_root, base="main", user=None):
     if isinstance(ctx_or_root, Ctx):
         ctx = ctx_or_root
     else:
         root = os.path.abspath(str(ctx_or_root))
         home = A.home_for(root)
         ctx = Ctx(root, base, home, False)
+
+    if user is None:
+        for p in ctx.auth.list_users():
+            if p.get("role") == "admin":
+                user = p
+                break
 
     pol = ctx.policy()
     try:
@@ -308,12 +341,48 @@ def state(ctx_or_root, base="main"):
         "risk": rev["risk"],
         "blocking": rev["counts"]["blocks"],
         "proposal": ctx.last_proposal or {"changed": 0},
-        "chain": ctx.log.verify()
+        "chain": ctx.log.verify(),
+        "auth": {
+            "current_user": user,
+            "roles": auth.ROLES,
+            "demo_personas": auth.DEFAULT_DEMO_USERS,
+            "company": user.get("company", "Acme Corp") if user else "Acme Corp",
+            "users": ctx.auth.list_users()
+        }
     }
 
 
-def route(ctx, path, body):
+def route(ctx, path, body, user=None):
     actor = str(body.get("actor", "")).strip()[:80]
+    if path == "/api/auth/register":
+        u, tok = ctx.auth.register(
+            email=body.get("email", ""),
+            password=body.get("password", ""),
+            name=body.get("name", ""),
+            role=body.get("role", "developer"),
+            company=body.get("company", ""),
+            audit_log=ctx.log
+        )
+        return {"user": u, "token": tok}
+    if path == "/api/auth/login":
+        u, tok = ctx.auth.login(
+            email=body.get("email", ""),
+            password=body.get("password", ""),
+            audit_log=ctx.log
+        )
+        return {"user": u, "token": tok}
+    if path == "/api/auth/logout":
+        tok = body.get("token") or ""
+        return ctx.auth.logout(tok, ctx.log)
+    if path == "/api/auth/switch-demo-role":
+        u, tok = ctx.auth.switch_demo_persona(body.get("role", "admin"), ctx.log)
+        return {"user": u, "token": tok}
+    if path == "/api/auth/update-role":
+        if user and not auth.check_permission(user, "manage_users"):
+            raise PermissionError("Permission Denied: Only Admin / Release Manager can change user roles")
+        actor_email = user.get("email", "admin") if user else "admin"
+        u = ctx.auth.update_role(body.get("email", ""), body.get("role", "developer"), actor_email, ctx.log)
+        return {"user": u}
     if path == "/api/review":
         pol = ctx.policy()
         rev = review.run(ctx.root, pol, ctx.base, ctx.home, body.get("pr_author"))
@@ -332,12 +401,24 @@ def route(ctx, path, body):
     if path == "/api/approve":
         if not actor:
             raise ValueError("approver name is required (a human approves)")
+        if user and not auth.check_permission(user, "apply_approval"):
+            role_title = user.get("role_title", user.get("role", "Developer"))
+            raise PermissionError(
+                f"Permission Denied: User '{user.get('name', 'User')}' ({role_title}) cannot approve code. "
+                "Only Admin / Release Manager can approve and apply code merges. Please switch to Admin persona."
+            )
         res = optimizer.apply(ctx.root, ctx.home, body["id"], actor)
         ctx.log.append("approve", actor, "APPLIED", f"{', '.join(res['applied'])} -> {str(res['commit'])[:8]}", head=res["commit"])
         return res
     if path == "/api/waive":
         if not actor:
             raise ValueError("waiver name is required")
+        if user and not auth.check_permission(user, "grant_waiver"):
+            role_title = user.get("role_title", user.get("role", "Developer"))
+            raise PermissionError(
+                f"Permission Denied: User '{user.get('name', 'User')}' ({role_title}) cannot grant policy waivers. "
+                "Waivers require Security Lead or Admin authority."
+            )
         w = review.waive(ctx.home, gitutil.head(ctx.root), actor, str(body.get("reason", "")))
         ctx.log.append("waive", actor, "WAIVED", w["reason"], head=gitutil.head(ctx.root))
         return w

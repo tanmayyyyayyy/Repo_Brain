@@ -5,11 +5,12 @@
 - **Track / Category**: Developer Tools & Infrastructure / AI Safety & Governance / Cyber Security / Open Innovation
 - **GitHub Repository**: [https://github.com/tanmayyyyayyy/Repo_Brain](https://github.com/tanmayyyyayyy/Repo_Brain)
 - **Live Demo Video**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) *(1080p 60fps narrated walkthrough with voiceover, captions, HMAC-signed audit demo, and live GitHub CI verification)*
+- **Technical Documentation**: [`docs/TECHNICAL_DOCUMENTATION.md`](docs/TECHNICAL_DOCUMENTATION.md) *(Architecture, Tech Stack, RBAC Spec, APIs & Integrations)*
 - **Live Pull Request Proofs (Public Repos)**:
   - Evaluation repo (`repobrain-demo-eval`): [PR #1 — Blocked risky AI PR](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/1) · [PR #2 — Complexity gate](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/2)
   - Main repo (`Repo_Brain`): [PR #1 — End-to-end Blocked → Refactored → Allowed lifecycle](https://github.com/tanmayyyyayyy/Repo_Brain/pull/1)
 - **License**: MIT
-- **Status**: Working MVP (`126 passed, 1 skipped` in `python -m pytest -q tests`)
+- **Status**: Final Build & Innovation Showcase (`130 passed, 1 skipped` in `python -m pytest -q tests`)
 
 ---
 
@@ -40,7 +41,7 @@ To run the automated test suite:
 ```bash
 pip install -r requirements-dev.txt
 python -m pytest -q tests
-# 126 passed, 1 skipped (live Anthropic API test requires ANTHROPIC_API_KEY)
+# 130 passed, 1 skipped (live Anthropic API test requires ANTHROPIC_API_KEY)
 ```
 
 ---

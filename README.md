@@ -4,10 +4,12 @@
 
 > **Judges start here:**
 > - **Pitch**: Vendor-neutral safety, AST complexity cleanup, and HMAC-signed audit layer for repos touched by AI coding agents—enforcing policy from the trusted base branch.
-> - **Live Demo**: **[repobrain-demo.onrender.com](https://repobrain-demo.onrender.com)** — no install, opens the seeded Mission Control console.
+> - **Technical Docs**: [`docs/TECHNICAL_DOCUMENTATION.md`](docs/TECHNICAL_DOCUMENTATION.md) — Comprehensive architecture, API reference, security model & RBAC specifications.
+> - **Live Demo**: **[repobrain-demo.onrender.com](https://repobrain-demo.onrender.com)** — no install, opens the seeded Mission Control console with instant 1-click role switcher (Admin, Developer, Tester, Security).
 > - **Demo Video (2m 05s, narrated 1080p60)**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) · **Live Public PRs**: [`repobrain-demo-eval#1`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/1), [`#2`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/2) & [`Repo_Brain#1`](https://github.com/tanmayyyyayyy/Repo_Brain/pull/1)
 > - **Quick Run**: `pip install -r requirements.txt && python server.py` (or Docker CLI: `docker build -t repobrain . && docker run --rm -v "$(pwd)":/repo repobrain review --base origin/main`)
 > - **Measured Impact**: 21 commits / 14,500 diff lines scanned with 0 runtime FPs ([`REAL_WORLD_EVAL.md`](docs/REAL_WORLD_EVAL.md)); 51,781 OSS Python LoC scanned with 0 FPs ([`SHIELD_EVAL.md`](docs/SHIELD_EVAL.md)).
+> - **Enterprise Security**: Corporate email domain enforcement (`@company.com`), 600,000-iteration PBKDF2-HMAC-SHA256 passwords, 4-tier RBAC, and zero-telemetry offline-first architecture.
 > - **Limits**: AST optimizer targets Python only (Shield/Audit are language-agnostic); ML guard warns only (0.625 recall); optional `--ai` refactor tier requires `GROQ_API_KEY` or `ANTHROPIC_API_KEY`.
 
 **A vendor-neutral safety, cleanup and audit layer for repos that AI agents write to.**
@@ -21,7 +23,7 @@ It does not write code. It decides what AI (and humans) may change, cleans up wh
 ```bash
 pip install -r requirements.txt          # pyyaml (+ pytest, coverage, playwright in requirements-dev.txt). Python 3.10+, git
 python server.py                         # seeds a demo git repo with HMAC signing enabled and opens the console
-python -m pytest -q tests                # 126 passed, 1 skipped (live Anthropic API test skipped when key unset)
+python -m pytest -q tests                # 130 passed, 1 skipped (live Anthropic API test skipped when key unset)
 ```
 
 Console walkthrough (≈3 min):
@@ -91,6 +93,7 @@ Full 4-view × 2-viewport × 2-theme matrix lives in [`docs/ui/`](docs/ui/); the
 | **Failure Explainer** | 18 rule-based patterns (Python/Node/CI/infra) → cause, fix, file:line, failed tests. Optional LLM summary with secrets redacted. |
 | **Audit** | Append-only JSONL, SHA-256 hash chain with HMAC-SHA256 signing (`REPOBRAIN_AUDIT_KEY`, auto-provisioned ephemerally in `--demo`), `verify`, `--expect <anchored head>`, `--anchor-file <path>`, `--write-anchor <path>`, SARIF, CSV, JSON export, markdown compliance report. |
 | **Agent Preflight API** | Vendor-neutral HTTP endpoint (`/api/preflight`), CLI (`repobrain preflight`), MCP server (`integrations/mcp_server.py`), and pre-execution tool hooks (`integrations/claude-code/`) allowing external agents to check permissions before writing files. |
+| **Enterprise RBAC & Auth** | Corporate email validation (`@company.com`), FIPS-grade PBKDF2-HMAC-SHA256 password hashing (600,000 iterations), 4-tier role separation (Admin, Security Lead, Tester, Developer), 15-point permission matrix, 1-click evaluator persona switcher, and HMAC-signed audit logging of all auth events. |
 | **Console** | Localhost-only Mission Control UI (`repobrain/web/index.html`); per-run token, Host check, JSON-only POSTs (CSRF guard); HTML-escaped; WCAG 2.1 AA contrast verified; interactive diff inspector with single-pass syntax highlighting, complexity bars, presenter mode, and `Cmd+K` palette. |
 
 ## CLI

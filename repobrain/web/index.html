@@ -1245,6 +1245,248 @@ pre {
   .action-chip-btn span { display: none; }
   .verdict-badge .big { font-size: 22px; }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   ROLE-BASED ACCESS CONTROL (RBAC) & CORPORATE IDENTITY STYLES
+   ───────────────────────────────────────────────────────────── */
+.user-role-menu-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+}
+.user-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 9999px;
+  padding: 4px 10px 4px 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.user-pill:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--brand-accent);
+}
+.user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand-accent), #818cf8);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: -0.5px;
+}
+.user-info-brief {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.user-name-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-role-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1.5px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.role-admin {
+  background: rgba(239, 68, 68, 0.16);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+.role-security {
+  background: rgba(168, 85, 247, 0.16);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+.role-tester {
+  background: rgba(234, 179, 8, 0.16);
+  color: #facc15;
+  border: 1px solid rgba(234, 179, 8, 0.35);
+}
+.role-developer {
+  background: rgba(56, 189, 248, 0.16);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+.user-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 310px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  z-index: 200;
+  padding: 8px 0;
+  display: none;
+}
+.user-dropdown-menu.open {
+  display: block;
+}
+.dropdown-header-block {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.dropdown-user-name {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--text-primary);
+}
+.dropdown-user-email {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.dropdown-section-title {
+  padding: 8px 16px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+.persona-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 16px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  font-size: 12.5px;
+}
+.persona-item:hover {
+  background: var(--bg-surface-hover);
+}
+.persona-item.active {
+  background: var(--bg-surface-raised);
+  border-left: 3px solid var(--brand-accent);
+}
+.persona-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.dropdown-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 6px 0;
+}
+.dropdown-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 16px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.dropdown-action-btn:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.role-perspective-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+.role-perspective-banner.admin-banner {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.28);
+}
+.role-perspective-banner.sec-banner {
+  background: rgba(168, 85, 247, 0.08);
+  border-color: rgba(168, 85, 247, 0.28);
+}
+.role-perspective-banner.tester-banner {
+  background: rgba(234, 179, 8, 0.08);
+  border-color: rgba(234, 179, 8, 0.28);
+}
+.role-perspective-banner.dev-banner {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.28);
+}
+
+.rbac-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 14px;
+  font-size: 12px;
+}
+.rbac-matrix-table th, .rbac-matrix-table td {
+  padding: 8px 12px;
+  border: 1px solid var(--border-subtle);
+  text-align: left;
+}
+.rbac-matrix-table th {
+  background: var(--bg-surface-raised);
+  font-weight: 600;
+}
+.perm-check {
+  color: var(--signal-pass);
+  font-weight: 700;
+  text-align: center;
+}
+.perm-cross {
+  color: var(--text-muted);
+  text-align: center;
+  opacity: 0.5;
+}
+.auth-input-group {
+  margin-bottom: 14px;
+}
+.auth-input-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--text-secondary);
+}
+.auth-text-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+.auth-text-input:focus {
+  border-color: var(--brand-accent);
+}
+.auth-validation-msg {
+  font-size: 11px;
+  margin-top: 4px;
+}
 </style>
 </head>
 <body>
@@ -1273,6 +1515,9 @@ pre {
   <div class="scenarios-group" id="scen"></div>
 
   <div class="top-actions">
+    <!-- Corporate Identity & RBAC Menu -->
+    <div class="user-role-menu-wrapper" id="userRoleMenuWrapper"></div>
+
     <button class="action-chip-btn" onclick="togglePresenterMode()" title="Toggle presenter mode (larger type, minimal chrome)">
       <svg style="width:14px;height:14px;color:var(--brand-accent)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path><line x1="12" y1="17" x2="12" y2="21"></line><line x1="8" y1="21" x2="16" y2="21"></line></svg>
       <span>Presenter</span>
@@ -1416,6 +1661,10 @@ pre {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><circle cx="12" cy="14" r="3"></circle></svg>
         <span>Policy</span>
       </button>
+      <button class="rail-nav-btn" id="btnTabAccess" onclick="openRBACMatrixModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        <span>Access &amp; RBAC</span>
+      </button>
     </div>
   </aside>
 
@@ -1472,6 +1721,9 @@ const ICONS = {
 const S = {
   tab: "review",
   token: new URLSearchParams(location.search).get("t") || "",
+  sessionToken: localStorage.getItem("repobrain_session_token") || "",
+  currentUser: null,
+  companyName: "Acme Corp",
   state: null,
   rev: null,
   prop: null,
@@ -1526,6 +1778,7 @@ async function copyText(text, label = "Item") {
 async function api(path, body) {
   const opts = { headers: {} };
   if (S.token) opts.headers["X-RepoBrain-Token"] = S.token;
+  if (S.sessionToken) opts.headers["X-RepoBrain-Session"] = S.sessionToken;
   if (body !== undefined) {
     opts.method = "POST";
     opts.headers["Content-Type"] = "application/json";
@@ -1535,6 +1788,9 @@ async function api(path, body) {
   if (!r.ok) {
     let msg = r.statusText;
     try { const j = await r.json(); msg = j.error || msg; } catch(_) {}
+    if (r.status === 403 && (msg.includes("Permission Denied") || msg.includes("Only Admin") || msg.includes("cannot approve"))) {
+      openPermissionDeniedModal(msg);
+    }
     throw new Error(msg);
   }
   const ct = r.headers.get("content-type") || "";
@@ -1669,6 +1925,11 @@ function go(tab) {
 
 async function loadState() {
   S.state = await api("/api/state");
+  if (S.state && S.state.auth) {
+    S.currentUser = S.state.auth.current_user;
+    S.companyName = S.state.auth.company || "Acme Corp";
+  }
+  renderUserRoleBar();
   const r = (S.state && S.state.repo) || {};
   const headSha = String(r.head || "");
   const shortSha = headSha.slice(0, 8);
@@ -1716,6 +1977,498 @@ function resetDemo() {
     await audit();
     toast("Demo repository reset to pristine initial state");
   });
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ROLE-BASED ACCESS CONTROL (RBAC) & CORPORATE AUTHENTICATION
+   ───────────────────────────────────────────────────────────── */
+const BLOCKED_DOMAINS = ["gmail.com", "googlemail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com", "aol.com", "proton.me", "protonmail.com"];
+
+function renderUserRoleBar() {
+  const container = $("#userRoleMenuWrapper");
+  if (!container) return;
+  const u = S.currentUser || {
+    name: "Alex Mercer",
+    role: "admin",
+    role_badge: "ADMIN",
+    email: "alex.mercer@acmeworks.internal",
+    title: "Principal Release Manager",
+    company: "Acme Corp"
+  };
+  const initials = u.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) || "U";
+  const roleClass = `role-${u.role || 'developer'}`;
+  const personas = (S.state && S.state.auth && S.state.auth.demo_personas) || [
+    { role: "admin", name: "Alex Mercer", title: "Release Manager", badge: "ADMIN" },
+    { role: "security", name: "Samira Patel", title: "DevSecOps Lead", badge: "SECURITY" },
+    { role: "tester", name: "Quinn Vance", title: "QA Engineer", badge: "TESTER" },
+    { role: "developer", name: "Alice Chen", title: "Backend Dev", badge: "DEV" }
+  ];
+
+  container.innerHTML = `
+    <div class="user-pill" onclick="toggleUserDropdown(event)" title="Current User Profile & Role">
+      <span class="user-avatar">${esc(initials)}</span>
+      <div class="user-info-brief">
+        <span class="user-name-label">${esc(u.name)}</span>
+        <span class="user-role-badge ${roleClass}">${esc(u.role_badge || u.role.toUpperCase())}</span>
+      </div>
+      <svg style="width:12px;height:12px;color:var(--text-muted)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+    </div>
+
+    <div class="user-dropdown-menu" id="userDropdownMenu" onclick="event.stopPropagation()">
+      <div class="dropdown-header-block">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:10.5px;font-weight:700;color:var(--brand-accent);text-transform:uppercase;letter-spacing:0.5px">🏢 ${esc(u.company || S.companyName || 'Corporate Workspace')}</span>
+          <span class="user-role-badge ${roleClass}">${esc(u.role_badge || u.role)}</span>
+        </div>
+        <div class="dropdown-user-name" style="margin-top:4px">${esc(u.name)}</div>
+        <div class="dropdown-user-email">${esc(u.email)}</div>
+        <div class="mut small" style="margin-top:2px">${esc(u.title || '')}</div>
+      </div>
+
+      <div class="dropdown-section-title">⚡ Evaluator Persona Switch (1-Click)</div>
+      ${personas.map(p => `
+        <div class="persona-item ${u.role === p.role ? 'active' : ''}" onclick="switchDemoPersona('${p.role}')">
+          <div>
+            <div style="font-weight:600">${p.role === 'admin' ? '👑' : p.role === 'security' ? '🛡️' : p.role === 'tester' ? '🧪' : '💻'} ${esc(p.name)}</div>
+            <div class="persona-desc">${esc(p.title || p.role)}</div>
+          </div>
+          <span class="user-role-badge role-${p.role}">${esc(p.badge || p.role.toUpperCase())}</span>
+        </div>
+      `).join("")}
+
+      <div class="dropdown-divider"></div>
+      <button class="dropdown-action-btn" onclick="closeUserDropdown();openRBACMatrixModal()">
+        <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        <span>Team &amp; RBAC Permissions Matrix</span>
+      </button>
+      <button class="dropdown-action-btn" onclick="closeUserDropdown();openLoginModal()">
+        <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+        <span>Sign In with Corporate Email…</span>
+      </button>
+      <button class="dropdown-action-btn" onclick="closeUserDropdown();openRegisterModal()">
+        <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+        <span>Register New Team Member…</span>
+      </button>
+      <div class="dropdown-divider"></div>
+      <button class="dropdown-action-btn" onclick="logoutUser()" style="color:var(--signal-block)">
+        <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+        <span>Sign Out</span>
+      </button>
+    </div>
+  `;
+}
+
+function toggleUserDropdown(e) {
+  if (e) e.stopPropagation();
+  const m = $("#userDropdownMenu");
+  if (m) m.classList.toggle("open");
+}
+
+function closeUserDropdown() {
+  const m = $("#userDropdownMenu");
+  if (m) m.classList.remove("open");
+}
+
+document.addEventListener("click", () => closeUserDropdown());
+
+async function switchDemoPersona(role) {
+  closeUserDropdown();
+  guard(async () => {
+    const res = await api("/api/auth/switch-demo-role", { role });
+    if (res.token) {
+      S.sessionToken = res.token;
+      localStorage.setItem("repobrain_session_token", res.token);
+    }
+    S.currentUser = res.user;
+    await loadState();
+    S.rev = await api("/api/review", {});
+    toast(`Switched persona to ${res.user.name} (${res.user.role_badge})`);
+    render();
+  });
+}
+
+function renderRolePerspectiveBanner() {
+  const u = S.currentUser || { role: "admin", name: "Alex Mercer", role_badge: "ADMIN" };
+  const r = u.role || "developer";
+  if (r === "admin") {
+    return `
+      <div class="role-perspective-banner admin-banner">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px">👑</span>
+          <div>
+            <strong>Release Manager Perspective (Alex Mercer)</strong>: Full governance authority active. Commit merge approval, policy waivers, and security administration enabled.
+          </div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="b xs" onclick="openRBACMatrixModal()">RBAC Matrix</button>
+        </div>
+      </div>
+    `;
+  }
+  if (r === "security") {
+    return `
+      <div class="role-perspective-banner sec-banner">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px">🛡️</span>
+          <div>
+            <strong>DevSecOps Lead Perspective (Samira Patel)</strong>: Shield policy enforcement, secret scanning telemetry, prompt injection detection & HMAC audit verification active. Code approvals require Release Manager.
+          </div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="b xs" onclick="switchDemoPersona('admin')">Switch to Admin</button>
+        </div>
+      </div>
+    `;
+  }
+  if (r === "tester") {
+    return `
+      <div class="role-perspective-banner tester-banner">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px">🧪</span>
+          <div>
+            <strong>Lead QA Perspective (Quinn Vance)</strong>: Differential fuzzing invariant testing, function coverage analysis & Failure Explainer active. Code commit approval requires Release Manager.
+          </div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="b xs" onclick="switchDemoPersona('admin')">Switch to Admin</button>
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="role-perspective-banner dev-banner">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:16px">💻</span>
+        <div>
+          <strong>Developer Perspective (Alice Chen)</strong>: AST optimizer rewrites, PR diff inspection & preflight checks active. Code approval & waivers restricted to Admin/Security.
+        </div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="b xs" onclick="switchDemoPersona('admin')">Switch to Admin</button>
+      </div>
+    </div>
+  `;
+}
+
+function validateCorporateEmailLive(val, feedbackId) {
+  const el = $(feedbackId);
+  if (!el) return;
+  if (!val || !val.includes("@")) {
+    el.innerHTML = "";
+    return;
+  }
+  const domain = val.split("@")[1].toLowerCase().trim();
+  if (BLOCKED_DOMAINS.includes(domain)) {
+    el.innerHTML = `<span style="color:var(--signal-block)">[BLOCKED] Personal webmail (@${esc(domain)}) not permitted. Please use corporate company email.</span>`;
+  } else if (domain.includes(".")) {
+    el.innerHTML = `<span style="color:var(--signal-pass)">${ICONS.check} Valid corporate domain (@${esc(domain)})</span>`;
+  } else {
+    el.innerHTML = "";
+  }
+}
+
+function openPermissionDeniedModal(msg) {
+  const container = $("#modalContainer");
+  const u = S.currentUser || { name: "User", role: "developer" };
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeDiffModal()">
+      <div class="modal-window" style="max-width:540px;border-top:4px solid var(--signal-block-border)">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <span class="pill p-block">🔒 ACCESS DENIED</span>
+            <span style="font-weight:700">RBAC Governance Restriction</span>
+          </div>
+          <button class="b s" onclick="closeDiffModal()">${ICONS.close}</button>
+        </div>
+        <div class="modal-body" style="padding:20px">
+          <div style="display:flex;gap:16px;align-items:flex-start">
+            <div style="font-size:32px">🛡️</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:6px">
+                Operation Restricted by Role Policy
+              </div>
+              <div style="font-size:13px;color:var(--text-secondary);line-height:1.5">
+                ${esc(msg)}
+              </div>
+              <div style="margin-top:14px;padding:12px;background:var(--bg-surface-raised);border-radius:6px;font-size:12px;border:1px solid var(--border-subtle)">
+                <strong>Current Active User</strong>: ${esc(u.name)} (${esc(u.role_title || u.role)})<br>
+                <strong>Required Authority</strong>: Admin / Release Manager
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding:14px 20px;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--border-subtle)">
+          <button class="b s" onclick="closeDiffModal()">Dismiss</button>
+          <button class="b p" onclick="closeDiffModal();switchDemoPersona('admin')">👑 Switch to Admin Persona &amp; Retry</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function openLoginModal() {
+  const container = $("#modalContainer");
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeDiffModal()">
+      <div class="modal-window" style="max-width:480px">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <span class="pill p-ok">ENTERPRISE AUTH</span>
+            <span style="font-weight:700">Sign In with Corporate Email</span>
+          </div>
+          <button class="b s" onclick="closeDiffModal()">${ICONS.close}</button>
+        </div>
+        <form onsubmit="submitLogin(event)" style="padding:20px">
+          <div class="auth-input-group">
+            <label class="auth-input-label">Corporate Email Address</label>
+            <input class="auth-text-input" id="loginEmail" type="email" placeholder="user@company.com" required autofocus oninput="validateCorporateEmailLive(this.value, '#loginEmailFeedback')">
+            <div id="loginEmailFeedback" class="auth-validation-msg"></div>
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Password</label>
+            <input class="auth-text-input" id="loginPassword" type="password" placeholder="Enter corporate password" required>
+          </div>
+          <div style="margin:16px 0 20px;padding:12px;background:var(--bg-surface-raised);border-radius:6px;font-size:12px">
+            <div style="font-weight:600;margin-bottom:6px;color:var(--text-muted)">⚡ Instant Evaluator Demo Logins:</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <button type="button" class="b xs" onclick="fillLoginDemo('alex.mercer@acmeworks.internal')">👑 Admin (Alex)</button>
+              <button type="button" class="b xs" onclick="fillLoginDemo('samira.patel@acmeworks.internal')">🛡️ Security (Samira)</button>
+              <button type="button" class="b xs" onclick="fillLoginDemo('quinn.vance@acmeworks.internal')">🧪 Tester (Quinn)</button>
+              <button type="button" class="b xs" onclick="fillLoginDemo('alice.chen@acmeworks.internal')">💻 Dev (Alice)</button>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px">
+            <button type="button" class="b s" onclick="openRegisterModal()">Need an account? Register</button>
+            <button type="submit" class="b p">Sign In</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+function fillLoginDemo(email) {
+  $("#loginEmail").value = email;
+  $("#loginPassword").value = "RepoBrainEnterprise2026!";
+  validateCorporateEmailLive(email, '#loginEmailFeedback');
+}
+
+async function submitLogin(e) {
+  e.preventDefault();
+  const email = $("#loginEmail").value;
+  const password = $("#loginPassword").value;
+  guard(async () => {
+    const res = await api("/api/auth/login", { email, password });
+    if (res.token) {
+      S.sessionToken = res.token;
+      localStorage.setItem("repobrain_session_token", res.token);
+    }
+    S.currentUser = res.user;
+    closeDiffModal();
+    await loadState();
+    S.rev = await api("/api/review", {});
+    toast(`Welcome back, ${res.user.name} (${res.user.role_badge})!`);
+    render();
+  });
+}
+
+function openRegisterModal() {
+  const container = $("#modalContainer");
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeDiffModal()">
+      <div class="modal-window" style="max-width:500px">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <span class="pill p-ai">NEW TEAM MEMBER</span>
+            <span style="font-weight:700">Register Corporate Profile</span>
+          </div>
+          <button class="b s" onclick="closeDiffModal()">${ICONS.close}</button>
+        </div>
+        <form onsubmit="submitRegister(event)" style="padding:20px">
+          <div class="auth-input-group">
+            <label class="auth-input-label">Full Name</label>
+            <input class="auth-text-input" id="regName" type="text" placeholder="e.g. Jordan Lee" required autofocus>
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Corporate Email (Company Domain)</label>
+            <input class="auth-text-input" id="regEmail" type="email" placeholder="jordan@acme-corp.com" required oninput="validateCorporateEmailLive(this.value, '#regEmailFeedback')">
+            <div id="regEmailFeedback" class="auth-validation-msg"></div>
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Company / Organization</label>
+            <input class="auth-text-input" id="regCompany" type="text" placeholder="Acme Corporation" value="${esc(S.companyName || 'Acme Corp')}">
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Enterprise Role</label>
+            <select class="auth-text-input" id="regRole" style="cursor:pointer">
+              <option value="developer">Developer / Software Engineer (Optimizer, Diff analysis, Preflight)</option>
+              <option value="tester">QA / Test Engineer (Differential fuzzing, Coverage, Explainer)</option>
+              <option value="security">DevSecOps / Security Lead (Shield rules, Secrets, Audit verification, Waivers)</option>
+              <option value="admin">Admin / Release Manager (Merge approvals, Waivers, User management)</option>
+            </select>
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-input-label">Password (min 6 characters)</label>
+            <input class="auth-text-input" id="regPassword" type="password" placeholder="At least 6 characters" required minlength="6">
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px">
+            <button type="button" class="b s" onclick="openLoginModal()">Already registered? Sign In</button>
+            <button type="submit" class="b p">Create Corporate Account</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+async function submitRegister(e) {
+  e.preventDefault();
+  const name = $("#regName").value;
+  const email = $("#regEmail").value;
+  const company = $("#regCompany").value;
+  const role = $("#regRole").value;
+  const password = $("#regPassword").value;
+  guard(async () => {
+    const res = await api("/api/auth/register", { name, email, company, role, password });
+    if (res.token) {
+      S.sessionToken = res.token;
+      localStorage.setItem("repobrain_session_token", res.token);
+    }
+    S.currentUser = res.user;
+    closeDiffModal();
+    await loadState();
+    S.rev = await api("/api/review", {});
+    toast(`Corporate account registered! Signed in as ${res.user.name} (${res.user.role_badge})`);
+    render();
+  });
+}
+
+function openRBACMatrixModal() {
+  const container = $("#modalContainer");
+  const users = (S.state && S.state.auth && S.state.auth.users) || [];
+  const currentRole = (S.currentUser && S.currentUser.role) || "admin";
+  const isAdmin = currentRole === "admin";
+
+  const matrix = [
+    { cap: "PR Diff & Change Inspection", dev: true, qa: true, sec: true, adm: true },
+    { cap: "Run AST Optimizer Rewrites", dev: true, qa: false, sec: false, adm: true },
+    { cap: "Preflight Agent Safety Check", dev: true, qa: false, sec: false, adm: true },
+    { cap: "Submit Human Review Request", dev: true, qa: true, sec: true, adm: true },
+    { cap: "Differential Fuzzing Diagnostics", dev: false, qa: true, sec: false, adm: true },
+    { cap: "Function Coverage Gates", dev: false, qa: true, sec: false, adm: true },
+    { cap: "AI Failure Log Explainer", dev: false, qa: true, sec: false, adm: true },
+    { cap: "Shield Policy Tuning", dev: false, qa: false, sec: true, adm: true },
+    { cap: "Inspect Masked Secrets", dev: false, qa: false, sec: true, adm: true },
+    { cap: "Prompt Injection Telemetry", dev: false, qa: false, sec: true, adm: true },
+    { cap: "HMAC Audit Verification", dev: false, qa: false, sec: true, adm: true },
+    { cap: "Simulate Audit Tampering", dev: false, qa: false, sec: true, adm: true },
+    { cap: "Grant Policy Waivers", dev: false, qa: false, sec: true, adm: true },
+    { cap: "Approve Code & Sign Commit", dev: false, qa: false, sec: false, adm: true },
+    { cap: "Manage Team Roles & Policies", dev: false, qa: false, sec: false, adm: true }
+  ];
+
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeDiffModal()">
+      <div class="modal-window" style="max-width:780px">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <span class="pill p-ok">RBAC GOVERNANCE</span>
+            <span style="font-weight:700">Enterprise Access Control Matrix &amp; Team Directory</span>
+          </div>
+          <button class="b s" onclick="closeDiffModal()">${ICONS.close}</button>
+        </div>
+        <div style="padding:20px;max-height:75vh;overflow-y:auto">
+          <div style="font-size:13px;color:var(--text-secondary);margin-bottom:14px">
+            RepoBrain enforces a zero-trust, 4-tier Role-Based Access Control matrix. Code merge authority and policy waivers are strictly separated from agent authoring and QA.
+          </div>
+
+          <table class="rbac-matrix-table">
+            <thead>
+              <tr>
+                <th style="width:38%">Governance Capability</th>
+                <th style="text-align:center"><span class="user-role-badge role-developer">DEV</span></th>
+                <th style="text-align:center"><span class="user-role-badge role-tester">TESTER</span></th>
+                <th style="text-align:center"><span class="user-role-badge role-security">SECURITY</span></th>
+                <th style="text-align:center"><span class="user-role-badge role-admin">ADMIN</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${matrix.map(m => `
+                <tr>
+                  <td>${esc(m.cap)}</td>
+                  <td class="${m.dev ? 'perm-check' : 'perm-cross'}">${m.dev ? ICONS.check : '—'}</td>
+                  <td class="${m.qa ? 'perm-check' : 'perm-cross'}">${m.qa ? ICONS.check : '—'}</td>
+                  <td class="${m.sec ? 'perm-check' : 'perm-cross'}">${m.sec ? ICONS.check : '—'}</td>
+                  <td class="${m.adm ? 'perm-check' : 'perm-cross'}">${m.adm ? ICONS.check : '—'}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+
+          <div style="margin-top:24px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <h4 style="margin:0;font-size:14px">Registered Corporate Team Members (${users.length})</h4>
+              <button class="b xs" onclick="openRegisterModal()">+ Add Member</button>
+            </div>
+            <table class="rbac-matrix-table">
+              <thead>
+                <tr>
+                  <th>Team Member</th>
+                  <th>Corporate Email</th>
+                  <th>Role</th>
+                  ${isAdmin ? '<th>Change Role</th>' : ''}
+                </tr>
+              </thead>
+              <tbody>
+                ${users.map(u => `
+                  <tr>
+                    <td><strong>${esc(u.name)}</strong><br><span class="mut small">${esc(u.company || 'Acme Corp')}</span></td>
+                    <td><code>${esc(u.email)}</code></td>
+                    <td><span class="user-role-badge role-${u.role}">${esc(u.role_badge || u.role.toUpperCase())}</span></td>
+                    ${isAdmin ? `
+                      <td>
+                        <select onchange="updateUserRole('${esc(u.email)}', this.value)" style="font-size:11px;padding:3px 6px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border-default);border-radius:4px">
+                          <option value="developer" ${u.role==='developer'?'selected':''}>Developer</option>
+                          <option value="tester" ${u.role==='tester'?'selected':''}>Tester / QA</option>
+                          <option value="security" ${u.role==='security'?'selected':''}>Security Lead</option>
+                          <option value="admin" ${u.role==='admin'?'selected':''}>Admin / Release Mgr</option>
+                        </select>
+                      </td>
+                    ` : ''}
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding:14px 20px;display:flex;justify-content:flex-end;border-top:1px solid var(--border-subtle)">
+          <button class="b s" onclick="closeDiffModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function updateUserRole(email, newRole) {
+  guard(async () => {
+    await api("/api/auth/update-role", { email, role: newRole });
+    await loadState();
+    toast(`Updated role for ${email} to ${newRole}`);
+    openRBACMatrixModal();
+  });
+}
+
+async function logoutUser() {
+  closeUserDropdown();
+  try {
+    await api("/api/auth/logout", { token: S.sessionToken });
+  } catch(_) {}
+  S.sessionToken = "";
+  localStorage.removeItem("repobrain_session_token");
+  S.currentUser = null;
+  await loadState();
+  toast("Signed out of corporate session");
+  render();
 }
 
 async function audit() {
@@ -2716,6 +3469,13 @@ const COMMANDS = [
   { label: "Export SARIF (GitHub Code Scanning)", action: () => dl('/api/export?fmt=sarif','repobrain.sarif') },
   { label: "Export Audit Ledger (CSV)", action: () => dl('/api/export?fmt=csv','repobrain-audit.csv') },
   { label: "Export Audit Ledger (JSON)", action: dlj },
+  { label: "Switch Role: Admin / Release Manager (Alex Mercer)", action: () => switchDemoPersona("admin") },
+  { label: "Switch Role: DevSecOps / Security Lead (Samira Patel)", action: () => switchDemoPersona("security") },
+  { label: "Switch Role: QA / Test Engineer (Quinn Vance)", action: () => switchDemoPersona("tester") },
+  { label: "Switch Role: Software Engineer / Developer (Alice Chen)", action: () => switchDemoPersona("developer") },
+  { label: "Open RBAC Governance Matrix & Team Directory", action: openRBACMatrixModal },
+  { label: "Sign In with Corporate Email", action: openLoginModal },
+  { label: "Register New Team Member", action: openRegisterModal },
   { label: "Toggle Dark / Light Theme", action: toggleTheme },
   { label: "Toggle Presenter Mode (Larger Type, Minimal Chrome)", action: togglePresenterMode },
   { label: "Start Guided Tour", action: toggleTour },
@@ -2932,8 +3692,10 @@ function render() {
     if (e.id) keep[e.id] = e.type === "checkbox" ? e.checked : e.value;
   });
 
+  const banner = renderRolePerspectiveBanner();
   if (S.busy) {
     $("#main").innerHTML = `
+      ${banner}
       <div class="skeleton-card">
         <div class="skeleton-bar" style="width: 35%; height: 24px;"></div>
         <div class="skeleton-bar" style="width: 85%; height: 14px;"></div>
@@ -2942,7 +3704,7 @@ function render() {
       ${v()}
     `;
   } else {
-    $("#main").innerHTML = v();
+    $("#main").innerHTML = banner + v();
   }
 
   for (const [k, val] of Object.entries(keep)) {
