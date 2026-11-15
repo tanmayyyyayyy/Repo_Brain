@@ -3,12 +3,15 @@ Binds to 127.0.0.1 by default and requires a per-run token or X-RepoBrain header
 /api calls. Set REPOBRAIN_HOST=0.0.0.0 (and REPOBRAIN_OPEN_DEMO=1) to serve the
 sandboxed demo publicly. Host header is validated (DNS-rebinding), allowed hosts can
 be extended with REPOBRAIN_ALLOWED_HOSTS (`*` for any), and POSTs must be JSON (CSRF)."""
+import collections
 import json
 import os
 import pathlib
+import re
 import secrets
 import shutil
 import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -44,13 +47,35 @@ def find_slides_html():
 
 STATIC = find_index_html()
 LOCK = threading.RLock()
+_LOGIN_ATTEMPTS = collections.defaultdict(list)
+_RATE_LOCK = threading.Lock()
+
+
+def check_login_rate(identifier: str) -> bool:
+    if not identifier:
+        return True
+    now = time.time()
+    with _RATE_LOCK:
+        attempts = [t for t in _LOGIN_ATTEMPTS[identifier] if now - t < 60]
+        _LOGIN_ATTEMPTS[identifier] = attempts
+        if len(attempts) >= 5:
+            return False
+        _LOGIN_ATTEMPTS[identifier].append(now)
+        return True
+
+
+def record_login_success(identifier: str):
+    if not identifier:
+        return
+    with _RATE_LOCK:
+        _LOGIN_ATTEMPTS.pop(identifier, None)
 
 
 class Ctx:
     def __init__(self, root, base, home, is_demo):
         self.root, self.base, self.home, self.demo = root, base, home, is_demo
         self.log = A.AuditLog(home)
-        self.auth = auth.AuthManager(home)
+        self.auth = auth.AuthManager(home, is_demo=is_demo)
         self.last_proposal = None
 
     def policy(self):
@@ -74,6 +99,11 @@ def preflight(root, actor, files):
         if isinstance(f, str):
             f = {"path": f}
         path = str(f.get("path", ""))[:300]
+        # Path safety check must execute before any disk access
+        if not path or path.startswith("/") or path.startswith("\\") or ".." in pathlib.PurePath(path).parts:
+            findings.append(dict(severity="block", rule="blocked-path", file=path or "?", line=0, evidence="",
+                                 msg="path escapes the repository", message="path escapes the repository"))
+            continue
         content = f.get("content")
         if content is None:
             disk_p = root_path / path
@@ -85,10 +115,6 @@ def preflight(root, actor, files):
             else:
                 content = ""
         content = str(content)[:400_000]
-        if not path or path.startswith("/") or ".." in pathlib.PurePath(path).parts:
-            findings.append(dict(severity="block", rule="blocked-path", file=path or "?", line=0, evidence="",
-                                 msg="path escapes the repository", message="path escapes the repository"))
-            continue
         if shield.ignored(path, pol):
             continue
         hit = shield.blocked_by(path, pol)
@@ -140,6 +166,7 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
 
     class H(BaseHTTPRequestHandler):
         server_version = "RepoBrain"
+        timeout = 10.0
 
         def log_message(self, *a):
             pass
@@ -151,7 +178,11 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("Content-Security-Policy", "default-src 'self' 'unsafe-inline'; connect-src 'self'")
+            if self.path.startswith("/api/"):
+                self.send_header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; sandbox")
+            else:
+                self.send_header("Content-Security-Policy",
+                                 "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'")
             if headers:
                 for k, v in headers.items():
                     self.send_header(k, v)
@@ -164,11 +195,14 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
                 self._send(403, {"error": "bad host"}); return False
             if open_demo:
                 return True
-            tok_hdr = self.headers.get("X-RepoBrain-Token", "")
+            tok_hdr = self.headers.get("X-RepoBrain-Token", "").strip()
+            if not tok_hdr:
+                tok_hdr = parse_qs(urlparse(self.path).query).get("t", [""])[0].strip()
             has_valid_tok = bool(tok_hdr) and secrets.compare_digest(tok_hdr, token)
-            has_x_hdr = (self.headers.get("X-RepoBrain") == "1")
-            if self.path.startswith("/api/") and not (has_valid_tok or has_x_hdr):
-                self._send(401, {"error": "missing or wrong token - open the URL printed by `repobrain serve`"}); return False
+            if self.path.startswith("/api/"):
+                if not has_valid_tok:
+                    self._send(401, {"error": "missing or wrong token - open the URL printed by `repobrain serve`"})
+                    return False
             return True
 
         def _get_user(self):
@@ -290,14 +324,67 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
                 return
             if "application/json" not in self.headers.get("Content-Type", ""):
                 return self._send(415, {"error": "JSON only"})
-            n = int(self.headers.get("Content-Length") or 0)
-            if n > 2_000_000:
-                return self._send(413, {"error": "body too large"})
+            cl_raw = self.headers.get("Content-Length")
+            if cl_raw is None:
+                return self._send(411, {"error": "Content-Length required"})
             try:
-                body = json.loads(self.rfile.read(n) or b"{}")
-                user = self._get_user()
+                n = int(cl_raw.strip())
+            except (ValueError, TypeError):
+                return self._send(400, {"error": "invalid Content-Length header"})
+            if n < 0:
+                return self._send(400, {"error": "negative Content-Length refused"})
+            if n > 2_000_000:
+                return self._send(413, {"error": "body too large (max 2MB)"})
+
+            try:
+                raw_bytes = self.rfile.read(n) if n > 0 else b"{}"
+                body = json.loads(raw_bytes.decode("utf-8") if raw_bytes else "{}")
+            except Exception as e:
+                return self._send(400, {"error": f"Invalid JSON payload: {e}"})
+
+            req_path = urlparse(self.path).path
+            user = self._get_user()
+
+            # Webhook HMAC-SHA256 signature verification
+            if req_path == "/api/webhook":
+                secret = os.environ.get("GITHUB_WEBHOOK_SECRET") or os.environ.get("REPOBRAIN_WEBHOOK_SECRET")
+                sig_header = self.headers.get("X-Hub-Signature-256", "").strip()
+                if secret:
+                    from . import webhook
+                    if not webhook.verify_signature(raw_bytes, secret, sig_header):
+                        return self._send(401, {"error": "invalid webhook HMAC-SHA256 signature"})
+                elif sig_header:
+                    return self._send(401, {"error": "webhook secret not configured on server"})
+
+            # Auth endpoints run outside global LOCK for concurrency & non-blocking PBKDF2
+            if req_path == "/api/auth/login":
+                client_ip = self.client_address[0] if self.client_address else "unknown"
+                login_email = str(body.get("email", "")).strip().lower()
+                if not check_login_rate(client_ip) or not check_login_rate(login_email):
+                    return self._send(429, {"error": "Too many failed login attempts. Please wait 60 seconds before trying again."})
+                try:
+                    res = route(ctx, req_path, body, user=user)
+                    record_login_success(client_ip)
+                    record_login_success(login_email)
+                    return self._send(200, res)
+                except ValueError as e:
+                    return self._send(400, {"error": str(e)})
+                except Exception as e:
+                    return self._send(500, {"error": f"{type(e).__name__}: {e}"})
+
+            if req_path.startswith("/api/auth/"):
+                try:
+                    return self._send(200, route(ctx, req_path, body, user=user))
+                except PermissionError as e:
+                    return self._send(403, {"error": str(e), "code": "FORBIDDEN"})
+                except ValueError as e:
+                    return self._send(400, {"error": str(e)})
+                except Exception as e:
+                    return self._send(500, {"error": f"{type(e).__name__}: {e}"})
+
+            try:
                 with LOCK:
-                    self._send(200, route(ctx, urlparse(self.path).path, body, user=user))
+                    self._send(200, route(ctx, req_path, body, user=user))
             except PermissionError as e:
                 self._send(403, {"error": str(e), "code": "FORBIDDEN"})
             except (ValueError, gitutil.GitError, P.PolicyError, KeyError) as e:
@@ -316,7 +403,7 @@ def state(ctx_or_root, base="main", user=None):
         home = A.home_for(root)
         ctx = Ctx(root, base, home, False)
 
-    if user is None:
+    if user is None and (ctx.demo or getattr(ctx, "open_demo", False)):
         for p in ctx.auth.list_users():
             if p.get("role") == "admin":
                 user = p
@@ -386,12 +473,14 @@ def route(ctx, path, body, user=None):
         tok = body.get("token") or ""
         return ctx.auth.logout(tok, ctx.log)
     if path == "/api/auth/switch-demo-role":
+        if not (ctx.demo or getattr(ctx, "open_demo", False)):
+            raise PermissionError("Demo persona switching is restricted to demo mode (--demo)")
         u, tok = ctx.auth.switch_demo_persona(body.get("role", "admin"), ctx.log)
         return {"user": u, "token": tok}
     if path == "/api/auth/update-role":
-        if user and not auth.check_permission(user, "manage_users"):
-            raise PermissionError("Permission Denied: Only Admin / Release Manager can change user roles")
-        actor_email = user.get("email", "admin") if user else "admin"
+        if not user or not auth.check_permission(user, "manage_users"):
+            raise PermissionError("Permission Denied: Authentication required. Only Admin / Release Manager can change user roles.")
+        actor_email = user.get("email", "admin")
         u = ctx.auth.update_role(body.get("email", ""), body.get("role", "developer"), actor_email, ctx.log)
         return {"user": u}
     if path == "/api/review":
@@ -412,26 +501,30 @@ def route(ctx, path, body, user=None):
     if path == "/api/approve":
         if not actor:
             raise ValueError("approver name is required (a human approves)")
-        if user and not auth.check_permission(user, "apply_approval"):
-            role_title = user.get("role_title", user.get("role", "Developer"))
+        if not user or not auth.check_permission(user, "apply_approval"):
+            role_title = user.get("role_title", user.get("role", "Developer")) if user else "Unauthenticated"
             raise PermissionError(
-                f"Permission Denied: User '{user.get('name', 'User')}' ({role_title}) cannot approve code. "
+                f"Permission Denied: User '{user.get('name', 'Anonymous') if user else 'Unauthenticated'}' ({role_title}) cannot approve code. "
                 "Only Admin / Release Manager can approve and apply code merges. Please switch to Admin persona."
             )
-        res = optimizer.apply(ctx.root, ctx.home, body["id"], actor)
-        ctx.log.append("approve", actor, "APPLIED", f"{', '.join(res['applied'])} -> {str(res['commit'])[:8]}", head=res["commit"])
+        approved_by = user.get("name") if (user and user.get("name")) else actor
+        approved_by = re.sub(r"[\r\n]+", " ", str(approved_by)).strip()
+        res = optimizer.apply(ctx.root, ctx.home, body["id"], approved_by)
+        ctx.log.append("approve", approved_by, "APPLIED", f"{', '.join(res['applied'])} -> {str(res['commit'])[:8]}", head=res["commit"])
         return res
     if path == "/api/waive":
         if not actor:
             raise ValueError("waiver name is required")
-        if user and not auth.check_permission(user, "grant_waiver"):
-            role_title = user.get("role_title", user.get("role", "Developer"))
+        if not user or not auth.check_permission(user, "grant_waiver"):
+            role_title = user.get("role_title", user.get("role", "Developer")) if user else "Unauthenticated"
             raise PermissionError(
-                f"Permission Denied: User '{user.get('name', 'User')}' ({role_title}) cannot grant policy waivers. "
+                f"Permission Denied: User '{user.get('name', 'Anonymous') if user else 'Unauthenticated'}' ({role_title}) cannot grant policy waivers. "
                 "Waivers require Security Lead or Admin authority."
             )
-        w = review.waive(ctx.home, gitutil.head(ctx.root), actor, str(body.get("reason", "")))
-        ctx.log.append("waive", actor, "WAIVED", w["reason"], head=gitutil.head(ctx.root))
+        waived_by = user.get("name") if (user and user.get("name")) else actor
+        waived_by = re.sub(r"[\r\n]+", " ", str(waived_by)).strip()
+        w = review.waive(ctx.home, gitutil.head(ctx.root), waived_by, str(body.get("reason", "")))
+        ctx.log.append("waive", waived_by, "WAIVED", w["reason"], head=gitutil.head(ctx.root))
         return w
     if path == "/api/shield":
         res = shield.check_action({"actor": str(body.get("actor", "")), "path": str(body.get("path", "")),

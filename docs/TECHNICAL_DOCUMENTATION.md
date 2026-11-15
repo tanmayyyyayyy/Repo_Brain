@@ -31,7 +31,7 @@ RepoBrain is engineered with a **minimal-dependency, high-reliability, zero-tele
 | **Configuration** | PyYAML (`repobrain.yml`) | Industry-standard declarative policy schema versioned directly within trusted base branches. |
 | **Embedded Console Server** | `http.server.ThreadingHTTPServer` | High-performance multi-threaded HTTP server with zero external web framework dependencies (no FastAPI/Flask/Django bloat). |
 | **Frontend Mission Control** | Vanilla Modern JavaScript (ES6+), HTML5, CSS3 | Single-file, zero-build dashboard adhering to WCAG 2.1 AA accessibility standards, responsive from mobile (360px) to 4K displays. |
-| **Testing & Quality Assurance** | `pytest`, `playwright` | Comprehensive unit, integration, and end-to-end browser tests (130 passed tests). |
+| **Testing & Quality Assurance** | `pytest`, `playwright` | Comprehensive unit, integration, security audit, and end-to-end browser tests (137 passed tests). |
 | **Containerization** | Docker, multi-stage Alpine / Python image | Production-ready container image for on-premise deployment and Kubernetes orchestration. |
 
 ---
@@ -285,10 +285,11 @@ Exports the complete HMAC audit ledger in CSV format for compliance reporting.
 ## 7. Enterprise Security Hardening & Zero-Trust Controls
 
 1. **DNS-Rebinding Protection**: Validates the `Host` and `X-Forwarded-Host` headers against localhost and explicitly configured domains in `REPOBRAIN_ALLOWED_HOSTS`.
-2. **Strict CSRF Defense**: All state-modifying endpoints (`POST`) strictly require `Content-Type: application/json` and reject `application/x-www-form-urlencoded` or `multipart/form-data`.
-3. **Content Security Policy (CSP)**: `default-src 'self' 'unsafe-inline'; connect-src 'self'` prevents external script injection and unauthorized outbound connections.
-4. **Path Traversal Defenses**: All file access endpoints (`/api/diff?path=...`) resolve absolute realpaths and enforce repository boundary containment via `os.path.commonpath`.
-5. **Payload Limits**: Requests exceeding 2MB are rejected with `413 Body Too Large` to prevent memory exhaustion DoS attacks.
+2. **Strict CSRF Defense**: All state-modifying endpoints (`POST`) require `Content-Type: application/json` and `X-RepoBrain: 1` verification, rejecting unauthorized cross-site requests.
+3. **Content Security Policy (CSP)**: Strict origin isolation policy — API endpoints enforce `default-src 'none'; frame-ancestors 'none'; sandbox`; UI enforces `connect-src 'self'; default-src 'self'; object-src 'none'; frame-ancestors 'none';` blocking external network egress and third-party script sources.
+4. **Corporate Domain Verification**: Strict domain filter rejecting consumer webmail providers (`@gmail.com`, `@yahoo.com`, `@hotmail.com`, etc.) to enforce corporate enterprise identity boundary isolation.
+5. **Path Traversal Defenses**: All file access endpoints (`/api/diff?path=...`, `/api/preflight`) validate paths prior to any filesystem access and enforce repository boundary containment via `os.path.commonpath`.
+6. **Payload & Resource Limits**: Requests exceeding 2MB or invalid `Content-Length` are rejected with `413 Body Too Large` or `400 Bad Request`. Test subprocesses execute within isolated process groups with POSIX CPU and memory rlimits.
 
 ---
 

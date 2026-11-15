@@ -180,8 +180,9 @@ def domain_to_company_name(domain: str) -> str:
 class AuthManager:
     """Thread-safe user, role, and session manager backed by JSON files in REPOBRAIN_HOME."""
 
-    def __init__(self, home_dir: str):
+    def __init__(self, home_dir: str, is_demo: bool = True):
         self.home = str(home_dir)
+        self.is_demo = bool(is_demo)
         self.users_file = os.path.join(self.home, "users.json")
         self.sessions_file = os.path.join(self.home, "sessions.json")
         self._lock = threading.RLock()
@@ -205,8 +206,8 @@ class AuthManager:
                 except Exception:
                     self._sessions = {}
 
-            # Seed default demo enterprise personas if users database is empty
-            if not self._users:
+            # Seed default demo enterprise personas if users database is empty AND in demo mode
+            if not self._users and self.is_demo:
                 self._seed_default_personas()
 
     def _save_users(self):
@@ -250,8 +251,8 @@ class AuthManager:
             if email_norm in self._users:
                 raise ValueError(f"User with email '{email_norm}' is already registered")
 
-            if role not in ROLES:
-                role = "developer"
+            # Force all new registrations to developer tier to prevent self-privilege escalation to admin
+            role = "developer"
 
             comp_name = (company or "").strip() or domain_to_company_name(domain)
             usr_name = (name or "").strip() or email_norm.split("@")[0].replace(".", " ").title()
@@ -306,6 +307,8 @@ class AuthManager:
 
     def switch_demo_persona(self, role: str, audit_log=None):
         """Evaluator / Demo quick-switch: instantiates or finds persona for role and returns valid session."""
+        if not self.is_demo:
+            raise PermissionError("Demo persona switching is restricted to demo mode (--demo)")
         with self._lock:
             target_role = role.lower() if role in ROLES else "admin"
             match = None

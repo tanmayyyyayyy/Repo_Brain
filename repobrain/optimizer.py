@@ -12,6 +12,7 @@ import pathlib
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,12 @@ from . import fuzz, gitutil, llm, metrics as metrics_mod, rewrite as rewrite_mod
 from .shield import SECRET_PATTERNS
 
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".pytest_cache", ".mypy_cache"}
+SECRET_PATTERNS_FILES = ("*.env*", "*.pem", "id_rsa*", "credentials*", "secrets*")
+SAFE_ENV_ALLOWLIST = {
+    "PATH", "PYTHONPATH", "PYTHONHOME", "LANG", "LC_ALL", "LC_CTYPE",
+    "TMPDIR", "TEMP", "TMP", "SYSTEMROOT", "WINDIR", "TZ", "TERM",
+    "VIRTUAL_ENV", "PLAYWRIGHT_BROWSERS_PATH"
+}
 SECRET_ENV = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.I)
 TERM = (ast.Return, ast.Raise)
 
@@ -94,13 +101,13 @@ def run_tests(root, overrides, policy):
     tmp = tempfile.mkdtemp(prefix="repobrain-")
     try:
         work = os.path.join(tmp, "repo")
-        shutil.copytree(str(root), work, ignore=shutil.ignore_patterns(*SKIP_DIRS))
+        shutil.copytree(str(root), work, ignore=shutil.ignore_patterns(*SKIP_DIRS, *SECRET_PATTERNS_FILES))
         for rel, text in overrides.items():
             dest = os.path.join(work, os.path.normpath(rel))
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             with open(dest, "w", encoding="utf-8", newline="") as f:
                 f.write(text)
-        env = {k: v for k, v in os.environ.items() if not SECRET_ENV.search(k)}
+        env = {k: v for k, v in os.environ.items() if (k in SAFE_ENV_ALLOWLIST or k.startswith("PYTHON") or k.startswith("LC_")) and not SECRET_ENV.search(k)}
         env.update(PYTHONDONTWRITEBYTECODE="1", HOME=tmp)
         if "PLAYWRIGHT_BROWSERS_PATH" not in env:
             pw_cache = os.path.expanduser("~/Library/Caches/ms-playwright" if sys.platform == "darwin" else "~/.cache/ms-playwright")
@@ -122,12 +129,43 @@ def run_tests(root, overrides, policy):
         except (ImportError, Exception):
             has_coverage = False
 
+        timeout_val = int(policy.get("test_timeout", 180))
+
+        def _limits():
+            if os.name == "posix":
+                try:
+                    import resource
+                    resource.setrlimit(resource.RLIMIT_CPU, (timeout_val, timeout_val))
+                    resource.setrlimit(resource.RLIMIT_AS, (1024 * 1024 * 1024, 1024 * 1024 * 1024))
+                except Exception:
+                    pass
+
         try:
-            r = subprocess.run(cov_cmd, cwd=work, capture_output=True, text=True, env=env,
-                               timeout=policy.get("test_timeout", 180))
-            out = (r.stdout + r.stderr)[-4000:]
+            if os.name == "posix":
+                proc = subprocess.Popen(
+                    cov_cmd, cwd=work, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    text=True, env=env, start_new_session=True, preexec_fn=_limits
+                )
+                try:
+                    stdout, stderr = proc.communicate(timeout=timeout_val)
+                    returncode = proc.returncode
+                except subprocess.TimeoutExpired:
+                    try:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    except Exception:
+                        pass
+                    proc.communicate()
+                    return {"ran": True, "ok": False, "output": "test run timed out",
+                            "cmd": " ".join(cmd) if isinstance(cmd, list) else str(cmd),
+                            "coverage": {"available": False}}
+            else:
+                r = subprocess.run(cov_cmd, cwd=work, capture_output=True, text=True, env=env,
+                                   timeout=timeout_val)
+                stdout, stderr, returncode = r.stdout, r.stderr, r.returncode
+
+            out = (stdout + stderr)[-4000:]
             cov_info = {"available": False, "unexecuted_functions": [], "function_coverage": []}
-            if r.returncode == 0 and has_coverage and os.path.exists(cov_file):
+            if returncode == 0 and has_coverage and os.path.exists(cov_file):
                 try:
                     import coverage
                     cov = coverage.Coverage(data_file=cov_file)
@@ -140,7 +178,7 @@ def run_tests(root, overrides, policy):
                         pass
                 except Exception:
                     pass
-            return {"ran": True, "ok": r.returncode == 0, "output": out,
+            return {"ran": True, "ok": returncode == 0, "output": out,
                     "cmd": " ".join(cmd) if isinstance(cmd, list) else str(cmd),
                     "runner": "pytest" if "pytest" in str(cmd) else "custom",
                     "coverage": cov_info}
@@ -798,10 +836,11 @@ def apply(root, home, pid, actor):
     if gitutil.is_repo(str(root)):
         paths = [r["path"] for r in prop["files"]]
         gitutil.git(str(root), "add", "--", *paths)
-        msg = (f"RepoBrain: simplify {len(paths)} file(s) (tests passed)\n\nApproved-by: {actor}\n"
+        clean_actor = re.sub(r"[\r\n]+", " ", str(actor)).strip()
+        msg = (f"RepoBrain: simplify {len(paths)} file(s) (tests passed)\n\nApproved-by: {clean_actor}\n"
                f"RepoBrain-proposal: {pid}")
         gitutil.git(str(root), "-c", "user.name=RepoBrain", "-c", "user.email=repobrain@localhost",
-                    "commit", "-m", msg)
+                    "commit", "-m", msg, "--", *paths)
         sha_new = gitutil.head(str(root))
     return {"applied": [r["path"] for r in prop["files"]], "commit": sha_new}
 

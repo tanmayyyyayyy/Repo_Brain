@@ -1,6 +1,7 @@
 """Policy loading and validation. The policy is read from the TRUSTED base ref
 when possible, so an AI-authored PR cannot loosen its own rules."""
 import fnmatch
+import os
 import pathlib
 import re
 import subprocess
@@ -21,8 +22,9 @@ DEFAULT = {
     "require_tests": True,           # optimizer output must pass tests to be applicable
     "test_command": None,            # default: python -m pytest -q -x
     "test_timeout": 180,
-    "blocked": [".github/workflows/", "secrets/", "credentials/", ".env", ".env.*",
-                "*.pem", "id_rsa", "repobrain.yml"],
+    "blocked": [".github/workflows/", ".github/actions/", "CODEOWNERS", ".gitlab-ci.yml", "Jenkinsfile",
+                "secrets/", "credentials/", ".env", ".env.*", "*.pem", "id_rsa", "repobrain.yml",
+                "conftest.py", "tox.ini", "Makefile", "setup.py"],
     "blocked_for": "ai",             # ai | all  (humans get a warning when "ai")
     "review_required": ["requirements.txt", "package.json", "pyproject.toml",
                         "Dockerfile", "package-lock.json"],
@@ -155,7 +157,9 @@ def load(path="repobrain.yml"):
 
 
 def load_for(root, base=None):
-    """Prefer the policy file as it exists on the trusted base ref."""
+    """Prefer the policy file as it exists on the trusted base ref.
+    If base branch has no policy (or in CI), fall back to strict defaults
+    rather than trusting an untrusted working tree policy added or edited by a PR."""
     if base:
         r = subprocess.run(["git", "show", f"{base}:repobrain.yml"], cwd=root,
                            capture_output=True, text=True)
@@ -163,6 +167,18 @@ def load_for(root, base=None):
             pol = parse(r.stdout)
             pol["_source"] = f"{base}:repobrain.yml (trusted base)"
             return pol
+        else:
+            pol = PolicyResult(DEFAULT)
+            pol["_warnings"] = ["base branch has no repobrain.yml - enforcing strict built-in defaults"]
+            pol["_source"] = "built-in defaults (trusted base fallback)"
+            return pol
+
+    if os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"):
+        pol = PolicyResult(DEFAULT)
+        pol["_warnings"] = ["CI environment detected without base - using built-in defaults"]
+        pol["_source"] = "built-in defaults"
+        return pol
+
     try:
         pol = load(f"{root}/repobrain.yml")
         pol["_source"] = "working tree repobrain.yml"
@@ -184,6 +200,8 @@ def is_ai(text, policy):
         f = frag.lower()
         if (f.isalnum() and f in toks) or (not f.isalnum() and f in low):
             return True
+    if any(pat in low for pat in ("[bot]", "app/", "actions-user", "github-actions", "noreply")):
+        return True
     return False
 
 

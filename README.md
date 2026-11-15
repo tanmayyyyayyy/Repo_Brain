@@ -24,7 +24,7 @@ It does not write code. It decides what AI (and humans) may change, cleans up wh
 ```bash
 pip install -r requirements.txt          # pyyaml (+ pytest, coverage, playwright in requirements-dev.txt). Python 3.10+, git
 python server.py                         # seeds a demo git repo with HMAC signing enabled and opens the console
-python -m pytest -q tests                # 131 passed, 1 skipped (live Anthropic API test skipped when key unset)
+python -m pytest -q tests                # 137 passed, 1 skipped (live Anthropic API test skipped when key unset)
 ```
 
 Console walkthrough (≈3 min):
@@ -160,7 +160,7 @@ repobrain/          policy · metrics · gitutil · shield · rewrite · optimiz
 repobrain/web/      index.html single-file WCAG 2.1 AA Mission Control UI
 demo_assets/        files for the seeded demo repo
 integrations/       MCP server and Claude Code pre-execution hook templates
-tests/              124+ tests incl. differential fuzzing, ML guard evaluation, mock LLM tests, tamper detection, server security, Playwright UI & a11y
+tests/              137 passing tests incl. security audit fixes, non-demo isolation, differential fuzzing, ML guard evaluation, mock LLM tests, tamper detection, server security, Playwright UI & a11y
 scripts/            contrast check, screenshot matrix, headless demo check, real-commit evaluator, video pipeline
 ```
 

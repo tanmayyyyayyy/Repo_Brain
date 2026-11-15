@@ -1844,6 +1844,7 @@ async function api(path, body) {
   const opts = { headers: {} };
   if (S.token) opts.headers["X-RepoBrain-Token"] = S.token;
   if (S.sessionToken) opts.headers["X-RepoBrain-Session"] = S.sessionToken;
+  opts.headers["X-RepoBrain"] = "1";
   if (body !== undefined) {
     opts.method = "POST";
     opts.headers["Content-Type"] = "application/json";

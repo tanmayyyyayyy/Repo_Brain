@@ -53,17 +53,34 @@ class AuditLog:
         return out
 
     def append(self, event, actor, decision, detail="", **extra):
+        lock_path = self.path + ".lock"
         with _lock:
-            es = self.entries()
-            prev = es[-1].get("hash", GENESIS) if es else GENESIS
-            rec = {"seq": len(es) + 1, "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "event": event,
-                   "actor": actor, "decision": decision, "detail": detail, "prev": prev, **extra}
-            rec["hash"] = _hash(rec)
-            if _key():
-                rec["sig"] = _sig(rec["hash"])
-            with open(self.path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-            return rec
+            lock_fd = None
+            try:
+                try:
+                    import fcntl
+                    lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR)
+                    fcntl.flock(lock_fd, fcntl.LOCK_EX)
+                except (ImportError, OSError):
+                    pass
+                es = self.entries()
+                prev = es[-1].get("hash", GENESIS) if es else GENESIS
+                rec = {"seq": len(es) + 1, "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "event": event,
+                       "actor": actor, "decision": decision, "detail": detail, "prev": prev, **extra}
+                rec["hash"] = _hash(rec)
+                if _key():
+                    rec["sig"] = _sig(rec["hash"])
+                with open(self.path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+                return rec
+            finally:
+                if lock_fd is not None:
+                    try:
+                        import fcntl
+                        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                        os.close(lock_fd)
+                    except (ImportError, OSError):
+                        pass
 
     def verify(self, expect_head=None):
         return verify_entries(self.entries(), expect_head)
@@ -75,6 +92,11 @@ def verify_entries(es, expect_head=None):
     has_key = bool(key)
     has_sig = any("sig" in e for e in es)
     hmac_signed = has_key and (has_sig or len(es) == 0)
+
+    if not has_key and has_sig:
+        return {"ok": False, "count": len(es), "broken_at": None,
+                "reason": "audit entries carry HMAC signatures but REPOBRAIN_AUDIT_KEY is not configured",
+                "signed": False, "hmac_signed": False}
 
     for i, e in enumerate(es):
         if "_corrupt" in e:

@@ -49,7 +49,7 @@
   >
   > If someone tampers with historical block #8 in memory—even if they recompute the SHA-256 hashes—the cryptographic HMAC signature fails immediately, invalidating every downstream block in the chain.
   >
-  > With zero heavy runtime dependencies, 124 passing automated tests, and a measured 0.03% false-positive rate across 4,000 stdlib prose samples, RepoBrain gives engineering leaders complete confidence to adopt AI coding agents at scale. Thank you."
+  > With zero heavy runtime dependencies, 137 passing automated tests, and a measured 0.03% false-positive rate across 4,000 stdlib prose samples, RepoBrain gives engineering leaders complete confidence to adopt AI coding agents at scale. Thank you."
 
 ---
 
