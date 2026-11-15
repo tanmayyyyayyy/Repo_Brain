@@ -193,7 +193,7 @@ body.presenter-mode .comp-bar-container {
   gap: 16px;
   flex-shrink: 0;
   max-width: 100vw;
-  overflow: visible;
+  overflow-x: hidden;
 }
 .brand-group {
   display: flex;
@@ -1347,10 +1347,11 @@ pre {
   border: 1px solid rgba(56, 189, 248, 0.35);
 }
 .user-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  position: fixed;
+  top: 54px;
+  right: 16px;
   min-width: 310px;
+  max-width: calc(100vw - 24px);
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: 8px;
@@ -1506,6 +1507,42 @@ pre {
 .auth-validation-msg {
   font-size: 11px;
   margin-top: 4px;
+}
+.auth-persona-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.auth-persona-card {
+  background: var(--bg-surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.auth-persona-card:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--brand-accent);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.auth-persona-card.active {
+  border-color: var(--brand-accent);
+  background: var(--bg-surface-hover);
+  box-shadow: 0 0 0 1px var(--brand-accent);
+}
+.auth-telemetry-box {
+  background: var(--bg-surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 12px;
+  margin-top: 12px;
 }
 </style>
 </head>
@@ -1688,6 +1725,10 @@ pre {
       <button class="rail-nav-btn" id="btnTabAccess" onclick="openRBACMatrixModal()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
         <span>Access &amp; RBAC</span>
+      </button>
+      <button class="rail-nav-btn" id="btnTabAuth" onclick="go('auth')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5z"></path><circle cx="12" cy="16" r="1"></circle><path d="M12 7a2 2 0 0 1 2 2v3h-4V9a2 2 0 0 1 2-2z"></path></svg>
+        <span>Identity &amp; Auth</span>
       </button>
     </div>
   </aside>
@@ -1912,7 +1953,8 @@ const TABS = [
   ["shield", "Shield"],
   ["explainer", "Failure explainer"],
   ["audit", "Audit & report"],
-  ["policy", "Policy"]
+  ["policy", "Policy"],
+  ["auth", "Identity & auth"]
 ];
 
 function nav() {
@@ -1923,7 +1965,8 @@ function nav() {
     shield: $("#btnTabShield"),
     explainer: $("#btnTabExplainer"),
     audit: $("#btnTabAudit"),
-    policy: $("#btnTabPolicy")
+    policy: $("#btnTabPolicy"),
+    auth: $("#btnTabAuth")
   };
   if (btnMap[S.tab]) btnMap[S.tab].classList.add("active");
 
@@ -1935,6 +1978,7 @@ function nav() {
 }
 
 function go(tab) {
+  closeUserDropdown();
   S.tab = tab;
   nav();
   if (tab === "audit") {
@@ -2088,7 +2132,15 @@ function toggleUserDropdown(e) {
     e.preventDefault();
   }
   const m = $("#userDropdownMenu");
-  if (m) m.classList.toggle("open");
+  const pill = document.querySelector(".user-pill");
+  if (m && pill) {
+    const r = pill.getBoundingClientRect();
+    m.style.top = (r.bottom + 6) + "px";
+    m.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+    m.classList.toggle("open");
+  } else if (m) {
+    m.classList.toggle("open");
+  }
 }
 
 function closeUserDropdown() {
@@ -3482,6 +3534,416 @@ function vPolicy() {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   VIEW: ENTERPRISE IDENTITY & AUTHENTICATION CENTER
+   ───────────────────────────────────────────────────────────── */
+function setAuthSubTab(tab) {
+  closeUserDropdown();
+  S.authSubTab = tab;
+  render();
+}
+
+function updateRoleDescriptionLive(role) {
+  const box = $("#roleDescLiveBox");
+  if (!box) return;
+  const descMap = {
+    developer: "<strong>Developer Authority:</strong> Run AST optimizer rewrites, inspect PR diffs, execute preflight agent safety checks. (Code approvals and waivers restricted to Admin/Security).",
+    tester: "<strong>QA / Test Engineer Authority:</strong> Inspect differential fuzzing invariants, verify test coverage gates, analyze AI Failure Explainer diagnostics.",
+    security: "<strong>DevSecOps Lead Authority:</strong> Tune Shield policies, inspect masked secrets, analyze prompt injection telemetry, verify HMAC audit ledger, issue security waivers.",
+    admin: "<strong>Release Manager Authority:</strong> Full governance authority. Approve code merges, apply verified AST rewrites, grant waivers, manage team roles and corporate policies."
+  };
+  box.innerHTML = descMap[role] || descMap.developer;
+}
+
+function getRolePermissionsList(role) {
+  const allPerms = [
+    { id: "view_pr", name: "PR Diff & Change Inspection", dev: true, qa: true, sec: true, adm: true },
+    { id: "run_optimizer", name: "Run AST Optimizer Rewrites", dev: true, qa: false, sec: false, adm: true },
+    { id: "run_tests", name: "Execute Sandbox Test Suites", dev: true, qa: true, sec: false, adm: true },
+    { id: "request_review", name: "Submit Human Review Request", dev: true, qa: true, sec: true, adm: true },
+    { id: "inspect_fuzzing", name: "Differential Fuzzing Diagnostics", dev: false, qa: true, sec: false, adm: true },
+    { id: "inspect_coverage", name: "Function Coverage Gates", dev: false, qa: true, sec: false, adm: true },
+    { id: "run_explainer", name: "Autonomous Failure Log Explainer", dev: false, qa: true, sec: false, adm: true },
+    { id: "configure_shield", name: "Shield Policy Tuning", dev: false, qa: false, sec: true, adm: true },
+    { id: "inspect_secrets", name: "Inspect Masked Secrets", dev: false, qa: false, sec: true, adm: true },
+    { id: "verify_audit", name: "HMAC Audit Verification", dev: false, qa: false, sec: true, adm: true },
+    { id: "simulate_tamper", name: "Simulate Audit Tampering", dev: false, qa: false, sec: true, adm: true },
+    { id: "grant_waiver", name: "Grant Governance Policy Waivers", dev: false, qa: false, sec: true, adm: true },
+    { id: "apply_approval", name: "Approve Code Merge & Commit Sign", dev: false, qa: false, sec: false, adm: true },
+    { id: "manage_users", name: "Manage Corporate User Roles", dev: false, qa: false, sec: false, adm: true },
+    { id: "manage_policy", name: "Manage Base Governance Policies", dev: false, qa: false, sec: false, adm: true }
+  ];
+  const r = role || "developer";
+  return allPerms.filter(p => {
+    if (r === "admin") return p.adm;
+    if (r === "security") return p.sec;
+    if (r === "tester") return p.qa;
+    return p.dev;
+  });
+}
+
+function renderRBACMatrixInlineHtml(users, isAdmin) {
+  const matrix = [
+    { cap: "PR Diff & Change Inspection", dev: true, qa: true, sec: true, adm: true },
+    { cap: "Run AST Optimizer Rewrites", dev: true, qa: false, sec: false, adm: true },
+    { cap: "Preflight Agent Safety Check", dev: true, qa: false, sec: false, adm: true },
+    { cap: "Submit Human Review Request", dev: true, qa: true, sec: true, adm: true },
+    { cap: "Differential Fuzzing Diagnostics", dev: false, qa: true, sec: false, adm: true },
+    { cap: "Function Coverage Gates", dev: false, qa: true, sec: false, adm: true },
+    { cap: "AI Failure Log Explainer", dev: false, qa: true, sec: false, adm: true },
+    { cap: "Shield Policy Tuning", dev: false, qa: false, sec: true, adm: true },
+    { cap: "Inspect Masked Secrets", dev: false, qa: false, sec: true, adm: true },
+    { cap: "Prompt Injection Telemetry", dev: false, qa: false, sec: true, adm: true },
+    { cap: "HMAC Audit Verification", dev: false, qa: false, sec: true, adm: true },
+    { cap: "Simulate Audit Tampering", dev: false, qa: false, sec: true, adm: true },
+    { cap: "Grant Policy Waivers", dev: false, qa: false, sec: true, adm: true },
+    { cap: "Approve Code & Sign Commit", dev: false, qa: false, sec: false, adm: true },
+    { cap: "Manage Team Roles & Policies", dev: false, qa: false, sec: false, adm: true }
+  ];
+
+  return `
+    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:14px">
+      RepoBrain enforces a zero-trust, 4-tier Role-Based Access Control matrix. Code merge authority and policy waivers are strictly separated from agent authoring and QA.
+    </div>
+
+    <table class="rbac-matrix-table">
+      <thead>
+        <tr>
+          <th style="width:38%">Governance Capability</th>
+          <th style="text-align:center"><span class="user-role-badge role-developer">DEV</span></th>
+          <th style="text-align:center"><span class="user-role-badge role-tester">TESTER</span></th>
+          <th style="text-align:center"><span class="user-role-badge role-security">SECURITY</span></th>
+          <th style="text-align:center"><span class="user-role-badge role-admin">ADMIN</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${matrix.map(m => `
+          <tr>
+            <td>${esc(m.cap)}</td>
+            <td class="${m.dev ? 'perm-check' : 'perm-cross'}">${m.dev ? ICONS.check : '&mdash;'}</td>
+            <td class="${m.qa ? 'perm-check' : 'perm-cross'}">${m.qa ? ICONS.check : '&mdash;'}</td>
+            <td class="${m.sec ? 'perm-check' : 'perm-cross'}">${m.sec ? ICONS.check : '&mdash;'}</td>
+            <td class="${m.adm ? 'perm-check' : 'perm-cross'}">${m.adm ? ICONS.check : '&mdash;'}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+
+    <div style="margin-top:24px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <h4 style="margin:0;font-size:14px">Registered Corporate Team Members (${users.length})</h4>
+        <button class="b xs" onclick="setAuthSubTab('signup')">+ Add Member</button>
+      </div>
+      <table class="rbac-matrix-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Corporate Email</th>
+            <th>Company</th>
+            <th>Role</th>
+            ${isAdmin ? '<th>Actions</th>' : ''}
+          </tr>
+        </thead>
+        <tbody>
+          ${users.map(u => `
+            <tr>
+              <td><strong>${esc(u.name)}</strong></td>
+              <td><code>${esc(u.email)}</code></td>
+              <td>${esc(u.company || 'Acme Corp')}</td>
+              <td><span class="user-role-badge role-${u.role}">${esc(u.role_badge || u.role)}</span></td>
+              ${isAdmin ? `
+                <td>
+                  <select class="auth-text-input" style="padding:2px 6px;font-size:11px;width:auto" onchange="updateUserRole('${esc(u.email)}', this.value)">
+                    <option value="developer" ${u.role === 'developer' ? 'selected' : ''}>Dev</option>
+                    <option value="tester" ${u.role === 'tester' ? 'selected' : ''}>Tester</option>
+                    <option value="security" ${u.role === 'security' ? 'selected' : ''}>Security</option>
+                    <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+                  </select>
+                </td>
+              ` : ''}
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function vAuth() {
+  const u = S.currentUser || {
+    name: "Alex Mercer",
+    role: "admin",
+    role_badge: "ADMIN",
+    email: "alex.mercer@acmeworks.internal",
+    title: "Principal Release Manager",
+    company: S.companyName || "Acme Corp"
+  };
+  const roleClass = `role-${u.role || 'developer'}`;
+  const subTab = S.authSubTab || "signin";
+  const users = (S.state && S.state.auth && S.state.auth.users) || [];
+  const personas = (S.state && S.state.auth && S.state.auth.demo_personas) || [
+    { role: "admin", name: "Alex Mercer", title: "Principal Release Manager", badge: "ADMIN" },
+    { role: "security", name: "Samira Patel", title: "Lead DevSecOps Engineer", badge: "SECURITY" },
+    { role: "tester", name: "Quinn Vance", title: "QA & Fuzzing Specialist", badge: "TESTER" },
+    { role: "developer", name: "Alice Chen", title: "Senior Backend Developer", badge: "DEV" }
+  ];
+
+  const initials = u.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) || "U";
+
+  let bodyHtml = "";
+
+  if (subTab === "signin") {
+    bodyHtml = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <h4 style="margin:0;font-size:14px;font-weight:700">Instant Evaluator Demo Logins (1-Click)</h4>
+            <span class="pill p-ai">DEMO PERSONAS</span>
+          </div>
+          <div class="mut small" style="margin-bottom:14px">Click any corporate persona card below to switch role and authenticate immediately:</div>
+
+          <div style="display:flex;flex-direction:column;gap:10px">
+            ${personas.map(p => `
+              <div class="auth-persona-card ${u.role === p.role ? 'active' : ''}" onclick="switchDemoPersona('${p.role}')">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <span style="font-size:20px">${p.role === 'admin' ? '👑' : p.role === 'security' ? '🛡️' : p.role === 'tester' ? '🧪' : '💻'}</span>
+                    <div>
+                      <div style="font-weight:700;font-size:13.5px">${esc(p.name)}</div>
+                      <div class="persona-desc">${esc(p.title || p.role)}</div>
+                    </div>
+                  </div>
+                  <span class="user-role-badge role-${p.role}">${esc(p.badge || p.role.toUpperCase())}</span>
+                </div>
+                <div style="margin-top:8px;font-size:11px;color:var(--text-muted);display:flex;align-items:center;justify-content:space-between">
+                  <code>${esc(p.email || (p.name.toLowerCase().replace(' ', '.') + '@acmeworks.internal'))}</code>
+                  <span style="color:var(--brand-accent);font-weight:600">${u.role === p.role ? 'ACTIVE USER' : 'CLICK TO SIGN IN ' + ICONS.arrowRight}</span>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+
+        <div style="background:var(--bg-surface-raised);border:1px solid var(--border-default);border-radius:10px;padding:24px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span class="pill p-ok">SECURE LOGIN</span>
+            <h4 style="margin:0;font-size:15px;font-weight:700">Corporate Email Sign In</h4>
+          </div>
+          <div class="mut small" style="margin-bottom:16px">Authenticate with company credentials or switch between seeded demo roles.</div>
+
+          <form onsubmit="submitLogin(event)">
+            <div class="auth-input-group">
+              <label class="auth-input-label">Corporate Email Address</label>
+              <input class="auth-text-input" id="loginEmail" type="email" placeholder="name@company.com" required oninput="validateCorporateEmailLive(this.value, '#loginEmailFeedback')">
+              <div id="loginEmailFeedback" class="auth-validation-msg"></div>
+            </div>
+
+            <div class="auth-input-group">
+              <label class="auth-input-label">Password</label>
+              <input class="auth-text-input" id="loginPassword" type="password" placeholder="Enter corporate password" required>
+            </div>
+
+            <div class="auth-telemetry-box" style="margin-bottom:16px">
+              <div style="font-weight:600;color:var(--text-primary);margin-bottom:4px">Security Specifications:</div>
+              <div class="mut small">
+                - PBKDF2-HMAC-SHA256 with 600,000 iterations<br>
+                - 16-byte random cryptographic salt per user<br>
+                - Public webmail (@gmail, @yahoo) strictly blocked
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px">
+              <button type="button" class="b s" onclick="setAuthSubTab('signup')">Need an account? Sign Up</button>
+              <button type="submit" class="b p">Sign In with Corporate Account</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+  } else if (subTab === "signup") {
+    bodyHtml = `
+      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:24px;align-items:start">
+        <div style="background:var(--bg-surface-raised);border:1px solid var(--border-default);border-radius:10px;padding:24px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span class="pill p-ai">NEW MEMBER</span>
+            <h4 style="margin:0;font-size:15px;font-weight:700">Register Corporate Profile</h4>
+          </div>
+          <div class="mut small" style="margin-bottom:18px">Enforces corporate email domain onboarding with zero-trust role provisioning.</div>
+
+          <form onsubmit="submitRegister(event)">
+            <div class="auth-input-group">
+              <label class="auth-input-label">Full Name</label>
+              <input class="auth-text-input" id="regName" type="text" placeholder="e.g. Marcus Vance" required autofocus>
+            </div>
+
+            <div class="auth-input-group">
+              <label class="auth-input-label">Corporate Email (Company Domain)</label>
+              <input class="auth-text-input" id="regEmail" type="email" placeholder="marcus@cyberdyne.corp" required oninput="validateCorporateEmailLive(this.value, '#regEmailFeedback')">
+              <div id="regEmailFeedback" class="auth-validation-msg"></div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="auth-input-group">
+                <label class="auth-input-label">Company / Organization</label>
+                <input class="auth-text-input" id="regCompany" type="text" placeholder="Acme Corp" value="${esc(S.companyName || 'Acme Corp')}">
+              </div>
+
+              <div class="auth-input-group">
+                <label class="auth-input-label">Enterprise Role</label>
+                <select class="auth-text-input" id="regRole" style="cursor:pointer" onchange="updateRoleDescriptionLive(this.value)">
+                  <option value="developer">Developer / Software Engineer</option>
+                  <option value="tester">QA / Test Engineer</option>
+                  <option value="security">DevSecOps / Security Lead</option>
+                  <option value="admin">Admin / Release Manager</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="roleDescLiveBox" class="auth-telemetry-box" style="margin-bottom:14px;border-color:var(--brand-accent)">
+              <strong>Developer Capabilities:</strong> Run AST optimizer rewrites, inspect PR diffs, execute preflight agent safety checks. (Code approvals & waivers restricted to Admin/Security).
+            </div>
+
+            <div class="auth-input-group">
+              <label class="auth-input-label">Password (min 6 characters)</label>
+              <input class="auth-text-input" id="regPassword" type="password" placeholder="At least 6 characters" required minlength="6">
+            </div>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px">
+              <button type="button" class="b s" onclick="setAuthSubTab('signin')">Already registered? Sign In</button>
+              <button type="submit" class="b p">Create Verified Corporate Account</button>
+            </div>
+          </form>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="telemetry-card" style="margin:0">
+            <h4 style="margin:0 0 8px;font-size:14px;font-weight:700">Why are personal emails blocked?</h4>
+            <div class="mut small" style="line-height:1.55">
+              Under SOC 2 Type II and ISO 27001 compliance, AI agent governance platforms must enforce corporate domain identity isolation. Free webmail providers (@gmail, @yahoo, @proton.me) cannot be cryptographically bound to enterprise directory federation (Okta, Azure AD, Google Workspace).
+            </div>
+          </div>
+
+          <div class="telemetry-card" style="margin:0">
+            <h4 style="margin:0 0 8px;font-size:14px;font-weight:700">Cryptographic Password Hardening</h4>
+            <div class="mut small" style="line-height:1.55">
+              Every password is processed using NIST FIPS-grade PBKDF2-HMAC-SHA256 with 600,000 iterations and a 16-byte cryptographically secure random salt. All registration and authentication events are logged directly into the tamper-evident HMAC audit ledger.
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  } else if (subTab === "profile") {
+    bodyHtml = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+        <div style="background:var(--bg-surface-raised);border:1px solid var(--border-default);border-radius:10px;padding:24px">
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+            <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg, var(--brand-accent), #818cf8);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#fff">
+              ${esc(initials)}
+            </div>
+            <div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <h3 style="margin:0;font-size:17px;font-weight:700">${esc(u.name)}</h3>
+                <span class="user-role-badge ${roleClass}">${esc(u.role_badge || u.role)}</span>
+              </div>
+              <div class="mut small" style="margin-top:2px">${esc(u.title || 'Team Member')} - ${esc(u.company || S.companyName || 'Acme Corp')}</div>
+              <div style="font-size:12px;color:var(--brand-accent);margin-top:2px"><code>${esc(u.email)}</code></div>
+            </div>
+          </div>
+
+          <div class="auth-telemetry-box" style="margin-top:0">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span style="font-weight:700">Active Bearer Session Token:</span>
+              <button class="b xs" onclick="copyText('${esc(S.sessionToken || 'demo-session-token')}', 'Session Token')">Copy Token</button>
+            </div>
+            <code style="word-break:break-all;font-size:11px;color:var(--text-muted)">${esc(S.sessionToken ? S.sessionToken.slice(0, 16) + '...' + S.sessionToken.slice(-8) : 'demo-ephemeral-session')}</code>
+          </div>
+
+          <div class="auth-telemetry-box">
+            <div style="font-weight:700;margin-bottom:6px">Security Storage Telemetry:</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11.5px">
+              <div>Algorithm: <strong>PBKDF2-HMAC-SHA256</strong></div>
+              <div>Rounds: <strong>600,000 FIPS</strong></div>
+              <div>Salt: <strong>16-Byte Cryptographic</strong></div>
+              <div>Session TTL: <strong>7 Days Rolling</strong></div>
+            </div>
+          </div>
+
+          <div style="margin-top:20px;display:flex;justify-content:space-between;align-items:center">
+            <button class="b s" onclick="setAuthSubTab('signin')">Switch User</button>
+            <button class="b d" onclick="logoutUser()">Sign Out of Session</button>
+          </div>
+        </div>
+
+        <div style="background:var(--bg-surface-raised);border:1px solid var(--border-default);border-radius:10px;padding:24px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <h4 style="margin:0;font-size:14px;font-weight:700">Active Persona Governance Capabilities</h4>
+            <span class="user-role-badge ${roleClass}">${esc(u.role_badge || u.role)}</span>
+          </div>
+          <div class="mut small" style="margin-bottom:16px">The active user has been granted the following enterprise permissions:</div>
+
+          <div style="display:flex;flex-direction:column;gap:8px">
+            ${getRolePermissionsList(u.role).map(p => `
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg-surface);border-radius:6px;border:1px solid var(--border-subtle)">
+                <span style="font-size:12.5px">${esc(p.name)}</span>
+                <span style="color:var(--signal-pass);font-weight:700;font-size:12px">${ICONS.check} Granted</span>
+              </div>
+            `).join("")}
+          </div>
+
+          <div style="margin-top:16px;text-align:right">
+            <button class="b s" onclick="setAuthSubTab('matrix')">Open Full Access Control Matrix ${ICONS.arrowRight}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  } else if (subTab === "matrix") {
+    bodyHtml = renderRBACMatrixInlineHtml(users, u.role === "admin");
+  }
+
+  return `
+  <div class="telemetry-card">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:20px">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+          <span style="font-size:22px">🔐</span>
+          <h2 style="margin:0;font-size:18px;font-weight:700">Enterprise Identity &amp; Corporate Access Governance</h2>
+        </div>
+        <div class="mut small" style="line-height:1.5">
+          Zero-trust 4-tier Role-Based Access Control, corporate email verification, and cryptographic PBKDF2-HMAC-SHA256 session management.
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        <span class="pill p-ok">FIPS 140-3 COMPLIANT</span>
+        <span class="pill p-ai">600,000 PBKDF2 ROUNDS</span>
+        <span class="pill p-block">WEBMAIL BLOCKED</span>
+        <span class="pill">HMAC-SIGNED LEDGER</span>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;border-bottom:1px solid var(--border-default);padding-bottom:12px;margin-bottom:20px;flex-wrap:wrap">
+      <button class="b ${subTab === 'signin' ? '' : 's'}" onclick="setAuthSubTab('signin')">
+        <svg class="icon-inline-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+        <span>Corporate Sign In</span>
+      </button>
+      <button class="b ${subTab === 'signup' ? '' : 's'}" onclick="setAuthSubTab('signup')">
+        <svg class="icon-inline-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+        <span>Create Corporate Account (Sign Up)</span>
+      </button>
+      <button class="b ${subTab === 'profile' ? '' : 's'}" onclick="setAuthSubTab('profile')">
+        <svg class="icon-inline-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        <span>Active Profile &amp; Security Posture</span>
+      </button>
+      <button class="b ${subTab === 'matrix' ? '' : 's'}" onclick="setAuthSubTab('matrix')">
+        <svg class="icon-inline-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        <span>RBAC Permissions Matrix (${users.length} members)</span>
+      </button>
+    </div>
+
+    ${bodyHtml}
+  </div>
+  `;
+}
+
+/* ─────────────────────────────────────────────────────────────
    COMMAND PALETTE & KEYBOARD SHORTCUTS
    ───────────────────────────────────────────────────────────── */
 const COMMANDS = [
@@ -3506,6 +3968,7 @@ const COMMANDS = [
   { label: "Switch Role: QA / Test Engineer (Quinn Vance)", action: () => switchDemoPersona("tester") },
   { label: "Switch Role: Software Engineer / Developer (Alice Chen)", action: () => switchDemoPersona("developer") },
   { label: "Open RBAC Governance Matrix & Team Directory", action: openRBACMatrixModal },
+  { label: "Go to Identity & Auth Center", action: () => go("auth") },
   { label: "Open 5-Slide Executive Pitch Deck (Finals)", action: () => window.open("/slides", "_blank") },
   { label: "Sign In with Corporate Email", action: openLoginModal },
   { label: "Register New Team Member", action: openRegisterModal },
@@ -3716,7 +4179,8 @@ function render() {
     shield: vShield,
     explainer: vExpl,
     audit: vAudit,
-    policy: vPolicy
+    policy: vPolicy,
+    auth: vAuth
   };
   const v = viewMap[S.tab] || vReview;
 
