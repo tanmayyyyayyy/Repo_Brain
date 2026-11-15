@@ -191,7 +191,7 @@ def test_playwright_auth_rbac_ui():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     tmp_demo_dir = tempfile.mkdtemp(prefix="repobrain-auth-ui-test-")
     env = {**os.environ, "REPOBRAIN_DEMO_DIR": tmp_demo_dir}
-    port = 8798
+    port = 8797
     cmd = [sys.executable, "-m", "repobrain", "serve", "--demo", "--no-browser", "--port", str(port)]
     proc = subprocess.Popen(cmd, cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
@@ -226,7 +226,7 @@ def test_playwright_auth_rbac_ui():
 
             # Switch persona to Developer (Alice Chen)
             page.locator(".persona-item:has-text('Alice Chen')").click()
-            page.wait_for_timeout(600)
+            page.wait_for_selector(".user-pill:has-text('DEV')", timeout=5000)
 
             # Verify persona updated to DEV
             updated_pill = page.locator(".user-pill").inner_text()
@@ -234,6 +234,7 @@ def test_playwright_auth_rbac_ui():
             assert "Alice" in updated_pill
 
             # Verify perspective banner is in Developer Mode
+            page.wait_for_selector(".role-perspective-banner:has-text('Developer Perspective')", timeout=5000)
             banner_text = page.locator(".role-perspective-banner").inner_text()
             assert "Developer Perspective" in banner_text
 

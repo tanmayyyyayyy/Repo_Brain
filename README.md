@@ -24,7 +24,7 @@ It does not write code. It decides what AI (and humans) may change, cleans up wh
 ```bash
 pip install -r requirements.txt          # pyyaml (+ pytest, coverage, playwright in requirements-dev.txt). Python 3.10+, git
 python server.py                         # seeds a demo git repo with HMAC signing enabled and opens the console
-python -m pytest -q tests                # 137 passed, 1 skipped (live Anthropic API test skipped when key unset)
+python -m pytest -q tests                # All suites pass cleanly (live Anthropic API test skipped when key unset)
 ```
 
 Console walkthrough (≈3 min):

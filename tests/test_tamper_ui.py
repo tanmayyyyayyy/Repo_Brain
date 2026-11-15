@@ -16,7 +16,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def test_tamper_ui_marks_server_reported_blocks():
     tmp_demo_dir = tempfile.mkdtemp(prefix="repobrain-tamper-ui-test-")
     env = {**os.environ, "REPOBRAIN_DEMO_DIR": tmp_demo_dir}
-    port = 8794
+    port = 8796
     cmd = [sys.executable, "-m", "repobrain", "serve", "--demo", "--no-browser", "--port", str(port)]
     proc = subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 

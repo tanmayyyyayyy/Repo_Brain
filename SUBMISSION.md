@@ -11,7 +11,7 @@
   - Evaluation repo (`repobrain-demo-eval`): [PR #1 — Blocked risky AI PR](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/1) · [PR #2 — Complexity gate](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/2)
   - Main repo (`Repo_Brain`): [PR #1 — End-to-end Blocked → Refactored → Allowed lifecycle](https://github.com/tanmayyyyayyy/Repo_Brain/pull/1)
 - **License**: MIT
-- **Status**: Final Build & Innovation Showcase (`131 passed, 1 skipped` in `python -m pytest -q tests`)
+- **Status**: Final Build & Innovation Showcase ([![CI](https://github.com/tanmayyyyayyy/Repo_Brain/actions/workflows/ci.yml/badge.svg)](https://github.com/tanmayyyyayyy/Repo_Brain/actions/workflows/ci.yml))
 
 ---
 
@@ -42,7 +42,7 @@ To run the automated test suite:
 ```bash
 pip install -r requirements-dev.txt
 python -m pytest -q tests
-# 130 passed, 1 skipped (live Anthropic API test requires ANTHROPIC_API_KEY)
+# All tests pass cleanly on CI (live Anthropic API test requires optional ANTHROPIC_API_KEY)
 ```
 
 ---

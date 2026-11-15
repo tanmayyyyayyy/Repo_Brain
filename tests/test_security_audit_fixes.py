@@ -190,3 +190,125 @@ def test_server_security_guards_and_non_demo_isolation():
             proc.terminate()
             proc.wait()
 
+
+def test_audit_append_is_o1_and_tails_last_record(tmp_path):
+    log_dir = str(tmp_path)
+    log = audit.AuditLog(log_dir)
+    
+    # Empty log returns seq 0, GENESIS
+    seq, h = audit._tail_last_record(log.path)
+    assert seq == 0
+    assert h == audit.GENESIS
+
+    # Append entries and verify seq & prev chain
+    for i in range(1, 10):
+        rec = log.append("event", f"actor-{i}", "ALLOWED", f"detail-{i}")
+        assert rec["seq"] == i
+
+    # _tail_last_record should return last seq and hash
+    seq, last_hash = audit._tail_last_record(log.path)
+    assert seq == 9
+    assert last_hash == log.entries()[-1]["hash"]
+
+    # Append one more entry; seq should be 10, prev should be last_hash
+    rec10 = log.append("event", "actor-10", "ALLOWED", "detail-10")
+    assert rec10["seq"] == 10
+    assert rec10["prev"] == last_hash
+
+
+def test_sessions_stored_as_sha256_hash_on_disk(tmp_path):
+    home = str(tmp_path)
+    mgr = auth.AuthManager(home, is_demo=False)
+    user, tok = mgr.register(
+        email="developer@enterprise.internal",
+        password="ValidPassword123!",
+        name="Dev User"
+    )
+    
+    # Read sessions.json directly from disk
+    sessions_file = os.path.join(home, "sessions.json")
+    with open(sessions_file, "r", encoding="utf-8") as f:
+        stored_sessions = json.load(f)
+
+    # Raw plaintext token must NOT exist as a key or stored field on disk
+    assert tok not in stored_sessions
+    
+    # The key must be the SHA-256 hex digest of the bearer token
+    tok_hash = hashlib.sha256(tok.strip().encode("utf-8")).hexdigest()
+    assert tok_hash in stored_sessions
+    assert stored_sessions[tok_hash]["email"] == "developer@enterprise.internal"
+
+    # get_user_by_token verifies bearer token using hash comparison
+    retrieved = mgr.get_user_by_token(tok)
+    assert retrieved is not None
+    assert retrieved["email"] == "developer@enterprise.internal"
+
+    # Logout invalidates hashed session on disk
+    mgr.logout(tok)
+    with open(sessions_file, "r", encoding="utf-8") as f:
+        updated_sessions = json.load(f)
+    assert tok_hash not in updated_sessions
+    assert mgr.get_user_by_token(tok) is None
+
+
+def test_corporate_email_verification_otp_flow(tmp_path):
+    home = str(tmp_path)
+    mgr = auth.AuthManager(home, is_demo=False)
+    user, tok = mgr.register(
+        email="compliance.officer@acmeworks.internal",
+        password="SecurePass2026!",
+        name="Compliance Officer"
+    )
+
+    # Initial registration has pending email verification
+    assert user["email_verified"] is False
+    otp_code = user["verification_code"]
+    assert otp_code is not None
+    assert len(otp_code) == 6
+    assert otp_code.isdigit()
+
+    # Invalid code raises ValueError
+    with pytest.raises(ValueError, match="Invalid verification code"):
+        mgr.verify_email("compliance.officer@acmeworks.internal", "000000")
+
+    # Valid code verifies corporate identity
+    verified_user = mgr.verify_email("compliance.officer@acmeworks.internal", otp_code)
+    assert verified_user["email_verified"] is True
+    assert verified_user["verification_code"] is None
+
+    # Re-verification of already verified account returns verified profile safely
+    rechecked = mgr.verify_email("compliance.officer@acmeworks.internal", otp_code)
+    assert rechecked["email_verified"] is True
+
+
+def test_protected_test_harness_files_cannot_be_tampered_by_optimizer(tmp_path):
+    from repobrain import optimizer
+    root = str(tmp_path)
+    
+    # Attempting to override test harness files must be rejected by sandbox policy
+    for harness_file in ["conftest.py", "tox.ini", "Makefile", "setup.py", "pyproject.toml"]:
+        res = optimizer.run_tests(root, {harness_file: "# malicious override"}, {"test_command": "echo 1"})
+        assert res["ran"] is False
+        assert "Security restriction" in res["output"]
+
+
+def test_demo_mode_multi_tenant_session_workspace_isolation(tmp_path):
+    root = os.path.join(str(tmp_path), "base_repo")
+    demo.seed(root)
+    home = os.path.join(str(tmp_path), "home")
+    ctx = server.Ctx(root, "main", home, is_demo=True)
+
+    # In demo mode, distinct sessions receive separate isolated workspace clones
+    user1 = {"id": "session-evaluator-1", "email": "eval1@corp.internal"}
+    user2 = {"id": "session-evaluator-2", "email": "eval2@corp.internal"}
+
+    root1 = ctx.get_root_for_user(user1)
+    root2 = ctx.get_root_for_user(user2)
+
+    assert root1 != root2
+    assert os.path.isdir(root1)
+    assert os.path.isdir(root2)
+    assert "demo_sessions" in root1
+    assert "demo_sessions" in root2
+
+

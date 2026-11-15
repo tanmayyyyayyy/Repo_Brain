@@ -91,10 +91,24 @@ def _analyze_function_coverage(work, overrides, cov_data):
     return unexecuted, func_cov
 
 
+PROTECTED_TEST_HARNESS_FILES = {
+    "conftest.py", "tox.ini", "Makefile", "setup.py", "setup.cfg", "pyproject.toml"
+}
+
+
 def run_tests(root, overrides, policy):
     """Copy the repo, apply `overrides` ({relpath: text}), run the test command. -> dict"""
     if not has_tests(root, policy):
         return {"ran": False, "ok": None, "output": "no tests found", "cmd": ""}
+    for rel in overrides:
+        base_fname = os.path.basename(rel)
+        if base_fname in PROTECTED_TEST_HARNESS_FILES or rel in PROTECTED_TEST_HARNESS_FILES:
+            return {
+                "ran": False,
+                "ok": False,
+                "output": f"Security restriction: modification of protected test harness file '{rel}' is rejected",
+                "cmd": ""
+            }
     cmd = policy.get("test_command") or [sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider"]
     posix_mode = (os.name == "posix")
     cmd = shlex.split(cmd, posix=posix_mode) if isinstance(cmd, str) else list(cmd)
@@ -131,6 +145,23 @@ def run_tests(root, overrides, policy):
 
         timeout_val = int(policy.get("test_timeout", 180))
 
+        bwrap_bin = shutil.which("bwrap")
+        can_use_bwrap = bool(bwrap_bin) and (os.name == "posix") and sys.platform.startswith("linux")
+        final_cmd = cov_cmd
+        if can_use_bwrap:
+            final_cmd = [
+                bwrap_bin,
+                "--unshare-all",
+                "--ro-bind", "/", "/",
+                "--bind", work, work,
+                "--bind", tmp, tmp,
+                "--dev", "/dev",
+                "--proc", "/proc",
+                "--tmpfs", "/tmp",
+                "--chdir", work,
+                *cov_cmd
+            ]
+
         def _limits():
             if os.name == "posix":
                 try:
@@ -143,7 +174,7 @@ def run_tests(root, overrides, policy):
         try:
             if os.name == "posix":
                 proc = subprocess.Popen(
-                    cov_cmd, cwd=work, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    final_cmd, cwd=work, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                     text=True, env=env, start_new_session=True, preexec_fn=_limits
                 )
                 try:

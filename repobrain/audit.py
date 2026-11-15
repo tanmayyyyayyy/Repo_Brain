@@ -33,6 +33,45 @@ def _hash(rec):
                                      ensure_ascii=False).encode()).hexdigest()
 
 
+def _tail_last_record(path: str):
+    """Return (seq, hash) of the trailing record in O(1) time by seeking backwards from EOF.
+    Avoids reading the entire file on every append.
+    """
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        return 0, GENESIS
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            chunk_size = 2048
+            buffer = bytearray()
+            pos = size
+            while pos > 0:
+                read_size = min(chunk_size, pos)
+                pos -= read_size
+                f.seek(pos, os.SEEK_SET)
+                chunk = f.read(read_size)
+                buffer = chunk + buffer
+                lines = buffer.split(b"\n")
+                # Look backwards for the last non-empty line
+                for ln in reversed(lines):
+                    ln = ln.strip()
+                    if ln:
+                        try:
+                            rec = json.loads(ln.decode("utf-8"))
+                            seq = int(rec.get("seq", 0))
+                            h = str(rec.get("hash", GENESIS))
+                            return seq, h
+                        except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+                            continue
+                # If we've read > 64KB without finding a line, fall back
+                if len(buffer) > 65536:
+                    break
+    except OSError:
+        pass
+    return 0, GENESIS
+
+
 class AuditLog:
     def __init__(self, home):
         self.home = str(home)
@@ -63,9 +102,8 @@ class AuditLog:
                     fcntl.flock(lock_fd, fcntl.LOCK_EX)
                 except (ImportError, OSError):
                     pass
-                es = self.entries()
-                prev = es[-1].get("hash", GENESIS) if es else GENESIS
-                rec = {"seq": len(es) + 1, "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "event": event,
+                last_seq, prev = _tail_last_record(self.path)
+                rec = {"seq": last_seq + 1, "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "event": event,
                        "actor": actor, "decision": decision, "detail": detail, "prev": prev, **extra}
                 rec["hash"] = _hash(rec)
                 if _key():

@@ -24,6 +24,8 @@ EXCLUDE_DIRS = {
     ".mypy_cache",
     ".ruff_cache",
     ".DS_Store",
+    "test_runs",
+    "before",
 }
 
 EXCLUDE_EXTS = {
@@ -33,6 +35,11 @@ EXCLUDE_EXTS = {
     ".DS_Store",
     ".log",
     ".tmp",
+    ".mp4",
+    ".mov",
+    ".webm",
+    ".mkv",
+    ".avi",
 }
 
 EXCLUDE_FILES = {

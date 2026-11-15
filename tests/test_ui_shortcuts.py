@@ -14,7 +14,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def test_single_key_shortcuts_ignored_in_inputs_and_contenteditable():
     tmp_demo_dir = tempfile.mkdtemp(prefix="repobrain-shortcuts-test-")
     env = {**os.environ, "REPOBRAIN_DEMO_DIR": tmp_demo_dir}
-    port = 8793
+    port = 8795
     cmd = [sys.executable, "-m", "repobrain", "serve", "--demo", "--no-browser", "--port", str(port)]
     proc = subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 

@@ -151,6 +151,11 @@ def hash_password(password: str) -> str:
     return f"pbkdf2_sha256${iterations}${salt.hex()}${derived.hex()}"
 
 
+def hash_session_token(token: str) -> str:
+    """Compute SHA-256 hash of a bearer session token for secure persistence."""
+    return hashlib.sha256((token or "").strip().encode("utf-8")).hexdigest()
+
+
 def verify_password(password: str, hashed_str: str) -> bool:
     """Verify password against stored PBKDF2 hash using constant-time comparison."""
     if not password or not hashed_str:
@@ -234,7 +239,9 @@ class AuthManager:
                 "title": p["title"],
                 "password_hash": default_pw_hash,
                 "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "is_demo_seed": True
+                "is_demo_seed": True,
+                "email_verified": True,
+                "verification_code": None
             }
             self._users[p["email"]] = user_rec
         self._save_users()
@@ -259,6 +266,7 @@ class AuthManager:
 
             pw_hash = hash_password(password)
             user_id = f"usr-{secrets.token_hex(6)}"
+            verification_code = f"{secrets.randbelow(900000) + 100000}"
             user_rec = {
                 "id": user_id,
                 "email": email_norm,
@@ -268,7 +276,10 @@ class AuthManager:
                 "title": ROLES[role]["name"],
                 "password_hash": pw_hash,
                 "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "is_demo_seed": False
+                "is_demo_seed": False,
+                "email_verified": False,
+                "verification_code": verification_code,
+                "verification_sent_at": time.time()
             }
             self._users[email_norm] = user_rec
             self._save_users()
@@ -277,9 +288,47 @@ class AuthManager:
 
             if audit_log:
                 audit_log.append("auth-register", email_norm, "SUCCESS",
-                                 f"New user registered as {ROLES[role]['badge']} for {comp_name}")
+                                 f"New user registered as {ROLES[role]['badge']} for {comp_name} (pending verification)")
 
             return self._strip_user(user_rec), session_tok
+
+    def verify_email(self, email: str, code: str, audit_log=None):
+        """Verify corporate email address using 6-digit OTP."""
+        with self._lock:
+            email_norm = (email or "").strip().lower()
+            u = self._users.get(email_norm)
+            if not u:
+                raise ValueError(f"User with email '{email}' not found")
+            if u.get("email_verified", False):
+                return self._strip_user(u)
+            expected = u.get("verification_code")
+            if not expected:
+                raise ValueError("No active verification code for this account")
+            if str(code).strip() != str(expected).strip():
+                if audit_log:
+                    audit_log.append("auth-verify-failed", email_norm, "REJECTED", "Invalid corporate OTP code")
+                raise ValueError("Invalid verification code. Please check your corporate inbox.")
+            u["email_verified"] = True
+            u["verification_code"] = None
+            self._save_users()
+            if audit_log:
+                audit_log.append("auth-verify-success", email_norm, "VERIFIED", "Corporate email verified with OTP")
+            return self._strip_user(u)
+
+    def resend_verification_code(self, email: str, audit_log=None):
+        """Resend a new 6-digit corporate verification OTP."""
+        with self._lock:
+            email_norm = (email or "").strip().lower()
+            u = self._users.get(email_norm)
+            if not u:
+                raise ValueError(f"User with email '{email}' not found")
+            new_code = f"{secrets.randbelow(900000) + 100000}"
+            u["verification_code"] = new_code
+            u["verification_sent_at"] = time.time()
+            self._save_users()
+            if audit_log:
+                audit_log.append("auth-resend-code", email_norm, "SENT", "Resent OTP verification code")
+            return {"email": email_norm, "code": new_code, "status": "sent"}
 
     def login(self, email: str, password: str, audit_log=None):
         """Authenticate user with corporate credentials and issue session token."""
@@ -351,9 +400,10 @@ class AuthManager:
 
     def _create_session(self, user_rec: dict) -> str:
         tok = secrets.token_urlsafe(32)
+        h = hash_session_token(tok)
         now = time.time()
-        self._sessions[tok] = {
-            "token": tok,
+        self._sessions[h] = {
+            "token_hash": h,
             "user_id": user_rec["id"],
             "email": user_rec["email"],
             "name": user_rec["name"],
@@ -369,12 +419,18 @@ class AuthManager:
         """Retrieve user profile for session token. Returns None if invalid or expired."""
         if not token:
             return None
+        h = hash_session_token(token)
         with self._lock:
-            s = self._sessions.get(token)
+            s = self._sessions.get(h)
+            # Compatibility migration for any pre-existing plaintext token entries
+            if not s and token in self._sessions:
+                s = self._sessions.pop(token)
+                self._sessions[h] = s
+                self._save_sessions()
             if not s:
                 return None
             if time.time() > s.get("expires_at", 0):
-                self._sessions.pop(token, None)
+                self._sessions.pop(h, None)
                 self._save_sessions()
                 return None
             u = self._users.get(s.get("email", ""))
@@ -384,8 +440,11 @@ class AuthManager:
 
     def logout(self, token: str, audit_log=None):
         """Invalidate session token."""
+        if not token:
+            return {"ok": True}
+        h = hash_session_token(token)
         with self._lock:
-            s = self._sessions.pop(token, None)
+            s = self._sessions.pop(h, None) or self._sessions.pop(token, None)
             self._save_sessions()
             if s and audit_log:
                 audit_log.append("auth-logout", s.get("email", "unknown"), "LOGOUT", "Session invalidated")
@@ -423,6 +482,7 @@ class AuthManager:
 
     def _strip_user(self, u: dict) -> dict:
         role_info = ROLES.get(u.get("role", "developer"), ROLES["developer"])
+        is_verified = bool(u.get("email_verified", True if u.get("is_demo_seed") else False))
         return {
             "id": u.get("id"),
             "email": u.get("email"),
@@ -435,7 +495,9 @@ class AuthManager:
             "company": u.get("company"),
             "title": u.get("title"),
             "created_at": u.get("created_at"),
-            "is_demo_seed": u.get("is_demo_seed", False)
+            "is_demo_seed": u.get("is_demo_seed", False),
+            "email_verified": is_verified,
+            "verification_code": u.get("verification_code") if not is_verified else None
         }
 
 

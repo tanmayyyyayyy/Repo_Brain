@@ -4,6 +4,7 @@ Binds to 127.0.0.1 by default and requires a per-run token or X-RepoBrain header
 sandboxed demo publicly. Host header is validated (DNS-rebinding), allowed hosts can
 be extended with REPOBRAIN_ALLOWED_HOSTS (`*` for any), and POSTs must be JSON (CSRF)."""
 import collections
+import hashlib
 import json
 import os
 import pathlib
@@ -77,9 +78,42 @@ class Ctx:
         self.log = A.AuditLog(home)
         self.auth = auth.AuthManager(home, is_demo=is_demo)
         self.last_proposal = None
+        self._session_roots = {}
+        self._lock = threading.Lock()
 
-    def policy(self):
-        return P.load_for(self.root, self.base)
+    def get_root_for_user(self, user=None):
+        """In demo mode, isolate working git repository per user session to prevent race conditions across concurrent evaluators."""
+        if not self.demo:
+            return self.root
+        ident = (user and user.get("id")) or (user and user.get("email"))
+        if not ident:
+            return self.root
+        key = hashlib.sha256(str(ident).encode()).hexdigest()[:12]
+        with self._lock:
+            if key in self._session_roots and os.path.isdir(self._session_roots[key]):
+                return self._session_roots[key]
+            session_repo_dir = os.path.join(self.home, "demo_sessions", key, "repo")
+            if not os.path.isdir(session_repo_dir):
+                os.makedirs(os.path.dirname(session_repo_dir), exist_ok=True)
+                try:
+                    demo.seed(session_repo_dir)
+                except Exception:
+                    return self.root
+            self._session_roots[key] = session_repo_dir
+            return session_repo_dir
+
+    def get_base_for_root(self, root=None):
+        r = root or self.root
+        if not self.demo or not gitutil.is_repo(r):
+            return self.base
+        branch = gitutil.branch(r)
+        if branch == "ai/orders":
+            return "orders-base"
+        return "main"
+
+    def policy(self, root=None):
+        r = root or self.root
+        return P.load_for(r, self.get_base_for_root(r))
 
 
 def strip(prop):
@@ -250,23 +284,29 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
                     return self._send(200, {"entries": es, "chain": A.verify_entries(es)})
                 if u.path == "/api/report.md":
                     with LOCK:
-                        pol = ctx.policy()
-                        rev = review.run(ctx.root, pol, ctx.base, ctx.home)
+                        usr = self._get_user()
+                        active_root = ctx.get_root_for_user(usr)
+                        active_base = ctx.get_base_for_root(active_root)
+                        pol = ctx.policy(active_root)
+                        rev = review.run(active_root, pol, active_base, ctx.home)
                         return self._send(200, report.compliance(rev, ctx.log.entries(), ctx.log.verify(), pol),
                                           "text/markdown")
                 if u.path == "/api/export":
                     qs = parse_qs(u.query)
                     fmt = qs.get("fmt", ["json"])[0]
                     with LOCK:
-                        pol = ctx.policy()
-                        rev = review.run(ctx.root, pol, ctx.base, ctx.home)
+                        usr = self._get_user()
+                        active_root = ctx.get_root_for_user(usr)
+                        active_base = ctx.get_base_for_root(active_root)
+                        pol = ctx.policy(active_root)
+                        rev = review.run(active_root, pol, active_base, ctx.home)
                         finds = rev["findings"]
                         gate = rev["gate"]
                         if fmt == "sarif":
                             return self._send(200, export.sarif(finds, gate), "application/json",
                                               {"content-disposition": "attachment; filename=repobrain.sarif"})
                         if fmt == "md":
-                            st = state(ctx)
+                            st = state(ctx, user=usr)
                             st["files"] = rev["files"]
                             st["findings"] = finds
                             st["gate"] = gate
@@ -291,19 +331,22 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
                     norm = os.path.normpath(req_path).replace("\\", "/")
                     if norm.startswith("..") or os.path.isabs(req_path) or req_path.startswith("/") or req_path.startswith("\\"):
                         return self._send(400, {"error": "path traversal refused"})
-                    target = os.path.realpath(os.path.join(ctx.root, norm))
-                    real_root = os.path.realpath(ctx.root)
+                    usr = self._get_user()
+                    active_root = ctx.get_root_for_user(usr)
+                    active_base = ctx.get_base_for_root(active_root)
+                    target = os.path.realpath(os.path.join(active_root, norm))
+                    real_root = os.path.realpath(active_root)
                     if os.path.commonpath([real_root, target]) != real_root:
                         return self._send(403, {"error": "path escapes repository"})
-                    changed = {p: s for s, p in gitutil.changed_files(ctx.root, ctx.base)}
+                    changed = {p: s for s, p in gitutil.changed_files(active_root, active_base)}
                     if norm not in changed:
                         return self._send(404, {"error": f"file '{norm}' not in current change set"})
                     status = changed[norm]
-                    diff_text = gitutil.git(ctx.root, "diff", "-u", f"{ctx.base}...HEAD", "--", norm, check=False)
+                    diff_text = gitutil.git(active_root, "diff", "-u", f"{active_base}...HEAD", "--", norm, check=False)
                     if len(diff_text) > 500_000:
                         diff_text = diff_text[:500_000] + "\n... [diff truncated at 500KB limit]"
-                    pol = ctx.policy()
-                    rev = review.run(ctx.root, pol, ctx.base, ctx.home)
+                    pol = ctx.policy(active_root)
+                    rev = review.run(active_root, pol, active_base, ctx.home)
                     file_findings = [f for f in rev["findings"] if f["file"] == norm]
                     file_gate = [g for g in rev["gate"] if g["file"] == norm]
                     return self._send(200, {
@@ -312,8 +355,8 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
                         "diff": diff_text,
                         "findings": file_findings,
                         "gate": file_gate,
-                        "base": ctx.base,
-                        "head": gitutil.head(ctx.root),
+                        "base": active_base,
+                        "head": gitutil.head(active_root),
                     })
                 self._send(404, {"error": "not found"})
             except Exception as e:
@@ -395,13 +438,13 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
     return H
 
 
-def state(ctx_or_root, base="main", user=None):
+def state(ctx_or_root, base=None, user=None):
     if isinstance(ctx_or_root, Ctx):
         ctx = ctx_or_root
     else:
         root = os.path.abspath(str(ctx_or_root))
         home = A.home_for(root)
-        ctx = Ctx(root, base, home, False)
+        ctx = Ctx(root, base or "main", home, False)
 
     if user is None and (ctx.demo or getattr(ctx, "open_demo", False)):
         for p in ctx.auth.list_users():
@@ -409,24 +452,26 @@ def state(ctx_or_root, base="main", user=None):
                 user = p
                 break
 
-    pol = ctx.policy()
+    active_root = ctx.get_root_for_user(user)
+    active_base = ctx.get_base_for_root(active_root)
+    pol = ctx.policy(active_root)
     try:
-        yml = gitutil.show(ctx.root, ctx.base, "repobrain.yml") or open(os.path.join(ctx.root, "repobrain.yml")).read()
+        yml = gitutil.show(active_root, active_base, "repobrain.yml") or open(os.path.join(active_root, "repobrain.yml")).read()
     except OSError:
         yml = ""
 
-    rev = review.run(ctx.root, pol, ctx.base, ctx.home)
-    head_sha = gitutil.head(ctx.root) if gitutil.is_repo(ctx.root) else ""
-    branch_name = gitutil.branch(ctx.root) if gitutil.is_repo(ctx.root) else ""
+    rev = review.run(active_root, pol, active_base, ctx.home)
+    head_sha = gitutil.head(active_root) if gitutil.is_repo(active_root) else ""
+    branch_name = gitutil.branch(active_root) if gitutil.is_repo(active_root) else ""
 
     return {
-        "root": ctx.root,
-        "base": ctx.base,
+        "root": active_root,
+        "base": active_base,
         "branch": branch_name,
         "head": head_sha,
         "repo": {
-            "path": ctx.root, "branch": branch_name, "head": head_sha,
-            "base": ctx.base, "demo": ctx.demo, "scenarios": list(demo.SCENARIOS) if ctx.demo else []
+            "path": active_root, "branch": branch_name, "head": head_sha,
+            "base": active_base, "demo": ctx.demo, "scenarios": list(demo.SCENARIOS) if ctx.demo else []
         },
         "policy": {k: v for k, v in pol.items() if not k.startswith("_")},
         "policy_source": pol.get("_source"),
@@ -452,6 +497,8 @@ def state(ctx_or_root, base="main", user=None):
 
 def route(ctx, path, body, user=None):
     actor = str(body.get("actor", "")).strip()[:80]
+    active_root = ctx.get_root_for_user(user)
+    active_base = ctx.get_base_for_root(active_root)
     if path == "/api/auth/register":
         u, tok = ctx.auth.register(
             email=body.get("email", ""),
@@ -477,6 +524,14 @@ def route(ctx, path, body, user=None):
             raise PermissionError("Demo persona switching is restricted to demo mode (--demo)")
         u, tok = ctx.auth.switch_demo_persona(body.get("role", "admin"), ctx.log)
         return {"user": u, "token": tok}
+    if path == "/api/auth/verify-email":
+        email = str(body.get("email", "")).strip().lower()
+        code = str(body.get("code", "")).strip()
+        u = ctx.auth.verify_email(email, code, ctx.log)
+        return {"user": u, "verified": True}
+    if path == "/api/auth/resend-code":
+        email = str(body.get("email", "")).strip().lower()
+        return ctx.auth.resend_verification_code(email, ctx.log)
     if path == "/api/auth/update-role":
         if not user or not auth.check_permission(user, "manage_users"):
             raise PermissionError("Permission Denied: Authentication required. Only Admin / Release Manager can change user roles.")
@@ -484,16 +539,16 @@ def route(ctx, path, body, user=None):
         u = ctx.auth.update_role(body.get("email", ""), body.get("role", "developer"), actor_email, ctx.log)
         return {"user": u}
     if path == "/api/review":
-        pol = ctx.policy()
-        rev = review.run(ctx.root, pol, ctx.base, ctx.home, body.get("pr_author"))
+        pol = ctx.policy(active_root)
+        rev = review.run(active_root, pol, active_base, ctx.home, body.get("pr_author"))
         review.log_review(ctx.log, rev)
         return rev
     if path == "/api/optimize":
-        pol, rev = ctx.policy(), None
-        rev = review.run(ctx.root, pol, ctx.base, ctx.home)
+        pol = ctx.policy(active_root)
+        rev = review.run(active_root, pol, active_base, ctx.home)
         files = [f["path"] for f in rev["files"] if f["status"] != "D" and f["path"].endswith(".py")
                  and not TEST_RX.search(f["path"]) and not f["path"].endswith("__init__.py")]
-        prop = optimizer.propose(ctx.root, pol, files, ctx.home, use_llm=bool(body.get("ai")))
+        prop = optimizer.propose(active_root, pol, files, ctx.home, use_llm=bool(body.get("ai")))
         ctx.log.append("optimize", "repobrain", prop["status"], f"{len(prop['files'])} file(s) proposed, id {prop['id']}",
                        head=prop["head"])
         ctx.last_proposal = prop["id"]
@@ -509,7 +564,7 @@ def route(ctx, path, body, user=None):
             )
         approved_by = user.get("name") if (user and user.get("name")) else actor
         approved_by = re.sub(r"[\r\n]+", " ", str(approved_by)).strip()
-        res = optimizer.apply(ctx.root, ctx.home, body["id"], approved_by)
+        res = optimizer.apply(active_root, ctx.home, body["id"], approved_by)
         ctx.log.append("approve", approved_by, "APPLIED", f"{', '.join(res['applied'])} -> {str(res['commit'])[:8]}", head=res["commit"])
         return res
     if path == "/api/waive":
@@ -523,17 +578,17 @@ def route(ctx, path, body, user=None):
             )
         waived_by = user.get("name") if (user and user.get("name")) else actor
         waived_by = re.sub(r"[\r\n]+", " ", str(waived_by)).strip()
-        w = review.waive(ctx.home, gitutil.head(ctx.root), waived_by, str(body.get("reason", "")))
-        ctx.log.append("waive", waived_by, "WAIVED", w["reason"], head=gitutil.head(ctx.root))
+        w = review.waive(ctx.home, gitutil.head(active_root), waived_by, str(body.get("reason", "")))
+        ctx.log.append("waive", waived_by, "WAIVED", w["reason"], head=gitutil.head(active_root))
         return w
     if path == "/api/shield":
         res = shield.check_action({"actor": str(body.get("actor", "")), "path": str(body.get("path", "")),
-                                   "content": str(body.get("content", ""))}, ctx.policy())
+                                   "content": str(body.get("content", ""))}, ctx.policy(active_root))
         ctx.log.append("shield-check", str(body.get("actor", "") or "unknown")[:60], res["decision"],
                        f"{body.get('path', '')}: " + (", ".join(f['rule'] for f in res['findings']) or "clean"))
         return res
     if path == "/api/explain":
-        pol = ctx.policy()
+        pol = ctx.policy(active_root)
         ask = llm.ask if body.get("ai") and pol.get("allow_llm") and llm.available() else None
         res = explainer.explain(str(body.get("log", ""))[:200_000], ask)
         ctx.log.append("explain", "repobrain", "EXPLAINED", res["summary"])
@@ -541,17 +596,21 @@ def route(ctx, path, body, user=None):
     if path == "/api/preflight":
         actor_name = str(body.get("actor", "unknown-agent"))[:80]
         files = body.get("files", [])
-        return preflight(ctx.root, actor_name, files)
+        return preflight(active_root, actor_name, files)
     if path == "/api/audit/tamper":
         return A.simulate_tamper(ctx.log.entries())
     if path == "/api/scenario" and ctx.demo:
-        demo.switch(ctx.root, body["name"])
-        ctx.base = demo.SCENARIO_BASES.get(body["name"], "main")
-        return {"branch": gitutil.branch(ctx.root), "base": ctx.base}
+        demo.switch(active_root, body["name"])
+        active_base = ctx.get_base_for_root(active_root)
+        ctx.base = active_base
+        return {"branch": gitutil.branch(active_root), "base": active_base}
     if path == "/api/reset" and ctx.demo:
-        demo.seed(ctx.root)
-        shutil.rmtree(ctx.home, ignore_errors=True)
-        ctx.log = A.AuditLog(ctx.home)
+        demo.seed(active_root)
+        if active_root != ctx.root:
+            pass
+        else:
+            shutil.rmtree(ctx.home, ignore_errors=True)
+            ctx.log = A.AuditLog(ctx.home)
         return {"ok": True}
     if path == "/api/webhook":
         from . import webhook
