@@ -262,7 +262,8 @@ def test_corporate_email_verification_otp_flow(tmp_path):
 
     # Initial registration has pending email verification
     assert user["email_verified"] is False
-    otp_code = user["verification_code"]
+    assert "verification_code" not in user  # Secure: never exposed in public profile!
+    otp_code = mgr.get_last_otp_for_test("compliance.officer@acmeworks.internal")
     assert otp_code is not None
     assert len(otp_code) == 6
     assert otp_code.isdigit()
@@ -274,7 +275,7 @@ def test_corporate_email_verification_otp_flow(tmp_path):
     # Valid code verifies corporate identity
     verified_user = mgr.verify_email("compliance.officer@acmeworks.internal", otp_code)
     assert verified_user["email_verified"] is True
-    assert verified_user["verification_code"] is None
+    assert "verification_code" not in verified_user
 
     # Re-verification of already verified account returns verified profile safely
     rechecked = mgr.verify_email("compliance.officer@acmeworks.internal", otp_code)

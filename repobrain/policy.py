@@ -39,6 +39,7 @@ DEFAULT = {
     "languages": ["python"],
     "fuzz": True,                    # differential fuzzing of rewritten functions
     "ml_guard": True,                # learned prompt-injection classifier
+    "require_sandbox": False,        # strictly require Bubblewrap container isolation (fails if bwrap unavailable)
     "dependency_guard": True,        # typosquat / dependency-confusion checks
     "ignore": [],                    # paths Shield will not scan
 }
@@ -51,6 +52,7 @@ _TYPES = {
     "review_required": list, "ai_actors": list, "allow_llm": bool,
     "remove_unused_imports": bool, "allow_comment_loss": bool, "preserve_comments": bool,
     "languages": list, "fuzz": bool, "ml_guard": bool, "dependency_guard": bool, "ignore": list,
+    "require_sandbox": bool,
 }
 
 _ENUMS = {
@@ -200,8 +202,15 @@ def is_ai(text, policy):
         f = frag.lower()
         if (f.isalnum() and f in toks) or (not f.isalnum() and f in low):
             return True
-    if any(pat in low for pat in ("[bot]", "app/", "actions-user", "github-actions", "noreply")):
+    # Explicit bot markers
+    if any(pat in low for pat in ("[bot]", "app/", "actions-user", "github-actions")):
         return True
+    # If noreply is present, only consider AI if a bot/agent keyword is also in the identity
+    # (prevents human web-UI edits and squash merges like username@users.noreply.github.com from false-positive)
+    if "noreply" in low:
+        if any(b in low for b in ("bot", "agent", "ai", "copilot", "claude", "synth")):
+            return True
+        return False
     return False
 
 

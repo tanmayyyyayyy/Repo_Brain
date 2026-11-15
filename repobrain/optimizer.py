@@ -144,10 +144,23 @@ def run_tests(root, overrides, policy):
             has_coverage = False
 
         timeout_val = int(policy.get("test_timeout", 180))
+        require_sandbox = bool(policy.get("require_sandbox", False))
 
         bwrap_bin = shutil.which("bwrap")
         can_use_bwrap = bool(bwrap_bin) and (os.name == "posix") and sys.platform.startswith("linux")
+
+        if require_sandbox and not can_use_bwrap:
+            return {
+                "ran": False,
+                "ok": False,
+                "output": "Policy enforcement error: 'require_sandbox: true' requires Bubblewrap (bwrap) container isolation, but bwrap is unavailable or unprivileged user namespaces are disabled on host.",
+                "cmd": "",
+                "coverage": {"available": False},
+                "sandbox": {"type": "none", "network_isolated": False, "required": True, "enforced": False}
+            }
+
         final_cmd = cov_cmd
+        used_bwrap = False
         if can_use_bwrap:
             final_cmd = [
                 bwrap_bin,
@@ -161,15 +174,26 @@ def run_tests(root, overrides, policy):
                 "--chdir", work,
                 *cov_cmd
             ]
+            used_bwrap = True
 
         def _limits():
             if os.name == "posix":
                 try:
                     import resource
-                    resource.setrlimit(resource.RLIMIT_CPU, (timeout_val, timeout_val))
-                    resource.setrlimit(resource.RLIMIT_AS, (1024 * 1024 * 1024, 1024 * 1024 * 1024))
+                    if hasattr(resource, "RLIMIT_CPU"):
+                        resource.setrlimit(resource.RLIMIT_CPU, (timeout_val, timeout_val))
+                    if hasattr(resource, "RLIMIT_AS"):
+                        resource.setrlimit(resource.RLIMIT_AS, (1024 * 1024 * 1024, 1024 * 1024 * 1024))
                 except Exception:
                     pass
+
+        sandbox_info = {
+            "type": "bubblewrap" if used_bwrap else "rlimit",
+            "network_isolated": bool(used_bwrap),
+            "cpu_limit_sec": timeout_val,
+            "memory_limit_mb": 1024,
+            "process_group_isolated": (os.name == "posix")
+        }
 
         try:
             if os.name == "posix":
@@ -180,15 +204,44 @@ def run_tests(root, overrides, policy):
                 try:
                     stdout, stderr = proc.communicate(timeout=timeout_val)
                     returncode = proc.returncode
+
+                    # If bwrap failed due to missing unprivileged user namespaces in Docker/container:
+                    if used_bwrap and returncode != 0 and ("permissions to create new namespace" in (stderr or "") or "setting up uid map" in (stderr or "")):
+                        if require_sandbox:
+                            return {
+                                "ran": True,
+                                "ok": False,
+                                "output": f"Bubblewrap sandbox creation failed: {stderr}",
+                                "cmd": " ".join(cmd) if isinstance(cmd, list) else str(cmd),
+                                "coverage": {"available": False},
+                                "sandbox": {"type": "bubblewrap_failed", "network_isolated": False, "required": True, "enforced": False}
+                            }
+                        # Graceful fallback to rlimit process group
+                        proc = subprocess.Popen(
+                            cov_cmd, cwd=work, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, env=env, start_new_session=True, preexec_fn=_limits
+                        )
+                        stdout, stderr = proc.communicate(timeout=timeout_val)
+                        returncode = proc.returncode
+                        used_bwrap = False
+                        sandbox_info["type"] = "rlimit"
+                        sandbox_info["network_isolated"] = False
                 except subprocess.TimeoutExpired:
-                    try:
-                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-                    except Exception:
-                        pass
+                    if hasattr(os, "killpg") and hasattr(os, "getpgid") and hasattr(signal, "SIGKILL"):
+                        try:
+                            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
                     proc.communicate()
                     return {"ran": True, "ok": False, "output": "test run timed out",
                             "cmd": " ".join(cmd) if isinstance(cmd, list) else str(cmd),
-                            "coverage": {"available": False}}
+                            "coverage": {"available": False},
+                            "sandbox": sandbox_info}
             else:
                 r = subprocess.run(cov_cmd, cwd=work, capture_output=True, text=True, env=env,
                                    timeout=timeout_val)
@@ -212,7 +265,8 @@ def run_tests(root, overrides, policy):
             return {"ran": True, "ok": returncode == 0, "output": out,
                     "cmd": " ".join(cmd) if isinstance(cmd, list) else str(cmd),
                     "runner": "pytest" if "pytest" in str(cmd) else "custom",
-                    "coverage": cov_info}
+                    "coverage": cov_info,
+                    "sandbox": sandbox_info}
         except subprocess.TimeoutExpired:
             return {"ran": True, "ok": False, "output": "test run timed out",
                     "cmd": " ".join(cmd) if isinstance(cmd, list) else str(cmd),
@@ -933,6 +987,7 @@ def run(root, policy, home, files=None, base=None, apply=False, ai=False, allow_
     t_res = run_tests(str(root), new_srcs, policy)
     ok = t_res.get("ok")
     res["tests"] = {"ok": ok, **t_res}
+    res["sandbox"] = t_res.get("sandbox", {"type": "rlimit", "network_isolated": False})
     if ok is False:
         res["status"] = "rejected (tests failed, nothing proposed)"
         if log:

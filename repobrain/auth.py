@@ -156,6 +156,11 @@ def hash_session_token(token: str) -> str:
     return hashlib.sha256((token or "").strip().encode("utf-8")).hexdigest()
 
 
+def hash_otp(code: str, salt: str) -> str:
+    """Compute salted SHA-256 hash for corporate email verification OTP."""
+    return hashlib.sha256(f"{salt}:{code.strip()}".encode("utf-8")).hexdigest()
+
+
 def verify_password(password: str, hashed_str: str) -> bool:
     """Verify password against stored PBKDF2 hash using constant-time comparison."""
     if not password or not hashed_str:
@@ -193,6 +198,7 @@ class AuthManager:
         self._lock = threading.RLock()
         self._users = {}
         self._sessions = {}
+        self._last_test_otp = {}
         os.makedirs(self.home, exist_ok=True)
         self._load()
 
@@ -249,8 +255,73 @@ class AuthManager:
     def register(self, email: str, password: str, name: str, role="developer",
                  company=None, allowed_domains=None, audit_log=None):
         """Register a new user with company email, password, and enterprise role."""
+        ok, reason, domain = validate_company_email(email, allowed_domains)
+        if not ok:
+            raise ValueError(reason)
+
+        email_norm = email.strip().lower()
+
+        # Compute PBKDF2 hash outside lock to prevent blocking concurrent sessions
+        pw_hash = hash_password(password)
+
+        # Generate 6-digit verification code and salted hash
+        raw_code = f"{secrets.randbelow(900000) + 100000}"
+        salt = secrets.token_hex(16)
+        code_hash = hash_otp(raw_code, salt)
+        expires_at = time.time() + 900  # 15 minutes
+
         with self._lock:
-            ok, reason, domain = validate_company_email(email, allowed_domains)
+            if email_norm in self._users:
+                raise ValueError(f"User with email '{email_norm}' is already registered")
+
+            # Force all public self-registrations to developer tier to prevent self-privilege escalation.
+            # Initial administrator must be provisioned via bootstrap_admin().
+            assigned_role = "developer"
+
+            comp_name = (company or "").strip() or domain_to_company_name(domain)
+            usr_name = (name or "").strip() or email_norm.split("@")[0].replace(".", " ").title()
+
+            user_id = f"usr-{secrets.token_hex(6)}"
+            user_rec = {
+                "id": user_id,
+                "email": email_norm,
+                "name": usr_name,
+                "role": assigned_role,
+                "company": comp_name,
+                "title": ROLES[assigned_role]["name"],
+                "password_hash": pw_hash,
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "is_demo_seed": False,
+                "email_verified": False,
+                "otp_hash": code_hash,
+                "otp_salt": salt,
+                "otp_expires_at": expires_at,
+                "otp_attempts": 0,
+            }
+            self._users[email_norm] = user_rec
+            self._last_test_otp[email_norm] = raw_code
+            self._save_users()
+
+            session_tok = self._create_session(user_rec)
+
+            smtp_host = os.environ.get("REPOBRAIN_SMTP_HOST") or os.environ.get("SMTP_HOST")
+            if not smtp_host:
+                print(f"[RepoBrain Demo Auth] Corporate verification code for {email_norm}: {raw_code} (expires in 15m)")
+
+            if audit_log:
+                audit_log.append("auth-register", email_norm, "SUCCESS",
+                                 f"New user registered as {ROLES[assigned_role]['badge']} for {comp_name} (pending verification)")
+
+            return self._strip_user(user_rec), session_tok
+
+    def bootstrap_admin(self, email: str, password: str, name: str, company=None, audit_log=None):
+        """Bootstrap the first system administrator account outside demo mode."""
+        with self._lock:
+            has_admin = any(u.get("role") == "admin" for u in self._users.values())
+            if has_admin:
+                raise PermissionError("An administrator already exists. Role changes must be performed by an existing admin.")
+
+            ok, reason, domain = validate_company_email(email)
             if not ok:
                 raise ValueError(reason)
 
@@ -258,39 +329,36 @@ class AuthManager:
             if email_norm in self._users:
                 raise ValueError(f"User with email '{email_norm}' is already registered")
 
-            # Force all new registrations to developer tier to prevent self-privilege escalation to admin
-            role = "developer"
-
             comp_name = (company or "").strip() or domain_to_company_name(domain)
             usr_name = (name or "").strip() or email_norm.split("@")[0].replace(".", " ").title()
 
             pw_hash = hash_password(password)
             user_id = f"usr-{secrets.token_hex(6)}"
-            verification_code = f"{secrets.randbelow(900000) + 100000}"
             user_rec = {
                 "id": user_id,
                 "email": email_norm,
                 "name": usr_name,
-                "role": role,
+                "role": "admin",
                 "company": comp_name,
-                "title": ROLES[role]["name"],
+                "title": ROLES["admin"]["name"],
                 "password_hash": pw_hash,
                 "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "is_demo_seed": False,
-                "email_verified": False,
-                "verification_code": verification_code,
-                "verification_sent_at": time.time()
+                "email_verified": True,
             }
             self._users[email_norm] = user_rec
             self._save_users()
-
             session_tok = self._create_session(user_rec)
 
             if audit_log:
-                audit_log.append("auth-register", email_norm, "SUCCESS",
-                                 f"New user registered as {ROLES[role]['badge']} for {comp_name} (pending verification)")
+                audit_log.append("auth-bootstrap-admin", email_norm, "SUCCESS",
+                                 f"First administrator account bootstrapped for {comp_name}")
 
             return self._strip_user(user_rec), session_tok
+
+    def get_last_otp_for_test(self, email: str) -> str:
+        """Testing helper to inspect the last generated OTP in memory without leaking via API."""
+        return self._last_test_otp.get((email or "").strip().lower(), "")
 
     def verify_email(self, email: str, code: str, audit_log=None):
         """Verify corporate email address using 6-digit OTP."""
@@ -301,15 +369,48 @@ class AuthManager:
                 raise ValueError(f"User with email '{email}' not found")
             if u.get("email_verified", False):
                 return self._strip_user(u)
-            expected = u.get("verification_code")
-            if not expected:
-                raise ValueError("No active verification code for this account")
-            if str(code).strip() != str(expected).strip():
+
+            otp_hash = u.get("otp_hash")
+            otp_salt = u.get("otp_salt")
+            legacy_code = u.get("verification_code")
+
+            if not otp_hash and not legacy_code:
+                raise ValueError("No active verification code for this account. Please request a new code.")
+
+            attempts = int(u.get("otp_attempts", 0))
+            if attempts >= 5:
                 if audit_log:
-                    audit_log.append("auth-verify-failed", email_norm, "REJECTED", "Invalid corporate OTP code")
-                raise ValueError("Invalid verification code. Please check your corporate inbox.")
+                    audit_log.append("auth-verify-locked", email_norm, "REJECTED", "OTP attempts exceeded max limit (5)")
+                raise ValueError("Verification code has exceeded maximum attempt limit (5 attempts). Please request a new code.")
+
+            expires_at = float(u.get("otp_expires_at", 0))
+            if expires_at and time.time() > expires_at:
+                if audit_log:
+                    audit_log.append("auth-verify-expired", email_norm, "REJECTED", "OTP code expired (> 15 mins)")
+                raise ValueError("Verification code has expired (valid for 15 minutes). Please request a new code.")
+
+            code_clean = str(code).strip()
+            match = False
+            if otp_hash and otp_salt:
+                expected_hash = hash_otp(code_clean, otp_salt)
+                match = secrets.compare_digest(expected_hash, otp_hash)
+            elif legacy_code:
+                match = secrets.compare_digest(code_clean, str(legacy_code).strip())
+
+            if not match:
+                u["otp_attempts"] = attempts + 1
+                self._save_users()
+                remaining = max(0, 5 - (attempts + 1))
+                if audit_log:
+                    audit_log.append("auth-verify-failed", email_norm, "REJECTED", f"Invalid OTP code ({remaining} attempts remaining)")
+                raise ValueError(f"Invalid verification code. {remaining} attempt(s) remaining before code is invalidated.")
+
             u["email_verified"] = True
-            u["verification_code"] = None
+            u.pop("otp_hash", None)
+            u.pop("otp_salt", None)
+            u.pop("otp_expires_at", None)
+            u.pop("otp_attempts", None)
+            u.pop("verification_code", None)
             self._save_users()
             if audit_log:
                 audit_log.append("auth-verify-success", email_norm, "VERIFIED", "Corporate email verified with OTP")
@@ -317,41 +418,61 @@ class AuthManager:
 
     def resend_verification_code(self, email: str, audit_log=None):
         """Resend a new 6-digit corporate verification OTP."""
+        email_norm = (email or "").strip().lower()
+        raw_code = f"{secrets.randbelow(900000) + 100000}"
+        salt = secrets.token_hex(16)
+        code_hash = hash_otp(raw_code, salt)
+        expires_at = time.time() + 900  # 15 minutes
+
         with self._lock:
-            email_norm = (email or "").strip().lower()
             u = self._users.get(email_norm)
             if not u:
                 raise ValueError(f"User with email '{email}' not found")
-            new_code = f"{secrets.randbelow(900000) + 100000}"
-            u["verification_code"] = new_code
-            u["verification_sent_at"] = time.time()
+            if u.get("email_verified", False):
+                return {"email": email_norm, "status": "already_verified", "email_verified": True}
+
+            u["otp_hash"] = code_hash
+            u["otp_salt"] = salt
+            u["otp_expires_at"] = expires_at
+            u["otp_attempts"] = 0
+            u.pop("verification_code", None)
             self._save_users()
+
+            smtp_host = os.environ.get("REPOBRAIN_SMTP_HOST") or os.environ.get("SMTP_HOST")
+            mode = "smtp" if smtp_host else "demo_simulation"
+            if not smtp_host:
+                print(f"[RepoBrain Demo Auth] Resent verification code for {email_norm}: {raw_code} (expires in 15m)")
+
             if audit_log:
-                audit_log.append("auth-resend-code", email_norm, "SENT", "Resent OTP verification code")
-            return {"email": email_norm, "code": new_code, "status": "sent"}
+                audit_log.append("auth-resend-code", email_norm, "SENT", f"Resent OTP verification code (mode: {mode})")
+            return {"email": email_norm, "status": "sent", "mode": mode, "expires_in": 900}
 
     def login(self, email: str, password: str, audit_log=None):
         """Authenticate user with corporate credentials and issue session token."""
+        email_norm = (email or "").strip().lower()
         with self._lock:
-            email_norm = (email or "").strip().lower()
             user_rec = self._users.get(email_norm)
             if not user_rec:
                 if audit_log:
-                    audit_log.append("auth-login-failed", email_norm or "unknown", "REJECTED",
-                                     "User not found")
+                    audit_log.append("auth-login-failed", email_norm or "unknown", "REJECTED", "User not found")
                 raise ValueError("Invalid corporate email or password")
+            stored_hash = user_rec.get("password_hash", "")
 
-            if not verify_password(password, user_rec.get("password_hash", "")):
-                if audit_log:
-                    audit_log.append("auth-login-failed", email_norm, "REJECTED",
-                                     "Invalid password credentials")
-                raise ValueError("Invalid corporate email or password")
+        # Compute password verification outside self._lock so 600,000 PBKDF2 iterations
+        # never block concurrent get_user_by_token requests.
+        if not verify_password(password, stored_hash):
+            if audit_log:
+                audit_log.append("auth-login-failed", email_norm, "REJECTED", "Invalid password credentials")
+            raise ValueError("Invalid corporate email or password")
 
+        with self._lock:
+            user_rec = self._users.get(email_norm)
+            if not user_rec:
+                raise ValueError("User deleted during authentication")
             session_tok = self._create_session(user_rec)
             if audit_log:
                 audit_log.append("auth-login", email_norm, "SUCCESS",
                                  f"Logged in as {ROLES.get(user_rec.get('role', 'developer'), {}).get('badge', 'USER')}")
-
             return self._strip_user(user_rec), session_tok
 
     def switch_demo_persona(self, role: str, audit_log=None):
@@ -436,7 +557,9 @@ class AuthManager:
             u = self._users.get(s.get("email", ""))
             if not u:
                 return None
-            return self._strip_user(u)
+            res = self._strip_user(u)
+            res["session_hash"] = h
+            return res
 
     def logout(self, token: str, audit_log=None):
         """Invalidate session token."""
@@ -483,6 +606,7 @@ class AuthManager:
     def _strip_user(self, u: dict) -> dict:
         role_info = ROLES.get(u.get("role", "developer"), ROLES["developer"])
         is_verified = bool(u.get("email_verified", True if u.get("is_demo_seed") else False))
+        smtp_configured = bool(os.environ.get("REPOBRAIN_SMTP_HOST") or os.environ.get("SMTP_HOST"))
         return {
             "id": u.get("id"),
             "email": u.get("email"),
@@ -497,7 +621,7 @@ class AuthManager:
             "created_at": u.get("created_at"),
             "is_demo_seed": u.get("is_demo_seed", False),
             "email_verified": is_verified,
-            "verification_code": u.get("verification_code") if not is_verified else None
+            "verification_mode": "smtp" if smtp_configured else "demo_simulation"
         }
 
 

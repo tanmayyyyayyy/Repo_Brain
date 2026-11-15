@@ -1862,6 +1862,7 @@ const S = {
   tourIndex: 0,
   presenterMode: false
 };
+window.S = S;
 
 const $ = s => document.querySelector(s);
 function esc(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
@@ -2431,10 +2432,9 @@ async function submitRegister(e) {
     }
     S.currentUser = res.user;
     S.pendingVerifyEmail = email;
-    S.lastGeneratedOTP = (res.user && res.user.verification_code) || "";
     await loadState();
     S.rev = await api("/api/review", {});
-    toast(`Account registered! 6-digit OTP code sent to ${email}`);
+    toast(`Account registered! Verification OTP code dispatched to ${email}`);
     setAuthModalTab("verify");
     render();
   });
@@ -2458,9 +2458,8 @@ async function submitVerifyOTP(e) {
 
 async function resendOTPCode(email) {
   guard(async () => {
-    const res = await api("/api/auth/resend-code", { email });
-    S.lastGeneratedOTP = res.code;
-    toast(`New verification OTP sent to ${email}`);
+    await api("/api/auth/resend-code", { email });
+    toast(`New verification OTP code dispatched to ${email}`);
     renderAuthModal();
   });
 }
@@ -2650,11 +2649,10 @@ function renderAuthModal() {
     `;
   } else if (tab === "verify") {
     const targetEmail = S.pendingVerifyEmail || u.email || "";
-    const demoCode = S.lastGeneratedOTP || (u.verification_code || "");
     contentHtml = `
       <div style="max-width:540px;margin:0 auto;background:var(--bg-surface-raised);border:1px solid var(--border-default);border-radius:10px;padding:24px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-          <span class="pill p-warn">OTP VERIFICATION</span>
+          <span class="pill p-warn">OTP VERIFICATION (DEMO SIMULATION)</span>
           <h4 style="margin:0;font-size:15px;font-weight:700">Verify Corporate Email Address</h4>
         </div>
         <div class="mut small" style="margin-bottom:18px;line-height:1.5">
@@ -2672,20 +2670,16 @@ function renderAuthModal() {
             <input class="auth-text-input" id="verifyCodeInput" type="text" placeholder="e.g. 748192" maxlength="6" style="font-size:20px;letter-spacing:6px;font-weight:800;text-align:center;font-family:var(--font-mono)" required autofocus>
           </div>
 
-          ${demoCode ? `
-            <div style="margin:12px 0 16px;padding:12px;background:var(--bg-input);border-radius:6px;border:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:space-between">
-              <div>
-                <span style="font-size:11px;color:var(--text-muted)">Demo Generated OTP:</span>
-                <code style="font-weight:800;font-size:13px;color:var(--signal-pass);margin-left:6px">${esc(demoCode)}</code>
-              </div>
-              <button type="button" class="b xs" onclick="$('#verifyCodeInput').value='${esc(demoCode)}'">⚡ Auto-Fill Code</button>
+          <div style="margin:12px 0 16px;padding:12px;background:var(--bg-input);border-radius:6px;border:1px solid var(--border-subtle)">
+            <div style="font-weight:600;font-size:12px;margin-bottom:4px">Enterprise Email Delivery: Demo Simulation</div>
+            <div class="mut small" style="line-height:1.45">
+              In this prototype environment, the 6-digit corporate verification OTP has been securely logged to the server terminal stdout (simulating enterprise SMTP mail relay without exposing credentials in client-side responses or storing plaintext codes on disk). Each code expires in 15 minutes and permits at most 5 attempts before locking.
             </div>
-          ` : `
-            <div style="margin:12px 0 16px;padding:10px;background:var(--bg-input);border-radius:6px;border:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--border-subtle)">
               <span class="mut small">Did not receive the code?</span>
               <button type="button" class="b xs" onclick="resendOTPCode('${esc(targetEmail)}')">Resend Code</button>
             </div>
-          `}
+          </div>
 
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px">
             <button type="button" class="b s" onclick="setAuthModalTab('signin')">Back to Sign In</button>
@@ -2729,10 +2723,10 @@ function renderAuthModal() {
 
           <div class="auth-telemetry-box" style="margin-top:0">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-              <span style="font-weight:700;font-size:12px">Active Bearer Session Token:</span>
-              <button class="b xs" onclick="copyText('${esc(S.sessionToken || 'demo-session-token')}', 'Session Token')">Copy Token</button>
+              <span style="font-weight:700;font-size:12px">Session Persistence Fingerprint:</span>
+              <span class="pill p-ready" style="font-size:10px">SHA-256</span>
             </div>
-            <code style="word-break:break-all;font-size:11px;color:var(--text-muted)">${esc(S.sessionToken ? S.sessionToken.slice(0, 16) + '...' + S.sessionToken.slice(-8) : 'demo-ephemeral-session')}</code>
+            <code style="word-break:break-all;font-size:11px;color:var(--text-muted)">${esc((u && u.session_hash) ? 'sha256:' + u.session_hash : 'sha256:ephemeral-session-demo')}</code>
           </div>
 
           <div class="auth-telemetry-box">
@@ -4226,10 +4220,10 @@ function vAuth() {
 
           <div class="auth-telemetry-box" style="margin-top:0">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-              <span style="font-weight:700">Active Bearer Session Token:</span>
-              <button class="b xs" onclick="copyText('${esc(S.sessionToken || 'demo-session-token')}', 'Session Token')">Copy Token</button>
+              <span style="font-weight:700">Session Persistence Fingerprint:</span>
+              <span class="pill p-ready" style="font-size:10px">SHA-256</span>
             </div>
-            <code style="word-break:break-all;font-size:11px;color:var(--text-muted)">${esc(S.sessionToken ? S.sessionToken.slice(0, 16) + '...' + S.sessionToken.slice(-8) : 'demo-ephemeral-session')}</code>
+            <code style="word-break:break-all;font-size:11px;color:var(--text-muted)">${esc((u && u.session_hash) ? 'sha256:' + u.session_hash : 'sha256:ephemeral-session-demo')}</code>
           </div>
 
           <div class="auth-telemetry-box">

@@ -33,43 +33,73 @@ def _hash(rec):
                                      ensure_ascii=False).encode()).hexdigest()
 
 
+class AuditCorruptionError(ValueError):
+    """Raised when the audit log tail or structure is malformed or corrupt."""
+    pass
+
+
 def _tail_last_record(path: str):
     """Return (seq, hash) of the trailing record in O(1) time by seeking backwards from EOF.
-    Avoids reading the entire file on every append.
+    Refuses to append if the trailing record is corrupt or malformed.
     """
     if not os.path.exists(path) or os.path.getsize(path) == 0:
         return 0, GENESIS
+
     try:
         with open(path, "rb") as f:
             f.seek(0, os.SEEK_END)
             size = f.tell()
-            chunk_size = 2048
+            chunk_size = 4096
             buffer = bytearray()
             pos = size
+            found_line = None
+
             while pos > 0:
                 read_size = min(chunk_size, pos)
                 pos -= read_size
                 f.seek(pos, os.SEEK_SET)
                 chunk = f.read(read_size)
                 buffer = chunk + buffer
+
+                # Split on newlines to extract candidate trailing line
                 lines = buffer.split(b"\n")
-                # Look backwards for the last non-empty line
-                for ln in reversed(lines):
-                    ln = ln.strip()
-                    if ln:
-                        try:
-                            rec = json.loads(ln.decode("utf-8"))
-                            seq = int(rec.get("seq", 0))
-                            h = str(rec.get("hash", GENESIS))
-                            return seq, h
-                        except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
-                            continue
-                # If we've read > 64KB without finding a line, fall back
-                if len(buffer) > 65536:
-                    break
-    except OSError:
-        pass
-    return 0, GENESIS
+                while lines and not lines[-1].strip():
+                    lines.pop()
+
+                if not lines:
+                    continue
+
+                # If pos > 0 and only 1 element, we haven't seen the start of this line yet
+                if pos > 0 and len(lines) == 1:
+                    continue
+
+                found_line = lines[-1].strip()
+                break
+
+            if not found_line:
+                raise AuditCorruptionError(f"Audit log at '{path}' is non-empty but contains no records.")
+
+            try:
+                text = found_line.decode("utf-8")
+                rec = json.loads(text)
+            except Exception as e:
+                raise AuditCorruptionError(f"Audit log at '{path}' has malformed trailing record JSON: {e}") from e
+
+            if not isinstance(rec, dict) or "seq" not in rec or "hash" not in rec or "prev" not in rec:
+                raise AuditCorruptionError(f"Audit log at '{path}' has missing cryptographic fields in trailing record.")
+
+            expected_hash = _hash(rec)
+            if rec.get("hash") != expected_hash:
+                raise AuditCorruptionError(
+                    f"Audit log at '{path}' has tampered or corrupt hash in trailing record (seq {rec.get('seq')}). "
+                    f"Expected {expected_hash[:16]}..., got {str(rec.get('hash'))[:16]}..."
+                )
+
+            seq = int(rec.get("seq", 0))
+            h = str(rec.get("hash", GENESIS))
+            return seq, h
+    except OSError as e:
+        raise AuditCorruptionError(f"Cannot read audit log at '{path}': {e}") from e
 
 
 class AuditLog:
@@ -100,7 +130,14 @@ class AuditLog:
                     import fcntl
                     lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR)
                     fcntl.flock(lock_fd, fcntl.LOCK_EX)
-                except (ImportError, OSError):
+                except ImportError:
+                    try:
+                        import msvcrt
+                        lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR)
+                        msvcrt.locking(lock_fd, msvcrt.LK_LOCK, 1)
+                    except (ImportError, OSError):
+                        pass
+                except OSError:
                     pass
                 last_seq, prev = _tail_last_record(self.path)
                 rec = {"seq": last_seq + 1, "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "event": event,
@@ -114,8 +151,15 @@ class AuditLog:
             finally:
                 if lock_fd is not None:
                     try:
-                        import fcntl
-                        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                        try:
+                            import fcntl
+                            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                        except ImportError:
+                            try:
+                                import msvcrt
+                                msvcrt.locking(lock_fd, msvcrt.LK_UNLCK, 1)
+                            except (ImportError, OSError):
+                                pass
                         os.close(lock_fd)
                     except (ImportError, OSError):
                         pass

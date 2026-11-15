@@ -79,7 +79,30 @@ class Ctx:
         self.auth = auth.AuthManager(home, is_demo=is_demo)
         self.last_proposal = None
         self._session_roots = {}
+        self._workspace_access = {}
         self._lock = threading.Lock()
+
+    MAX_DEMO_WORKSPACES = 10
+    DEMO_WORKSPACE_TTL = 3600  # 1 hour
+
+    def _cleanup_workspaces(self):
+        """Prune expired and excess demo workspaces to prevent disk filling on hosted free tiers."""
+        now = time.time()
+        expired = [k for k, last_ts in self._workspace_access.items() if now - last_ts > self.DEMO_WORKSPACE_TTL]
+        for k in expired:
+            dir_to_remove = os.path.join(self.home, "demo_sessions", k)
+            shutil.rmtree(dir_to_remove, ignore_errors=True)
+            self._workspace_access.pop(k, None)
+            self._session_roots.pop(k, None)
+
+        if len(self._workspace_access) > self.MAX_DEMO_WORKSPACES:
+            sorted_keys = sorted(self._workspace_access.keys(), key=lambda k: self._workspace_access[k])
+            excess_count = len(self._workspace_access) - self.MAX_DEMO_WORKSPACES
+            for k in sorted_keys[:excess_count]:
+                dir_to_remove = os.path.join(self.home, "demo_sessions", k)
+                shutil.rmtree(dir_to_remove, ignore_errors=True)
+                self._workspace_access.pop(k, None)
+                self._session_roots.pop(k, None)
 
     def get_root_for_user(self, user=None):
         """In demo mode, isolate working git repository per user session to prevent race conditions across concurrent evaluators."""
@@ -90,8 +113,10 @@ class Ctx:
             return self.root
         key = hashlib.sha256(str(ident).encode()).hexdigest()[:12]
         with self._lock:
+            self._workspace_access[key] = time.time()
             if key in self._session_roots and os.path.isdir(self._session_roots[key]):
                 return self._session_roots[key]
+            self._cleanup_workspaces()
             session_repo_dir = os.path.join(self.home, "demo_sessions", key, "repo")
             if not os.path.isdir(session_repo_dir):
                 os.makedirs(os.path.dirname(session_repo_dir), exist_ok=True)
@@ -362,6 +387,19 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
             except Exception as e:
                 self._send(500, {"error": str(e)})
 
+        def _client_ip(self):
+            xff = self.headers.get("X-Forwarded-For", "").strip()
+            if xff:
+                client = xff.split(",")[0].strip()
+                if re.match(r"^[0-9a-fA-F:.]+$", client):
+                    return client
+            x_real = self.headers.get("X-Real-IP", "").strip()
+            if x_real and re.match(r"^[0-9a-fA-F:.]+$", x_real):
+                return x_real
+            if self.client_address and len(self.client_address) > 0:
+                return str(self.client_address[0])
+            return "unknown"
+
         def do_POST(self):
             if not self._guard():
                 return
@@ -401,7 +439,7 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
 
             # Auth endpoints run outside global LOCK for concurrency & non-blocking PBKDF2
             if req_path == "/api/auth/login":
-                client_ip = self.client_address[0] if self.client_address else "unknown"
+                client_ip = self._client_ip()
                 login_email = str(body.get("email", "")).strip().lower()
                 if not check_login_rate(client_ip) or not check_login_rate(login_email):
                     return self._send(429, {"error": "Too many failed login attempts. Please wait 60 seconds before trying again."})

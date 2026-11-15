@@ -69,6 +69,37 @@ def test_ui_xss_safety_against_malicious_findings():
             assert fired is None, f"XSS payload executed! Value: {fired}"
             assert len(xss_alert) == 0, f"Dialog appeared from XSS: {xss_alert}"
 
+            # 2. Test XSS safety inside auth modal, profile tab, and user dropdown
+            modal_payload = '<img src=x onerror="window.__xss_modal=1"><script>window.__xss_modal=1</script>'
+            page.evaluate("""(payload) => {
+                window.__xss_modal = undefined;
+                window.S.currentUser = {
+                    id: "usr-xss",
+                    name: "Malicious " + payload,
+                    email: "attacker" + payload + "@evil.com",
+                    role: "admin",
+                    role_badge: "ADMIN",
+                    company: "Injected " + payload,
+                    title: "Lead " + payload,
+                    email_verified: false,
+                    session_hash: "hash" + payload
+                };
+                window.renderUserRoleBar();
+                window.openAuthModal('profile');
+            }""", modal_payload)
+
+            page.wait_for_timeout(300)
+            fired_modal = page.evaluate("() => window.__xss_modal")
+            assert fired_modal is None, f"XSS payload executed in profile modal! Value: {fired_modal}"
+            assert len(xss_alert) == 0, f"Dialog appeared from XSS modal: {xss_alert}"
+
+            # Test signin, signup, verify, and matrix tabs with malicious strings
+            for tab_name in ("signin", "signup", "verify", "matrix"):
+                page.evaluate(f"() => window.setAuthModalTab('{tab_name}')")
+                page.wait_for_timeout(150)
+                fired_tab = page.evaluate("() => window.__xss_modal")
+                assert fired_tab is None, f"XSS payload executed in tab '{tab_name}'! Value: {fired_tab}"
+
             browser.close()
     finally:
         proc.terminate()
