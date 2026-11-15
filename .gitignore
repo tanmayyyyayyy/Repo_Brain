@@ -16,3 +16,6 @@ venv/
 audit.jsonl
 *.audit.jsonl
 *.mov
+*.webm
+*.log
+docs/demo/test_runs/*.mp4

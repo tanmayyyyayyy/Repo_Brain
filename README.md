@@ -4,6 +4,7 @@
 
 > **Judges start here:**
 > - **Pitch**: Vendor-neutral safety, AST complexity cleanup, and HMAC-signed audit layer for repos touched by AI coding agents—enforcing policy from the trusted base branch.
+> - **5-Slide Executive Deck**: [`docs/SLIDE_DECK.md`](docs/SLIDE_DECK.md) · **Interactive Slide Deck**: [`docs/slides.html`](docs/slides.html) (or visit `/slides` in console)
 > - **Technical Docs**: [`docs/TECHNICAL_DOCUMENTATION.md`](docs/TECHNICAL_DOCUMENTATION.md) — Comprehensive architecture, API reference, security model & RBAC specifications.
 > - **Live Demo**: **[repobrain-demo.onrender.com](https://repobrain-demo.onrender.com)** — no install, opens the seeded Mission Control console with instant 1-click role switcher (Admin, Developer, Tester, Security).
 > - **Demo Video (2m 05s, narrated 1080p60)**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) · **Live Public PRs**: [`repobrain-demo-eval#1`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/1), [`#2`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/2) & [`Repo_Brain#1`](https://github.com/tanmayyyyayyy/Repo_Brain/pull/1)
@@ -23,7 +24,7 @@ It does not write code. It decides what AI (and humans) may change, cleans up wh
 ```bash
 pip install -r requirements.txt          # pyyaml (+ pytest, coverage, playwright in requirements-dev.txt). Python 3.10+, git
 python server.py                         # seeds a demo git repo with HMAC signing enabled and opens the console
-python -m pytest -q tests                # 130 passed, 1 skipped (live Anthropic API test skipped when key unset)
+python -m pytest -q tests                # 131 passed, 1 skipped (live Anthropic API test skipped when key unset)
 ```
 
 Console walkthrough (≈3 min):

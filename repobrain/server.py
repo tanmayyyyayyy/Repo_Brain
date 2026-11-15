@@ -36,6 +36,12 @@ def find_index_html():
     return str(pkg_web)
 
 
+def find_slides_html():
+    """Locate the packaged 5-slide presentation deck for finals judges."""
+    p = pathlib.Path(__file__).resolve().parent.parent / "docs" / "slides.html"
+    return str(p) if p.is_file() else None
+
+
 STATIC = find_index_html()
 LOCK = threading.RLock()
 
@@ -188,6 +194,11 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
                 if u.path == "/":
                     with open(find_index_html(), "rb") as f:
                         return self._send(200, f.read(), "text/html")
+                if u.path in ("/slides", "/docs/slides.html"):
+                    sl = find_slides_html()
+                    if sl and os.path.exists(sl):
+                        with open(sl, "rb") as f:
+                            return self._send(200, f.read(), "text/html")
                 if u.path == "/api/auth/me":
                     usr = self._get_user()
                     return self._send(200, {

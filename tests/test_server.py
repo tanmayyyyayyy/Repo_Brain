@@ -82,7 +82,7 @@ def test_diff_endpoint_and_path_traversal_guards(srv):
 
 
 def test_find_index_html_and_root_delivery(srv):
-    from repobrain.server import find_index_html
+    from repobrain.server import find_index_html, find_slides_html
     html_path = find_index_html()
     assert os.path.isfile(html_path)
     assert html_path.endswith(os.path.join("repobrain", "web", "index.html"))
@@ -90,4 +90,12 @@ def test_find_index_html_and_root_delivery(srv):
     assert s == 200
     assert b"<!doctype html>" in b.lower()
     assert b"RepoBrain" in b
+
+    # Slides delivery
+    slides_path = find_slides_html()
+    assert slides_path is not None and os.path.isfile(slides_path)
+    s_sl, b_sl = call("/slides", srv)
+    assert s_sl == 200
+    assert b"Executive Pitch Deck" in b_sl
+    assert b"RepoBrain" in b_sl
 

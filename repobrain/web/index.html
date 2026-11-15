@@ -789,6 +789,19 @@ button.b.s:hover {
   background: var(--bg-surface-hover);
   border-color: var(--border-strong);
 }
+button.b.xs {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  background: var(--bg-surface-raised);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+button.b.xs:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-strong);
+}
 button.b.d { background: var(--signal-block); color: var(--text-inverse); }
 button.b.g { background: var(--signal-pass); color: var(--text-inverse); }
 button.b:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
@@ -1518,6 +1531,10 @@ pre {
     <!-- Corporate Identity & RBAC Menu -->
     <div class="user-role-menu-wrapper" id="userRoleMenuWrapper"></div>
 
+    <button class="action-chip-btn" onclick="window.open('/slides', '_blank')" title="View 5-Slide Executive Pitch Deck for Finals Showcase">
+      <svg style="width:14px;height:14px;color:var(--brand-accent)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+      <span>Deck</span>
+    </button>
     <button class="action-chip-btn" onclick="togglePresenterMode()" title="Toggle presenter mode (larger type, minimal chrome)">
       <svg style="width:14px;height:14px;color:var(--brand-accent)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path><line x1="12" y1="17" x2="12" y2="21"></line><line x1="8" y1="21" x2="16" y2="21"></line></svg>
       <span>Presenter</span>
@@ -3474,6 +3491,7 @@ const COMMANDS = [
   { label: "Switch Role: QA / Test Engineer (Quinn Vance)", action: () => switchDemoPersona("tester") },
   { label: "Switch Role: Software Engineer / Developer (Alice Chen)", action: () => switchDemoPersona("developer") },
   { label: "Open RBAC Governance Matrix & Team Directory", action: openRBACMatrixModal },
+  { label: "Open 5-Slide Executive Pitch Deck (Finals)", action: () => window.open("/slides", "_blank") },
   { label: "Sign In with Corporate Email", action: openLoginModal },
   { label: "Register New Team Member", action: openRegisterModal },
   { label: "Toggle Dark / Light Theme", action: toggleTheme },
