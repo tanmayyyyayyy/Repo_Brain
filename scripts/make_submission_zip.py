@@ -10,7 +10,7 @@ import sys
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT_DIR = os.path.expanduser("~/Downloads")
+OUT_DIR = os.environ.get("REPOBRAIN_SUBMISSION_ZIP_DIR") or os.path.expanduser("~/Downloads")
 ZIP_NAME = "RepoBrain_Round3_Final_Submission.zip"
 OUT_PATH = os.path.join(OUT_DIR, ZIP_NAME)
 

@@ -31,7 +31,7 @@ RepoBrain is engineered with a **minimal-dependency, high-reliability, zero-tele
 | **Configuration** | PyYAML (`repobrain.yml`) | Industry-standard declarative policy schema versioned directly within trusted base branches. |
 | **Embedded Console Server** | `http.server.ThreadingHTTPServer` | High-performance multi-threaded HTTP server with zero external web framework dependencies (no FastAPI/Flask/Django bloat). |
 | **Frontend Mission Control** | Vanilla Modern JavaScript (ES6+), HTML5, CSS3 | Single-file, zero-build dashboard adhering to WCAG 2.1 AA accessibility standards, responsive from mobile (360px) to 4K displays. |
-| **Testing & Quality Assurance** | `pytest`, `playwright` | Comprehensive unit, integration, security audit, and end-to-end browser tests (137 passed tests). |
+| **Testing & Quality Assurance** | `pytest`, `playwright` | Comprehensive unit, integration, security audit, and end-to-end browser tests (190+ passing tests). |
 | **Containerization** | Docker, multi-stage Alpine / Python image | Production-ready container image for on-premise deployment and Kubernetes orchestration. |
 
 ---

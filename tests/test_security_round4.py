@@ -868,6 +868,55 @@ def test_item10_non_admin_cannot_see_other_users_emails(tmp_path):
     assert admin_in_admin_view["email"] == "admin@acmeworks.com"
 
 
+# ==============================================================================
+# ITEM 11: Packaging & Docs Consistency
+# ==============================================================================
+
+def test_item11_asset_and_doc_links_exist():
+    import glob, os, re
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    md_files = glob.glob(os.path.join(root, "*.md")) + glob.glob(os.path.join(root, "docs", "**", "*.md"), recursive=True)
+    
+    broken_links = []
+    for mf in md_files:
+        content = open(mf, encoding="utf-8", errors="ignore").read()
+        links = re.findall(r'\[(?:[^\]]*)\]\(([^)]+)\)', content)
+        for link in links:
+            clean = link.split("#")[0].strip()
+            if not clean or clean.startswith(("http://", "https://", "mailto:", "conversation://")):
+                continue
+            target = os.path.normpath(os.path.join(os.path.dirname(mf), clean))
+            if not os.path.exists(target):
+                broken_links.append((os.path.relpath(mf, root), clean, target))
+    
+    assert len(broken_links) == 0, f"Found broken asset/doc links: {broken_links}"
+
+
+def test_item11_submission_zip_under_size_limit_and_excludes_raw_video(tmp_path, monkeypatch):
+    import os, zipfile, subprocess, sys
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    monkeypatch.setenv("REPOBRAIN_SUBMISSION_ZIP_DIR", str(tmp_path))
+    
+    script_path = os.path.join(root, "scripts", "make_submission_zip.py")
+    subprocess.run([sys.executable, script_path], check=True, cwd=root)
+    
+    zip_path = tmp_path / "RepoBrain_Round3_Final_Submission.zip"
+    assert zip_path.is_file(), "Submission zip was not created"
+    
+    size_mb = os.path.getsize(str(zip_path)) / (1024 * 1024)
+    # Must be well under the 50MB limit
+    assert size_mb < 50.0, f"Submission zip too large: {size_mb:.2f} MB"
+    
+    # Must NOT contain raw screen recording or heavy video files
+    with zipfile.ZipFile(str(zip_path), "r") as zf:
+        names = zf.namelist()
+        for name in names:
+            ext = os.path.splitext(name)[1].lower()
+            assert ext not in (".mp4", ".mov", ".mkv", ".avi", ".webm"), f"Zip contained forbidden video file: {name}"
+            assert ".git" not in name.split("/"), f"Zip contained .git metadata: {name}"
+
+
+
 
 
 

@@ -93,7 +93,7 @@
 - **Instant Tamper Invalidation**: In-memory or on-disk tampering of any historical entry instantly breaks downstream hash verification, flagged in real-time on the console and CI.
 
 *Speaker Script (45s)*:  
-> "What makes RepoBrain technically distinctive? First, our Shield Engine normalizes concatenated and base64 strings before scanning, preventing the simplest evasions that defeat standard tools. Second, our AST Optimizer doesn't just guess—it rewrites code in an isolated sandbox, runs the repository's tests, and differentially fuzzes 500 edge cases to mathematically prove zero behavioral regressions. Third, our cryptographic audit ledger provides unbreakable proof of compliance for enterprise security teams."
+> "What makes RepoBrain technically distinctive? First, our Shield Engine normalizes concatenated and base64 strings before scanning, preventing the simplest evasions that defeat standard tools. Second, our AST Optimizer doesn't just guess—it rewrites code in an isolated sandbox, runs the repository's tests, and differentially fuzzes 500 generated inputs to empirically verify behavioral equivalence across edge cases. Third, our cryptographic audit ledger provides HMAC-SHA256 signed tamper-evident proof of compliance for enterprise security teams."
 
 ---
 
@@ -140,7 +140,7 @@
 | **Real-World PR Evaluation** | 21 production commits / 14,500 diff lines ([`REAL_WORLD_EVAL.md`](REAL_WORLD_EVAL.md)) | **0% False Positives** |
 | **Open-Source Code Scan** | 124 files / 51,781 LoC across CPython, PyYAML, coverage ([`SHIELD_EVAL.md`](SHIELD_EVAL.md)) | **0 False Positives** |
 | **Complexity Reduction** | `shop/orders.py` order processing module | **27 → 8 Cyclomatic (70% drop)** |
-| **Automated Test Suite** | Matrix across Linux/macOS × Python 3.10–3.13 | **137 Passed, 1 Skipped (100% Green)** |
+| **Automated Test Suite** | Matrix across Linux/macOS/Windows × Python 3.10–3.13 | **190+ Passed, 1 Skipped (100% Green)** |
 | **Supply Chain Surface** | Third-party production runtime dependencies | **Pure Python Stdlib + PyYAML** |
 
 ### Future Scope & Commercial Horizon
@@ -149,7 +149,7 @@
 3. **Hardware Enclave & Rekor Integration**: Anchoring audit log signatures to public transparency logs (Sigstore Rekor) and AWS KMS / Google Cloud HSM keys.
 
 *Speaker Script (30s)*:  
-> "RepoBrain is not a mock concept. We evaluated it across 21 real production commits and 14,500 diff lines with zero false positives. Our test suite passes 137 tests across multiple Python versions and operating systems. As AI coding agents become the primary contributors to global software, RepoBrain provides the definitive safety, optimization, and cryptographic governance infrastructure the software industry requires."
+> "RepoBrain is not a mock concept. We evaluated it across 21 real production commits and 14,500 diff lines with zero false positives. Our test suite passes 190+ automated tests across multiple Python versions and operating systems. As AI coding agents become the primary contributors to global software, RepoBrain provides the definitive safety, optimization, and cryptographic governance infrastructure the software industry requires."
 
 ---
 
