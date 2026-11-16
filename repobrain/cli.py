@@ -161,6 +161,11 @@ def cmd_explain(a):
 
 def cmd_audit(a):
     _, _, _, _, log = _ctx(a)
+    if getattr(a, "ack_recovery", False):
+        actor = getattr(a, "actor", None) or "admin"
+        res = log.ack_recovery(actor)
+        print(f"Audit ledger recovery acknowledged by {actor}: quarantined {res.get('quarantined_file')}")
+        return 0
     expect = getattr(a, "expect", None)
     if not expect and getattr(a, "anchor_file", None) and os.path.isfile(a.anchor_file):
         try:
@@ -342,6 +347,8 @@ def build():
     sp = add("audit", cmd_audit, help="show / verify / export the audit log")
     sp.add_argument("--expect", help="anchored head hash to verify against"); sp.add_argument("--export", action="store_true")
     sp.add_argument("--tail", type=int, default=25)
+    sp.add_argument("--ack-recovery", action="store_true", help="acknowledge audit ledger recovery state")
+    sp.add_argument("--actor", help="actor acknowledging recovery")
     sp.add_argument("--anchor-file", dest="anchor_file",
                     help="path to a file containing the anchored head hash (written by --write-anchor)")
     sp.add_argument("--write-anchor", dest="write_anchor",

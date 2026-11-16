@@ -160,6 +160,7 @@ class BoundedRateLimiter:
 
 
 LOGIN_LIMITER = BoundedRateLimiter(max_keys=10000, window=60, max_attempts=5)
+PREFLIGHT_LIMITER = BoundedRateLimiter(max_keys=10000, window=60, max_attempts=60)
 
 
 def check_login_rate(identifier: str) -> bool:
@@ -610,6 +611,15 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
             user = self._get_user()
 
             with ctx.acquire_workspace(wid):
+                if req_path == "/api/preflight":
+                    client_ip = self._client_ip()
+                    if not PREFLIGHT_LIMITER.check(f"ip:{client_ip}"):
+                        return self._send(429, {"error": "Rate limit exceeded for preflight requests. Please slow down."})
+                if req_path == "/api/shield" and not user:
+                    client_ip = self._client_ip()
+                    if not PREFLIGHT_LIMITER.check(f"ip:{client_ip}"):
+                        return self._send(429, {"error": "Rate limit exceeded for unauthenticated shield requests."})
+
                 # Webhook HMAC-SHA256 signature verification
                 if req_path == "/api/webhook":
                     secret = os.environ.get("GITHUB_WEBHOOK_SECRET") or os.environ.get("REPOBRAIN_WEBHOOK_SECRET")
@@ -779,6 +789,8 @@ def route(ctx, path, body, user=None, wid=None):
         ctx.last_proposal = prop["id"]
         return strip(prop)
     if path == "/api/approve":
+        if ctx.log.is_recovery_pending():
+            raise PermissionError("Audit ledger is in recovery state. Human administrator must acknowledge recovery before approvals can be processed.")
         if not actor:
             raise ValueError("approver name is required (a human approves)")
         if not user or not auth.check_permission(user, "apply_approval"):
@@ -823,7 +835,14 @@ def route(ctx, path, body, user=None, wid=None):
         files = body.get("files", [])
         return preflight(active_root, actor_name, files)
     if path == "/api/audit/tamper":
+        if not (ctx.demo or getattr(ctx, "open_demo", False)):
+            if not user or not auth.check_permission(user, "simulate_tamper"):
+                raise PermissionError("Permission Denied: simulate_tamper requires security or admin privileges outside demo mode.")
         return A.simulate_tamper(ctx.log.entries())
+    if path == "/api/audit/ack-recovery":
+        if not user or not auth.check_permission(user, "manage_policy"):
+            raise PermissionError("Permission Denied: Only Admin can acknowledge audit ledger recovery.")
+        return ctx.log.ack_recovery(user.get("email", actor or "admin"))
     if path == "/api/scenario" and ctx.demo:
         demo.switch(active_root, body["name"])
         active_base = ctx.get_base_for_root(active_root)

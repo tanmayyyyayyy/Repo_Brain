@@ -518,7 +518,7 @@ class AuthManager:
             mode = "smtp" if smtp_host else "demo_simulation"
             if audit_log:
                 audit_log.append("auth-resend-code", email_norm, "SENT", f"Resent OTP verification code (mode: {mode})")
-            return {"email": email_norm, "status": "sent", "mode": mode, "expires_in": int(max(0, u["otp_expires_at"] - now))}
+            return {"email": email_norm, "status": "sent", "mode": mode, "expires_in": int(round(max(0, u["otp_expires_at"] - now)))}
 
     def login(self, email: str, password: str, audit_log=None):
         """Authenticate user with corporate credentials and issue session token."""

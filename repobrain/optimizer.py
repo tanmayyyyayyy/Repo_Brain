@@ -896,9 +896,28 @@ def load_proposal(home, pid):
         return json.load(f)
 
 
-def apply(root, home, pid, actor):
+def apply(root, *args, **kwargs):
     """Write an approved proposal to the working tree and commit it. Refuses stale proposals."""
-    prop = load_proposal(home, pid)
+    home = kwargs.get("home")
+    pid = kwargs.get("pid")
+    actor = kwargs.get("actor")
+
+    if len(args) >= 3:
+        home, pid, actor = args[0], args[1], args[2]
+    elif len(args) == 2:
+        home, pid = args[0], args[1]
+    elif len(args) == 1:
+        if isinstance(args[0], dict):
+            pid = args[0].get("id")
+        else:
+            home = args[0]
+
+    from . import audit as A
+    home_dir = home or A.home_for(root)
+    if home_dir and A.AuditLog(home_dir).is_recovery_pending():
+        raise PermissionError("Audit ledger is in recovery state. Acknowledge recovery before applying optimizer proposals.")
+
+    prop = load_proposal(home_dir, pid)
     if not prop["applicable"]:
         raise ValueError(f"proposal is not applicable (status: {prop['status']})")
     if prop["head"] and gitutil.head(str(root)) != prop["head"]:

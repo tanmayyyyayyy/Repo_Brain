@@ -69,9 +69,11 @@ def test_audit_tail_seek_partial_line_from_crash():
             audit._tail_last_record(log.path)
         assert "malformed" in str(exc_info.value).lower()
 
-        # append() must refuse to append onto corrupt chain
-        with pytest.raises(AuditCorruptionError):
-            log.append("event-4", "user", "OK", "should be refused")
+        # append() must NOT append to corrupt file, but quarantine it and set recovery pending
+        log.append("event-4", "user", "OK", "quarantine trigger")
+        assert log.is_recovery_pending() is True
+        corrupt_files = [fn for fn in os.listdir(tmp) if fn.startswith("audit.corrupt.")]
+        assert len(corrupt_files) == 1
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

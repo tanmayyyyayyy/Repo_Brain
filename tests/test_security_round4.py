@@ -397,6 +397,127 @@ def test_item4_env_vars_create_admin_once_and_are_scrubbed(tmp_path, monkeypatch
     assert admin["role"] == "admin"
 
 
+# ==============================================================================
+# ITEM 5: Audit Log Robustness & DoS Surface
+# ==============================================================================
+
+def test_item5_corrupt_tail_quarantined_and_recovery_entry_written(tmp_path):
+    from repobrain import audit as A
+    home = str(tmp_path)
+    log = A.AuditLog(home)
+    
+    # Write a valid entry
+    log.append("test-event-1", "alice", "ALLOWED", "Initial entry")
+    
+    # Corrupt the tail by appending garbage
+    with open(log.path, "a", encoding="utf-8") as f:
+        f.write('{"seq": 2, "broken JSON without closing\n')
+        
+    # Append should trigger quarantine recovery
+    rec = log.append("test-event-2", "bob", "ALLOWED", "Post-crash entry")
+    
+    # Quarantined file must exist
+    corrupt_files = [fn for fn in os.listdir(home) if fn.startswith("audit.corrupt.")]
+    assert len(corrupt_files) == 1, f"Expected 1 quarantined file, found {corrupt_files}"
+    
+    # New ledger must contain recovery entry as first entry
+    entries = log.entries()
+    assert len(entries) == 2
+    assert entries[0]["event"] == "audit-recovery"
+    assert entries[0]["seq"] == 1
+    assert entries[0]["prev"] == A.GENESIS
+    assert entries[0]["quarantined_file"] == corrupt_files[0]
+    assert log.is_recovery_pending() is True
+
+
+def test_item5_approve_and_apply_refused_while_recovery_pending(tmp_path):
+    from repobrain import audit as A, optimizer
+    root = os.path.join(str(tmp_path), "base_repo")
+    from repobrain import demo
+    demo.seed(root)
+    home = os.path.join(str(tmp_path), "home")
+    ctx = server.Ctx(root, "main", home, is_demo=False)
+    
+    # Mark recovery pending
+    ctx.log.set_recovery_pending(True, "audit.corrupt.test")
+    
+    # Route /api/approve must be refused
+    with pytest.raises(PermissionError, match=r"recovery"):
+        server.route(ctx, "/api/approve", {"id": "prop-123", "actor": "Alice"}, user={"role": "admin", "email_verified": True})
+        
+    # optimizer.apply must be refused
+    with pytest.raises(PermissionError, match=r"recovery"):
+        optimizer.apply(root, {"id": "prop-123", "files": []}, actor="Alice", home=home)
+
+
+def test_item5_ack_recovery_clears_flag(tmp_path):
+    from repobrain import audit as A
+    home = str(tmp_path)
+    log = A.AuditLog(home)
+    log.set_recovery_pending(True, "audit.corrupt.test")
+    assert log.is_recovery_pending() is True
+    
+    res = log.ack_recovery("admin@corp.internal")
+    assert res["ok"] is True
+    assert log.is_recovery_pending() is False
+    
+    # Recovery ack entry logged
+    entries = log.entries()
+    assert any(e.get("event") == "audit-recovery-ack" for e in entries)
+
+
+def test_item5_verify_reports_broken_chain_across_quarantine(tmp_path):
+    from repobrain import audit as A
+    home = str(tmp_path)
+    log = A.AuditLog(home)
+    log.append("test-event-1", "alice", "ALLOWED")
+    with open(log.path, "a", encoding="utf-8") as f:
+        f.write("{corrupt-tail\n")
+        
+    log.append("test-event-2", "bob", "ALLOWED")
+    
+    # While recovery is pending, verify must fail
+    v = log.verify()
+    assert v["ok"] is False
+    assert "recovery" in v["reason"].lower() or "quarantined" in v["reason"].lower()
+
+
+def test_item5_cached_verification_avoids_reverifying_old_records(tmp_path):
+    from repobrain import audit as A
+    home = str(tmp_path)
+    log = A.AuditLog(home)
+    for i in range(10):
+        log.append(f"event-{i}", "system", "ALLOWED")
+        
+    v1 = log.verify()
+    assert v1["ok"] is True
+    
+    # Second verify with no changes should return cached result without scanning
+    v2 = log.verify()
+    assert v2["ok"] is True
+    assert v2.get("cached", False) is True
+
+
+def test_item5_rate_limit_preflight_and_tamper_blocked_outside_demo(tmp_path):
+    root = os.path.join(str(tmp_path), "base_repo")
+    from repobrain import demo
+    demo.seed(root)
+    home = os.path.join(str(tmp_path), "home")
+    ctx = server.Ctx(root, "main", home, is_demo=False)
+    
+    # 1. Tamper blocked outside demo without permissions
+    with pytest.raises(PermissionError):
+        server.route(ctx, "/api/audit/tamper", {}, user=None)
+        
+    # 2. Preflight rate limiter enforces max 60/min
+    limiter = server.PREFLIGHT_LIMITER
+    for _ in range(60):
+        assert limiter.check("ip:203.0.113.10") is True
+    # 61st attempt blocked
+    assert limiter.check("ip:203.0.113.10") is False
+
+
+
 
 
 
