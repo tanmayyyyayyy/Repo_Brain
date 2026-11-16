@@ -13,11 +13,12 @@ TEST_RX = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$)")
 def _waivers(home, root=None):
     res = {}
     if root:
-        try:
-            with open(os.path.join(root, ".repobrain", "waivers.json"), encoding="utf-8") as f:
-                res.update(json.load(f))
-        except (OSError, json.JSONDecodeError):
-            pass
+        for fname in (".repobrain_waivers.json", os.path.join(".repobrain", "waivers.json")):
+            try:
+                with open(os.path.join(root, fname), encoding="utf-8") as f:
+                    res.update(json.load(f))
+            except (OSError, json.JSONDecodeError):
+                pass
     if home:
         try:
             with open(os.path.join(home, "waivers.json"), encoding="utf-8") as f:
@@ -117,7 +118,8 @@ def run(root, policy, base=None, home=None, extra_actor=None):
     waiver = (_waivers(home, root).get(head) or _waivers(home, root).get("*")) if (home or root) else None
     if not waiver:
         try:
-            msg = gitutil.git(root, "log", "-1", "--format=%B", head, check=False)
+            range_spec = f"{base}..{head}" if base else head
+            msg = gitutil.git(root, "log", range_spec, "--format=%B", check=False)
             for line in msg.splitlines():
                 if line.strip().lower().startswith("waived-by:"):
                     parts = line.strip().split(":", 1)[1].strip()
