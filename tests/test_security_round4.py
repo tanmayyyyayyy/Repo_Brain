@@ -576,6 +576,67 @@ def test_item6_default_policy_blocks_protected_paths_for_everyone(tmp_path):
     assert any(f["severity"] == "block" for f in findings), f"Expected block finding for human on workflow, got {findings}"
 
 
+# ==============================================================================
+# ITEM 7: Policy Provenance (PR Cannot Loosen Its Own Policy)
+# ==============================================================================
+
+def test_item7_pr_adding_repobrain_yml_does_not_affect_its_own_review(tmp_path):
+    import subprocess
+    from repobrain import policy as P, review, gitutil
+    root = str(tmp_path / "repo")
+    subprocess.run(["git", "init", "-b", "main", root], check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Developer"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "dev@corp.internal"], cwd=root, check=True)
+    
+    # Base commit with no repobrain.yml
+    (tmp_path / "repo" / "app.py").write_text("print('hello')\n")
+    subprocess.run(["git", "add", "app.py"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=root, check=True)
+    
+    # Feature branch with PR adding a loose repobrain.yml that tries to disable blocked paths
+    subprocess.run(["git", "checkout", "-b", "feature-pr"], cwd=root, check=True)
+    (tmp_path / "repo" / "repobrain.yml").write_text("blocked: []\ncomplexity_threshold: 999\nblocked_for: nobody\n")
+    (tmp_path / "repo" / ".github").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "repo" / ".github" / "workflows").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "repo" / ".github" / "workflows" / "deploy.yml").write_text("name: test\n")
+    subprocess.run(["git", "add", "repobrain.yml", ".github/workflows/deploy.yml"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "pr with loose policy"], cwd=root, check=True)
+    
+    # load_for must load strict built-in defaults, not the PR's repobrain.yml
+    pol = P.load_for(root, "main")
+    assert pol.get("_source") == "built-in defaults"
+    assert ".github/workflows/" in pol.get("blocked", [])
+    
+    rev = review.run(root, pol, "main", str(tmp_path / "home"))
+    assert rev["policy_source"] == "built-in defaults"
+    # Workflow file should be BLOCKED by default policy
+    assert rev["decision"] == "BLOCKED"
+    assert any(f["severity"] == "block" for f in rev["findings"])
+
+
+def test_item7_server_state_does_not_leak_untrusted_working_tree_policy(tmp_path):
+    import subprocess
+    from repobrain import server
+    root = str(tmp_path / "repo")
+    subprocess.run(["git", "init", "-b", "main", root], check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Developer"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "dev@corp.internal"], cwd=root, check=True)
+    
+    (tmp_path / "repo" / "app.py").write_text("print('hello')\n")
+    subprocess.run(["git", "add", "app.py"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=root, check=True)
+    
+    subprocess.run(["git", "checkout", "-b", "pr-branch"], cwd=root, check=True)
+    (tmp_path / "repo" / "repobrain.yml").write_text("blocked: []\ncomplexity_threshold: 999\n")
+    subprocess.run(["git", "add", "repobrain.yml"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "pr with loose policy"], cwd=root, check=True)
+    
+    st = server.state(root, "main")
+    assert st["policy_source"] == "built-in defaults"
+    assert "999" not in st["policy_yaml"]
+
+
+
 
 
 

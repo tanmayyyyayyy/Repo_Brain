@@ -691,9 +691,11 @@ def state(ctx_or_root, base=None, user=None, wid=None):
     active_base = ctx.get_base_for_root(active_root)
     pol = ctx.policy(active_root)
     try:
-        yml = gitutil.show(active_root, active_base, "repobrain.yml") or open(os.path.join(active_root, "repobrain.yml")).read()
-    except OSError:
+        yml = gitutil.show(active_root, active_base, "repobrain.yml")
+    except Exception:
         yml = ""
+    if not yml:
+        yml = "# Base branch has no repobrain.yml — built-in defaults in force\n"
 
     rev = review.run(active_root, pol, active_base, ctx.home)
     head_sha = gitutil.head(active_root) if gitutil.is_repo(active_root) else ""

@@ -163,6 +163,14 @@ def load_for(root, base=None):
     """Prefer the policy file as it exists on the trusted base ref.
     If base branch has no policy (or in CI), fall back to strict defaults
     rather than trusting an untrusted working tree policy added or edited by a PR."""
+    if not base:
+        try:
+            from . import gitutil
+            if gitutil.is_repo(root):
+                base = gitutil.resolve_base(root, None)
+        except Exception:
+            base = None
+
     if base:
         r = subprocess.run(["git", "show", f"{base}:repobrain.yml"], cwd=root,
                            capture_output=True, text=True)
@@ -173,7 +181,7 @@ def load_for(root, base=None):
         else:
             pol = PolicyResult(DEFAULT)
             pol["_warnings"] = ["base branch has no repobrain.yml - enforcing strict built-in defaults"]
-            pol["_source"] = "built-in defaults (trusted base fallback)"
+            pol["_source"] = "built-in defaults"
             return pol
 
     if os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"):
