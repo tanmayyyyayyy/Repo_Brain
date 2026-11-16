@@ -14,6 +14,7 @@ Provides:
 """
 
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -156,9 +157,47 @@ def hash_session_token(token: str) -> str:
     return hashlib.sha256((token or "").strip().encode("utf-8")).hexdigest()
 
 
-def hash_otp(code: str, salt: str) -> str:
-    """Compute salted SHA-256 hash for corporate email verification OTP."""
-    return hashlib.sha256(f"{salt}:{code.strip()}".encode("utf-8")).hexdigest()
+def get_server_secret(home_dir: str = None) -> bytes:
+    sec = os.environ.get("REPOBRAIN_SECRET", "").strip()
+    if sec:
+        return sec.encode("utf-8")
+    if not home_dir:
+        home_dir = os.environ.get("REPOBRAIN_HOME", os.path.expanduser("~/.repobrain"))
+    sec_file = os.path.join(home_dir, "secret.key")
+    if os.path.isfile(sec_file):
+        try:
+            with open(sec_file, "rb") as f:
+                data = f.read().strip()
+                if data:
+                    return data
+        except Exception:
+            pass
+    os.makedirs(home_dir, exist_ok=True)
+    new_secret = secrets.token_bytes(32)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    mode = 0o600
+    try:
+        fd = os.open(sec_file, flags, mode)
+        with os.fdopen(fd, "wb") as f:
+            f.write(new_secret)
+    except Exception:
+        with open(sec_file, "wb") as f:
+            f.write(new_secret)
+        try:
+            os.chmod(sec_file, 0o600)
+        except Exception:
+            pass
+    return new_secret
+
+
+def hash_otp(code: str, salt: str, secret: bytes = None) -> str:
+    """Compute HMAC-SHA256(server_secret, salt+code) for corporate email verification OTP."""
+    if secret is None:
+        secret = get_server_secret()
+    elif isinstance(secret, str):
+        secret = secret.encode("utf-8")
+    msg = f"{salt}:{str(code).strip()}".encode("utf-8")
+    return hmac.new(secret, msg, hashlib.sha256).hexdigest()
 
 
 def verify_password(password: str, hashed_str: str) -> bool:
@@ -193,6 +232,7 @@ class AuthManager:
     def __init__(self, home_dir: str, is_demo: bool = True):
         self.home = str(home_dir)
         self.is_demo = bool(is_demo)
+        self.server_secret = get_server_secret(self.home)
         self.users_file = os.path.join(self.home, "users.json")
         self.sessions_file = os.path.join(self.home, "sessions.json")
         self._lock = threading.RLock()
@@ -255,6 +295,10 @@ class AuthManager:
     def register(self, email: str, password: str, name: str, role="developer",
                  company=None, allowed_domains=None, audit_log=None):
         """Register a new user with company email, password, and enterprise role."""
+        smtp_host = os.environ.get("REPOBRAIN_SMTP_HOST") or os.environ.get("SMTP_HOST")
+        if not self.is_demo and not smtp_host:
+            raise ValueError("Registration unavailable: SMTP service is not configured. Email verification is required in production.")
+
         ok, reason, domain = validate_company_email(email, allowed_domains)
         if not ok:
             raise ValueError(reason)
@@ -264,11 +308,12 @@ class AuthManager:
         # Compute PBKDF2 hash outside lock to prevent blocking concurrent sessions
         pw_hash = hash_password(password)
 
-        # Generate 6-digit verification code and salted hash
+        # Generate 6-digit verification code and HMAC-SHA256 hash
+        now = time.time()
         raw_code = f"{secrets.randbelow(900000) + 100000}"
         salt = secrets.token_hex(16)
-        code_hash = hash_otp(raw_code, salt)
-        expires_at = time.time() + 900  # 15 minutes
+        code_hash = hash_otp(raw_code, salt, self.server_secret)
+        expires_at = now + 900  # 15 minutes
 
         with self._lock:
             if email_norm in self._users:
@@ -296,7 +341,9 @@ class AuthManager:
                 "otp_hash": code_hash,
                 "otp_salt": salt,
                 "otp_expires_at": expires_at,
+                "otp_window_expires_at": expires_at,
                 "otp_attempts": 0,
+                "resend_timestamps": [],
             }
             self._users[email_norm] = user_rec
             self._last_test_otp[email_norm] = raw_code
@@ -304,8 +351,7 @@ class AuthManager:
 
             session_tok = self._create_session(user_rec)
 
-            smtp_host = os.environ.get("REPOBRAIN_SMTP_HOST") or os.environ.get("SMTP_HOST")
-            if not smtp_host:
+            if self.is_demo and os.environ.get("REPOBRAIN_DEMO_PRINT_OTP") == "1":
                 print(f"[RepoBrain Demo Auth] Corporate verification code for {email_norm}: {raw_code} (expires in 15m)")
 
             if audit_log:
@@ -392,7 +438,7 @@ class AuthManager:
             code_clean = str(code).strip()
             match = False
             if otp_hash and otp_salt:
-                expected_hash = hash_otp(code_clean, otp_salt)
+                expected_hash = hash_otp(code_clean, otp_salt, self.server_secret)
                 match = secrets.compare_digest(expected_hash, otp_hash)
             elif legacy_code:
                 match = secrets.compare_digest(code_clean, str(legacy_code).strip())
@@ -409,7 +455,9 @@ class AuthManager:
             u.pop("otp_hash", None)
             u.pop("otp_salt", None)
             u.pop("otp_expires_at", None)
+            u.pop("otp_window_expires_at", None)
             u.pop("otp_attempts", None)
+            u.pop("resend_timestamps", None)
             u.pop("verification_code", None)
             self._save_users()
             if audit_log:
@@ -419,10 +467,11 @@ class AuthManager:
     def resend_verification_code(self, email: str, audit_log=None):
         """Resend a new 6-digit corporate verification OTP."""
         email_norm = (email or "").strip().lower()
-        raw_code = f"{secrets.randbelow(900000) + 100000}"
-        salt = secrets.token_hex(16)
-        code_hash = hash_otp(raw_code, salt)
-        expires_at = time.time() + 900  # 15 minutes
+        now = time.time()
+
+        smtp_host = os.environ.get("REPOBRAIN_SMTP_HOST") or os.environ.get("SMTP_HOST")
+        if not self.is_demo and not smtp_host:
+            raise ValueError("Resend unavailable: SMTP service is not configured. Email verification is required in production.")
 
         with self._lock:
             u = self._users.get(email_norm)
@@ -431,21 +480,43 @@ class AuthManager:
             if u.get("email_verified", False):
                 return {"email": email_norm, "status": "already_verified", "email_verified": True}
 
+            # Rate limit resends: 3 per hour max
+            resends = [t for t in u.get("resend_timestamps", []) if now - t < 3600]
+            if len(resends) >= 3:
+                raise ValueError("Too many resend requests. Maximum 3 resends per hour allowed.")
+            resends.append(now)
+            u["resend_timestamps"] = resends
+
+            # Window check: 15-minute window
+            window_exp = float(u.get("otp_window_expires_at", 0))
+            if now < window_exp:
+                # Window still active: do NOT reset attempt counter!
+                current_attempts = int(u.get("otp_attempts", 0))
+                if current_attempts >= 5:
+                    raise ValueError("Verification code has exceeded maximum attempt limit (5 attempts). Please wait until the 15-minute window expires.")
+                u["otp_attempts"] = current_attempts
+            else:
+                # Window expired, start new window
+                u["otp_window_expires_at"] = now + 900
+                u["otp_attempts"] = 0
+
+            raw_code = f"{secrets.randbelow(900000) + 100000}"
+            salt = secrets.token_hex(16)
+            code_hash = hash_otp(raw_code, salt, self.server_secret)
             u["otp_hash"] = code_hash
             u["otp_salt"] = salt
-            u["otp_expires_at"] = expires_at
-            u["otp_attempts"] = 0
+            u["otp_expires_at"] = u["otp_window_expires_at"]
             u.pop("verification_code", None)
+            self._last_test_otp[email_norm] = raw_code
             self._save_users()
 
-            smtp_host = os.environ.get("REPOBRAIN_SMTP_HOST") or os.environ.get("SMTP_HOST")
-            mode = "smtp" if smtp_host else "demo_simulation"
-            if not smtp_host:
+            if self.is_demo and os.environ.get("REPOBRAIN_DEMO_PRINT_OTP") == "1":
                 print(f"[RepoBrain Demo Auth] Resent verification code for {email_norm}: {raw_code} (expires in 15m)")
 
+            mode = "smtp" if smtp_host else "demo_simulation"
             if audit_log:
                 audit_log.append("auth-resend-code", email_norm, "SENT", f"Resent OTP verification code (mode: {mode})")
-            return {"email": email_norm, "status": "sent", "mode": mode, "expires_in": 900}
+            return {"email": email_norm, "status": "sent", "mode": mode, "expires_in": int(max(0, u["otp_expires_at"] - now))}
 
     def login(self, email: str, password: str, audit_log=None):
         """Authenticate user with corporate credentials and issue session token."""
@@ -626,8 +697,12 @@ class AuthManager:
 
 
 def check_permission(user: dict, permission: str) -> bool:
-    """Check if user role grants the specified permission."""
+    """Check if user role grants the specified permission.
+    Unverified users have NO permissions until their email is verified.
+    """
     if not user:
+        return False
+    if not user.get("email_verified", False):
         return False
     role = user.get("role", "developer")
     role_def = ROLES.get(role)
