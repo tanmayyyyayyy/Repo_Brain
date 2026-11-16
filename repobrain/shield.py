@@ -222,6 +222,7 @@ def scan_text(path, text, policy, actor=None, only_lines=None):
             sec_val = matched_rule[1]
             is_allowlisted = (
                 sec_val in SAMPLE_SECRET_ALLOWLIST and (
+                    path in ("repobrain/shield.py", "tests/test_shield_evasions.py") or
                     path.startswith("repobrain/web/") or path.startswith("docs/") or
                     path.startswith("demo_assets/") or path.endswith((".js", ".html", ".md", ".json")) or
                     ignored(path, policy) or sec_val in policy.get("allowed_secrets", [])
