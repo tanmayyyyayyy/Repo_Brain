@@ -402,8 +402,12 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
             if self.path.startswith("/api/"):
                 self.send_header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; sandbox")
             else:
-                self.send_header("Content-Security-Policy",
-                                 "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'")
+                nonce = getattr(self, "_csp_nonce", None)
+                if nonce:
+                    csp = f"default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'nonce-{nonce}'; style-src-attr 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+                else:
+                    csp = "default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+                self.send_header("Content-Security-Policy", csp)
             if headers:
                 for k, v in headers.items():
                     self.send_header(k, v)
@@ -478,8 +482,23 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
             with ctx.acquire_workspace(wid):
                 try:
                     if u.path == "/":
-                        with open(find_index_html(), "rb") as f:
-                            return self._send(200, f.read(), "text/html")
+                        nonce = secrets.token_urlsafe(16)
+                        self._csp_nonce = nonce
+                        with open(find_index_html(), "r", encoding="utf-8") as f:
+                            raw_html = f.read()
+                        html_out = raw_html.replace("<script>", f'<script nonce="{nonce}">')
+                        html_out = html_out.replace("<style>", f'<style nonce="{nonce}">')
+                        return self._send(200, html_out.encode("utf-8"), "text/html")
+                    if u.path == "/static/app.css":
+                        p = pathlib.Path(find_index_html()).parent / "app.css"
+                        if p.is_file():
+                            with open(p, "rb") as f:
+                                return self._send(200, f.read(), "text/css")
+                    if u.path == "/static/app.js":
+                        p = pathlib.Path(find_index_html()).parent / "app.js"
+                        if p.is_file():
+                            with open(p, "rb") as f:
+                                return self._send(200, f.read(), "application/javascript")
                     if u.path in ("/slides", "/docs/slides.html"):
                         sl = find_slides_html()
                         if sl and os.path.exists(sl):

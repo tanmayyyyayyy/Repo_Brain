@@ -636,6 +636,69 @@ def test_item7_server_state_does_not_leak_untrusted_working_tree_policy(tmp_path
     assert "999" not in st["policy_yaml"]
 
 
+# ==============================================================================
+# ITEM 8: CSP Safety & Zero Violations Across Views
+# ==============================================================================
+
+def test_item8_strict_csp_and_zero_violations_across_views(tmp_path):
+    import threading, time
+    from playwright.sync_api import sync_playwright
+    from repobrain import server, demo
+    
+    root = str(tmp_path / "repo")
+    demo.seed(root)
+    port = 18894
+    ctx = server.Ctx(root, "main", str(tmp_path / "home"), True)
+    srv = server.ThreadingHTTPServer(("127.0.0.1", port), server.make_handler(ctx, "test-token", port, open_demo=True))
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    time.sleep(0.5)
+    
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            console_errors = []
+            page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+            
+            page.add_init_script("""
+                window.__csp_violations = [];
+                window.addEventListener('securitypolicyviolation', (e) => {
+                    window.__csp_violations.push({
+                        blockedURI: e.blockedURI,
+                        directive: e.violatedDirective,
+                        originalPolicy: e.originalPolicy
+                    });
+                });
+            """)
+            
+            resp = page.goto(f"http://127.0.0.1:{port}/")
+            csp_header = resp.headers.get("content-security-policy", "")
+            # script-src and style-src must NOT contain unsafe-inline
+            script_src_part = csp_header.split("script-src")[1].split(";")[0]
+            style_src_part = csp_header.split("style-src")[1].split(";")[0]
+            assert "'unsafe-inline'" not in script_src_part, f"script-src contains unsafe-inline: {script_src_part}"
+            assert "'unsafe-inline'" not in style_src_part, f"style-src contains unsafe-inline: {style_src_part}"
+            assert "nonce-" in script_src_part
+            assert "nonce-" in style_src_part
+            
+            page.wait_for_timeout(500)
+            # Switch views / tabs to exercise JavaScript execution
+            for tab_id in ["btnTabOptimizer", "btnTabShield", "btnTabExplainer", "btnTabAudit", "btnTabPolicy", "btnTabReview"]:
+                btn = page.query_selector(f"#{tab_id}")
+                if btn:
+                    btn.click()
+                    page.wait_for_timeout(150)
+            
+            violations = page.evaluate("window.__csp_violations")
+            assert len(violations) == 0, f"Expected 0 CSP violations, got: {violations}"
+            assert len(console_errors) == 0, f"Expected 0 console errors, got: {console_errors}"
+            browser.close()
+    finally:
+        srv.shutdown()
+
+
+
 
 
 
