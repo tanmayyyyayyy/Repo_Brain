@@ -698,6 +698,59 @@ def test_item8_strict_csp_and_zero_violations_across_views(tmp_path):
         srv.shutdown()
 
 
+# ==============================================================================
+# ITEM 9: Sandbox Truthfulness & Capability Probing
+# ==============================================================================
+
+def test_item9_bwrap_capability_probe_and_caching():
+    from repobrain import optimizer
+    can_use, reason = optimizer.probe_bwrap_capability()
+    assert isinstance(can_use, bool)
+    assert isinstance(reason, str)
+    assert len(reason) > 0
+    # Second call must hit cache
+    can_use_2, reason_2 = optimizer.probe_bwrap_capability()
+    assert can_use == can_use_2
+    assert reason == reason_2
+
+
+def test_item9_require_sandbox_aborts_when_probe_fails(tmp_path, monkeypatch):
+    from repobrain import optimizer, policy as P
+    monkeypatch.setattr(optimizer, "probe_bwrap_capability", lambda: (False, "mock user namespace creation blocked in test"))
+    
+    root = str(tmp_path / "repo")
+    (tmp_path / "repo").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "repo" / "a.py").write_text("def f(): return 1\n")
+    (tmp_path / "repo" / "test_a.py").write_text("def test_f(): assert True\n")
+    
+    pol = dict(P.DEFAULT)
+    pol["require_sandbox"] = True
+    
+    t_res = optimizer.run_tests(root, {}, pol)
+    assert t_res["ok"] is False
+    assert t_res["ran"] is False
+    assert "mock user namespace" in t_res["output"]
+    assert t_res["sandbox"]["type"] == "none"
+    assert t_res["sandbox"]["network_isolated"] is False
+    assert t_res["sandbox"]["rlimits_applied"] is False
+
+
+def test_item9_proposal_reports_sandbox_network_and_rlimits(tmp_path):
+    from repobrain import optimizer, demo, policy as P
+    root = str(tmp_path / "repo")
+    demo.seed(root)
+    
+    pol = dict(P.DEFAULT)
+    prop = optimizer.propose(root, pol, ["repobrain_demo/orders.py"], str(tmp_path / "home"))
+    
+    sb = prop.get("sandbox") or prop.get("tests", {}).get("sandbox")
+    assert sb is not None
+    assert "type" in sb
+    assert "network_isolated" in sb
+    assert "rlimits_applied" in sb
+
+
+
 
 
 

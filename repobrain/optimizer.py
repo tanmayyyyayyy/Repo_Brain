@@ -95,11 +95,47 @@ PROTECTED_TEST_HARNESS_FILES = {
     "conftest.py", "tox.ini", "Makefile", "setup.py", "setup.cfg", "pyproject.toml"
 }
 
+_BWRAP_PROBE_CACHE = None
 
-def run_tests(root, overrides, policy):
+def probe_bwrap_capability() -> tuple[bool, str]:
+    """Capability probe: run bwrap --unshare-all --ro-bind / / true and cache result.
+    Returns (supported: bool, reason: str)."""
+    global _BWRAP_PROBE_CACHE
+    if _BWRAP_PROBE_CACHE is not None:
+        return _BWRAP_PROBE_CACHE
+    if os.name != "posix" or not sys.platform.startswith("linux"):
+        _BWRAP_PROBE_CACHE = (False, f"platform '{sys.platform}' does not support bubblewrap user namespaces")
+        return _BWRAP_PROBE_CACHE
+    bwrap_bin = shutil.which("bwrap")
+    if not bwrap_bin:
+        _BWRAP_PROBE_CACHE = (False, "bwrap binary not found in PATH")
+        return _BWRAP_PROBE_CACHE
+    try:
+        proc = subprocess.run(
+            [bwrap_bin, "--unshare-all", "--ro-bind", "/", "/", "true"],
+            capture_output=True, text=True, timeout=5
+        )
+        if proc.returncode == 0:
+            _BWRAP_PROBE_CACHE = (True, "bubblewrap capability verified (user namespaces active)")
+        else:
+            err = proc.stderr.strip() or f"exit code {proc.returncode}"
+            _BWRAP_PROBE_CACHE = (False, f"bubblewrap capability probe failed: {err}")
+    except Exception as exc:
+        _BWRAP_PROBE_CACHE = (False, f"bubblewrap capability probe error: {exc}")
+    return _BWRAP_PROBE_CACHE
+
+
+def run_tests(root, overrides, policy, cov_funcs=None):
     """Copy the repo, apply `overrides` ({relpath: text}), run the test command. -> dict"""
+    can_use_bwrap, bwrap_reason = probe_bwrap_capability()
+    sb_default = {
+        "type": "bubblewrap" if can_use_bwrap else ("rlimit" if os.name == "posix" else "none"),
+        "network_isolated": bool(can_use_bwrap),
+        "rlimits_applied": bool(os.name == "posix"),
+        "reason": bwrap_reason
+    }
     if not has_tests(root, policy):
-        return {"ran": False, "ok": None, "output": "no tests found", "cmd": ""}
+        return {"ran": False, "ok": None, "output": "no tests found", "cmd": "", "sandbox": sb_default}
     for rel in overrides:
         base_fname = os.path.basename(rel)
         if base_fname in PROTECTED_TEST_HARNESS_FILES or rel in PROTECTED_TEST_HARNESS_FILES:
@@ -107,7 +143,8 @@ def run_tests(root, overrides, policy):
                 "ran": False,
                 "ok": False,
                 "output": f"Security restriction: modification of protected test harness file '{rel}' is rejected",
-                "cmd": ""
+                "cmd": "",
+                "sandbox": sb_default
             }
     cmd = policy.get("test_command") or [sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider"]
     posix_mode = (os.name == "posix")
@@ -146,17 +183,23 @@ def run_tests(root, overrides, policy):
         timeout_val = int(policy.get("test_timeout", 180))
         require_sandbox = bool(policy.get("require_sandbox", False))
 
-        bwrap_bin = shutil.which("bwrap")
-        can_use_bwrap = bool(bwrap_bin) and (os.name == "posix") and sys.platform.startswith("linux")
+        bwrap_bin = shutil.which("bwrap") if can_use_bwrap else None
 
         if require_sandbox and not can_use_bwrap:
             return {
                 "ran": False,
                 "ok": False,
-                "output": "Policy enforcement error: 'require_sandbox: true' requires Bubblewrap (bwrap) container isolation, but bwrap is unavailable or unprivileged user namespaces are disabled on host.",
+                "output": f"Policy enforcement error: 'require_sandbox: true' requires Bubblewrap container isolation, but capability probe failed: {bwrap_reason}",
                 "cmd": "",
                 "coverage": {"available": False},
-                "sandbox": {"type": "none", "network_isolated": False, "required": True, "enforced": False}
+                "sandbox": {
+                    "type": "none",
+                    "network_isolated": False,
+                    "rlimits_applied": False,
+                    "required": True,
+                    "enforced": False,
+                    "reason": bwrap_reason
+                }
             }
 
         final_cmd = cov_cmd
@@ -188,11 +231,13 @@ def run_tests(root, overrides, policy):
                     pass
 
         sandbox_info = {
-            "type": "bubblewrap" if used_bwrap else "rlimit",
+            "type": "bubblewrap" if used_bwrap else ("rlimit" if os.name == "posix" else "none"),
             "network_isolated": bool(used_bwrap),
+            "rlimits_applied": bool(os.name == "posix"),
             "cpu_limit_sec": timeout_val,
             "memory_limit_mb": 1024,
-            "process_group_isolated": (os.name == "posix")
+            "process_group_isolated": (os.name == "posix"),
+            "reason": bwrap_reason
         }
 
         try:
@@ -761,8 +806,16 @@ def propose(root, policy, files, home, use_llm=False, ask=None, head=None):
         else:
             llm_info["used"] = True
 
+    can_bwrap, bwrap_r = probe_bwrap_capability()
+    sb_default = {
+        "type": "bubblewrap" if can_bwrap else ("rlimit" if os.name == "posix" else "none"),
+        "network_isolated": bool(can_bwrap),
+        "rlimits_applied": bool(os.name == "posix"),
+        "reason": bwrap_r
+    }
+
     overrides = {r["path"]: r["after"] for r in results if r["after"] != r["before"]}
-    tests = run_tests(root, overrides, policy) if overrides else {"ran": False, "ok": None, "output": "", "cmd": ""}
+    tests = run_tests(root, overrides, policy) if overrides else {"ran": False, "ok": None, "output": "", "cmd": "", "sandbox": sb_default}
 
     if llm_info["used"]:
         remaining = []
@@ -873,6 +926,7 @@ def propose(root, policy, files, home, use_llm=False, ask=None, head=None):
     prop = {"id": pid, "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "status": status, "files": out_files,
             "skipped": skipped_all + [dict(s, file=r["path"]) for r in results for s in r["skipped"]],
             "tests": tests, "coverage": cov_info,
+            "sandbox": tests.get("sandbox") or sb_default,
             "unexecuted_functions": unexec_rewritten or below_threshold,
             "llm": llm_info,
             "fuzz": fuzz_total if fuzz_total["inputs"] else None,
@@ -999,6 +1053,13 @@ def run(root, policy, home, files=None, base=None, apply=False, ai=False, allow_
     res["fuzz"] = fuzz_total if fuzz_total["inputs"] else None
     if not new_srcs:
         res["status"] = "rejected (fuzz found a behaviour change)" if any(f.get("rejected") for f in res["files"]) else "nothing to optimize"
+        can_bwrap, bwrap_r = probe_bwrap_capability()
+        res["sandbox"] = {
+            "type": "bubblewrap" if can_bwrap else ("rlimit" if os.name == "posix" else "none"),
+            "network_isolated": bool(can_bwrap),
+            "rlimits_applied": bool(os.name == "posix"),
+            "reason": bwrap_r
+        }
         if log:
             audit.log(home, "optimize", "rejected" if res["status"].startswith("rejected") else "no-op", "repobrain", {"files": len(res["files"])})
         return res
