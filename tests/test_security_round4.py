@@ -975,6 +975,46 @@ def test_item3_audit_full_uncached_verify_detects_middle_record_tampering_with_r
     assert v_default["ok"] is False, "Default verify() must be uncached and detect tampering"
 
 
+def test_cross_platform_fuzz_cwd_and_differential_execution():
+    from repobrain import fuzz
+    good = "def compute(x, y):\n    return x + y\n"
+    bad = "def compute(x, y):\n    return x - y\n"
+    res = fuzz.differential(good, bad, ["compute"], n=20)
+    assert res["diverged"] > 0, "Fuzzer must detect divergence"
+    assert res["inputs"] > 0, "Fuzzer must execute generated inputs"
+
+
+def test_review_recognizes_commit_trailer_waiver(tmp_path):
+    import subprocess
+    from repobrain import gitutil, policy, review
+    repo = str(tmp_path / "repo")
+    os.makedirs(repo)
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "test@corp.internal"], cwd=repo, check=True)
+    
+    # Base commit
+    with open(os.path.join(repo, "a.py"), "w") as f:
+        f.write("def f(): pass\n")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-m", "base commit"], cwd=repo, check=True)
+    base_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    
+    # Over-complexity commit with Waived-by trailer
+    complex_code = "def f(x):\n" + "".join(f"    if x == {i}: return {i}\n" for i in range(15)) + "    return 0\n"
+    with open(os.path.join(repo, "a.py"), "w") as f:
+        f.write(complex_code)
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    commit_msg = "feat: add logic\n\nWaived-by: Alex Mercer - Architectural complexity sign-off for matrix operations"
+    subprocess.run(["git", "commit", "-m", commit_msg], cwd=repo, check=True)
+    
+    pol = dict(policy.DEFAULT, optimize="required", complexity_threshold=5)
+    rev = review.run(repo, pol, base=base_sha)
+    assert rev["decision"] == "ALLOWED", f"Expected ALLOWED with trailer waiver, got {rev['decision']}"
+    assert "Alex Mercer" in rev["reason"]
+
+
+
 
 
 

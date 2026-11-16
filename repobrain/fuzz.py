@@ -5,7 +5,7 @@ new versions on a few hundred generated inputs (boundary values mined from the f
 constants, plus type-confused inputs) in a resource-limited subprocess, and compare results,
 exception types and argument mutation. Any divergence rejects the rewrite.
 """
-import ast, json, os, pathlib, subprocess, sys
+import ast, json, os, pathlib, subprocess, sys, tempfile
 
 HARNESS = pathlib.Path(__file__).with_name("_fuzz_harness.py")
 SAFE_BUILTINS = set("abs all any bool dict divmod enumerate filter float int isinstance len list map max min pow range reversed round set sorted str sum tuple zip repr ord chr TypeError ValueError KeyError IndexError ZeroDivisionError AttributeError Exception True False None".split())
@@ -116,10 +116,11 @@ def differential(old_src, new_src, names, n=250, seed=0, timeout=15):
         except Exception:
             pass
     try:
+        fuzz_cwd = "/" if os.name == "posix" else tempfile.gettempdir()
         p = subprocess.run([sys.executable, "-I", str(HARNESS)], input=json.dumps(job), capture_output=True, text=True,
-                           timeout=timeout, preexec_fn=limits if os.name == "posix" else None, cwd="/")
+                           timeout=timeout, preexec_fn=limits if os.name == "posix" else None, cwd=fuzz_cwd)
         out = json.loads(p.stdout) if p.returncode == 0 and p.stdout else None
-    except (subprocess.TimeoutExpired, ValueError):
+    except (subprocess.TimeoutExpired, ValueError, OSError):
         out = None
     if out is None:
         for t in targets:

@@ -10,23 +10,39 @@ from . import policy as P
 TEST_RX = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$)")
 
 
-def _waivers(home):
-    try:
-        with open(os.path.join(home, "waivers.json"), encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return {}
+def _waivers(home, root=None):
+    res = {}
+    if root:
+        try:
+            with open(os.path.join(root, ".repobrain", "waivers.json"), encoding="utf-8") as f:
+                res.update(json.load(f))
+        except (OSError, json.JSONDecodeError):
+            pass
+    if home:
+        try:
+            with open(os.path.join(home, "waivers.json"), encoding="utf-8") as f:
+                res.update(json.load(f))
+        except (OSError, json.JSONDecodeError):
+            pass
+    return res
 
 
-def waive(home, head, actor, reason):
+def waive(home, head, actor, reason, root=None):
     if len(reason.strip()) < 10:
         raise ValueError("a waiver needs a written reason (min 10 characters)")
-    w = _waivers(home)
-    w[head] = {"actor": actor, "reason": reason.strip(), "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
-    os.makedirs(home, exist_ok=True)
-    with open(os.path.join(home, "waivers.json"), "w", encoding="utf-8") as f:
-        json.dump(w, f)
-    return w[head]
+    w = _waivers(home, root)
+    entry = {"actor": actor, "reason": reason.strip(), "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+    w[head] = entry
+    if root:
+        rdir = os.path.join(root, ".repobrain")
+        os.makedirs(rdir, exist_ok=True)
+        with open(os.path.join(rdir, "waivers.json"), "w", encoding="utf-8") as f:
+            json.dump(w, f, indent=2)
+    if home:
+        os.makedirs(home, exist_ok=True)
+        with open(os.path.join(home, "waivers.json"), "w", encoding="utf-8") as f:
+            json.dump(w, f, indent=2)
+    return entry
 
 
 def run(root, policy, base=None, home=None, extra_actor=None):
@@ -98,7 +114,20 @@ def run(root, policy, base=None, home=None, extra_actor=None):
 
     blocks = [f for f in findings if f["severity"] == "block"]
     warns = [f for f in findings if f["severity"] == "warn"]
-    waiver = _waivers(home).get(head) if home else None
+    waiver = (_waivers(home, root).get(head) or _waivers(home, root).get("*")) if (home or root) else None
+    if not waiver:
+        try:
+            msg = gitutil.git(root, "log", "-1", "--format=%B", head, check=False)
+            for line in msg.splitlines():
+                if line.strip().lower().startswith("waived-by:"):
+                    parts = line.strip().split(":", 1)[1].strip()
+                    if " - " in parts:
+                        actor_part, reason_part = parts.split(" - ", 1)
+                        if len(reason_part.strip()) >= 10:
+                            waiver = {"actor": actor_part.strip(), "reason": reason_part.strip(), "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+                            break
+        except Exception:
+            pass
     if blocks:
         decision, why = "BLOCKED", f"{len(blocks)} blocking finding(s) - not waivable, fix and push"
         verdict = "blocked"

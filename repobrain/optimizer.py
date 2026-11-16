@@ -764,10 +764,15 @@ def format_source(src, policy):
     cmd = policy.get("format_command")
     if not cmd:
         return src
-    posix_mode = (os.name == "posix")
-    cmd_parts = shlex.split(cmd, posix=posix_mode) if isinstance(cmd, str) else list(cmd)
     try:
-        p = subprocess.run(cmd_parts, input=src, capture_output=True, text=True, timeout=30)
+        if os.name == "posix":
+            cmd_parts = shlex.split(cmd) if isinstance(cmd, str) else list(cmd)
+            p = subprocess.run(cmd_parts, input=src, capture_output=True, text=True, timeout=30)
+        else:
+            if isinstance(cmd, str):
+                p = subprocess.run(cmd, shell=True, input=src, capture_output=True, text=True, timeout=30)
+            else:
+                p = subprocess.run(list(cmd), input=src, capture_output=True, text=True, timeout=30)
         if p.returncode == 0 and p.stdout:
             res = p.stdout
             if "\r\n" in src and "\r\n" not in res:

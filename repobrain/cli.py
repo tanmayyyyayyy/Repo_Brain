@@ -200,7 +200,7 @@ def cmd_audit(a):
 
 def cmd_waive(a):
     root, base, pol, home, log = _ctx(a)
-    w = review.waive(home, gitutil.head(root), a.actor, a.reason)
+    w = review.waive(home, gitutil.head(root), a.actor, a.reason, root=root)
     log.append("waive", a.actor, "WAIVED", w["reason"], head=gitutil.head(root))
     print("waived:", w)
     return 0
