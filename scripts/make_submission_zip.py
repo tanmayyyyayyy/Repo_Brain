@@ -9,6 +9,13 @@ import os
 import sys
 import zipfile
 
+# Ensure UTF-8 stdout on all platforms (including Windows console)
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR = os.environ.get("REPOBRAIN_SUBMISSION_ZIP_DIR") or os.path.expanduser("~/Downloads")
 ZIP_NAME = "RepoBrain_Round3_Final_Submission.zip"

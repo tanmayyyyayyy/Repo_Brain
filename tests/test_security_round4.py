@@ -946,32 +946,17 @@ def test_item3_audit_full_uncached_verify_detects_middle_record_tampering_with_r
     orig_mtime_ns = orig_stat.st_mtime_ns
     orig_size = orig_stat.st_size
     
-    # Read all lines
-    with open(log.path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-    assert len(lines) == 5
+    # Read raw binary to avoid platform newline conversion differences
+    with open(log.path, "rb") as f:
+        raw_bytes = f.read()
     
-    # Tamper with middle record (record index 2, seq 3)
-    # Carefully replace characters in-place to preserve exact byte length
-    mid_line = lines[2]
-    import json
-    data = json.loads(mid_line)
-    orig_event = data["event"]
-    tampered_event = orig_event.replace("event-3", "hacked-3")
-    data["event"] = tampered_event
-    # Re-encode and pad to exact length
-    tampered_json = json.dumps(data)
-    pad = len(mid_line.rstrip("\r\n")) - len(tampered_json)
-    if pad >= 0:
-        tampered_line = tampered_json + (" " * pad) + "\n"
-    else:
-        # replace directly
-        tampered_line = mid_line.replace('"event": "event-3"', '"event": "hacked3"')
-    assert len(tampered_line.encode("utf-8")) == len(mid_line.encode("utf-8")), "Line length must match exactly"
-    lines[2] = tampered_line
+    # Tamper with middle record (replace event-3 with hacked3 preserving exact byte length)
+    assert b"event-3" in raw_bytes, "event-3 must exist in raw log"
+    tampered_bytes = raw_bytes.replace(b'"event": "event-3"', b'"event": "hacked3"', 1)
+    assert len(tampered_bytes) == len(raw_bytes), "Byte length must match exactly"
     
-    with open(log.path, "w", encoding="utf-8", newline="\n") as f:
-        f.writelines(lines)
+    with open(log.path, "wb") as f:
+        f.write(tampered_bytes)
         
     # Restore mtime and atime
     os.utime(log.path, ns=(orig_mtime_ns, orig_mtime_ns))
