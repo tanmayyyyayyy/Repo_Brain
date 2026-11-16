@@ -216,3 +216,119 @@ def test_item2_stdout_printing_controls(tmp_path, monkeypatch, capsys):
     assert "verification code" in captured.out.lower()
 
 
+# ==============================================================================
+# ITEM 3: Demo Workspace Isolation
+# ==============================================================================
+
+def test_item3_two_concurrent_anonymous_visitors_get_distinct_paths(tmp_path):
+    root = os.path.join(str(tmp_path), "base_repo")
+    from repobrain import demo
+    demo.seed(root)
+    home = os.path.join(str(tmp_path), "home")
+    ctx = server.Ctx(root, "main", home, is_demo=True)
+
+    wid1 = ctx.create_valid_wid()
+    wid2 = ctx.create_valid_wid()
+    assert wid1 != wid2
+
+    root1 = ctx.get_workspace_root(wid1)
+    root2 = ctx.get_workspace_root(wid2)
+    assert root1 != root2
+    assert os.path.isdir(root1)
+    assert os.path.isdir(root2)
+
+
+def test_item3_forged_cookie_cannot_collide_with_existing(tmp_path):
+    root = os.path.join(str(tmp_path), "base_repo")
+    from repobrain import demo
+    demo.seed(root)
+    home = os.path.join(str(tmp_path), "home")
+    ctx = server.Ctx(root, "main", home, is_demo=True)
+
+    legit_wid = ctx.create_valid_wid()
+    assert ctx.is_valid_wid(legit_wid) is True
+
+    # Forged wid never issued by server
+    forged_wid = "0123456789abcdef0123456789abcdef"
+    assert ctx.is_valid_wid(forged_wid) is False
+
+    # Validation should reject forged wid and issue a fresh one
+    resolved_wid = ctx.resolve_or_create_wid(forged_wid)
+    assert resolved_wid != forged_wid
+    assert resolved_wid != legit_wid
+    assert ctx.is_valid_wid(resolved_wid) is True
+
+
+def test_item3_in_use_workspace_not_pruned_while_request_in_flight(tmp_path):
+    root = os.path.join(str(tmp_path), "base_repo")
+    from repobrain import demo
+    demo.seed(root)
+    home = os.path.join(str(tmp_path), "home")
+    ctx = server.Ctx(root, "main", home, is_demo=True)
+    ctx.MAX_DEMO_WORKSPACES = 2
+
+    w1 = ctx.create_valid_wid()
+    r1 = ctx.get_workspace_root(w1)
+
+    # Put w1 in-use
+    with ctx.acquire_workspace(w1):
+        # Force expiration of w1
+        with ctx._lock:
+            ctx._workspace_access[w1] = time.time() - 99999
+
+        # Create two more workspaces to exceed MAX_DEMO_WORKSPACES (capacity 2)
+        w2 = ctx.create_valid_wid()
+        ctx.get_workspace_root(w2)
+        w3 = ctx.create_valid_wid()
+        ctx.get_workspace_root(w3)
+
+        # Trigger cleanup
+        ctx._cleanup_workspaces()
+
+        # w1 must still exist because refcount > 0
+        assert os.path.isdir(r1), "In-use workspace must not be pruned while request in flight"
+
+    # Once released, cleanup should prune expired w1
+    ctx._cleanup_workspaces()
+    assert not os.path.isdir(r1), "Expired workspace should be pruned after request finishes"
+
+
+def test_item3_http_handler_sets_cookie_and_isolates_workspaces(tmp_path):
+    root = os.path.join(str(tmp_path), "base_repo")
+    from repobrain import demo
+    demo.seed(root)
+    home = os.path.join(str(tmp_path), "home")
+    ctx = server.Ctx(root, "main", home, is_demo=True)
+    
+    handler_class = server.make_handler(ctx, token="test-tok", port=8000, host="127.0.0.1", open_demo=True)
+    
+    # 1. Anonymous request without cookie
+    class DummyAnonRequest:
+        headers = {"Host": "127.0.0.1"}
+        path = "/api/state"
+        client_address = ("127.0.0.1", 12345)
+    
+    h1 = handler_class.__new__(handler_class)
+    h1.headers = DummyAnonRequest.headers
+    h1.path = DummyAnonRequest.path
+    h1.client_address = DummyAnonRequest.client_address
+    
+    wid1 = h1._get_demo_wid()
+    assert wid1 is not None
+    assert len(wid1) == 32
+    assert getattr(h1, "_new_demo_wid", None) == wid1
+
+    # 2. Forged cookie request
+    h2 = handler_class.__new__(handler_class)
+    h2.headers = {"Host": "127.0.0.1", "Cookie": "repobrain_demo_wid=forged000000000000000000000000000"}
+    h2.path = "/api/state"
+    h2.client_address = ("127.0.0.1", 12346)
+    
+    wid2 = h2._get_demo_wid()
+    assert wid2 is not None
+    assert wid2 != "forged000000000000000000000000000"
+    assert wid2 != wid1
+
+
+
+

@@ -4,6 +4,7 @@ Binds to 127.0.0.1 by default and requires a per-run token or X-RepoBrain header
 sandboxed demo publicly. Host header is validated (DNS-rebinding), allowed hosts can
 be extended with REPOBRAIN_ALLOWED_HOSTS (`*` for any), and POSTs must be JSON (CSRF)."""
 import collections
+import contextlib
 import hashlib
 import ipaddress
 import json
@@ -170,6 +171,9 @@ def record_login_success(identifier: str):
 
 
 class Ctx:
+    MAX_DEMO_WORKSPACES = 50
+    DEMO_WORKSPACE_TTL = 3600  # 1 hour
+
     def __init__(self, root, base, home, is_demo):
         self.root, self.base, self.home, self.demo = root, base, home, is_demo
         self.log = A.AuditLog(home)
@@ -177,52 +181,98 @@ class Ctx:
         self.last_proposal = None
         self._session_roots = {}
         self._workspace_access = {}
-        self._lock = threading.Lock()
+        self._valid_demo_wids = set()
+        self._workspace_refcounts = collections.defaultdict(int)
+        self._lock = threading.RLock()
 
-    MAX_DEMO_WORKSPACES = 10
-    DEMO_WORKSPACE_TTL = 3600  # 1 hour
+    def create_valid_wid(self) -> str:
+        with self._lock:
+            wid = secrets.token_hex(16)
+            self._valid_demo_wids.add(wid)
+            return wid
+
+    def is_valid_wid(self, wid: str) -> bool:
+        if not wid or not isinstance(wid, str):
+            return False
+        wid = wid.strip().lower()
+        if not re.match(r"^[0-9a-f]{32}$", wid):
+            return False
+        with self._lock:
+            return wid in self._valid_demo_wids
+
+    def resolve_or_create_wid(self, candidate_wid: str = None) -> str:
+        if candidate_wid and self.is_valid_wid(candidate_wid):
+            return candidate_wid.strip().lower()
+        return self.create_valid_wid()
+
+    @contextlib.contextmanager
+    def acquire_workspace(self, wid: str):
+        if not wid:
+            yield
+            return
+        with self._lock:
+            self._workspace_refcounts[wid] += 1
+        try:
+            yield
+        finally:
+            with self._lock:
+                self._workspace_refcounts[wid] = max(0, self._workspace_refcounts[wid] - 1)
+
+    def _delete_workspace(self, k: str):
+        dir_to_remove = os.path.join(self.home, "demo_sessions", k)
+        shutil.rmtree(dir_to_remove, ignore_errors=True)
+        self._workspace_access.pop(k, None)
+        self._session_roots.pop(k, None)
+        self._valid_demo_wids.discard(k)
 
     def _cleanup_workspaces(self):
-        """Prune expired and excess demo workspaces to prevent disk filling on hosted free tiers."""
+        """Prune expired and excess demo workspaces to prevent disk filling on hosted free tiers.
+        Never prunes workspaces currently marked in-use by an active request.
+        """
         now = time.time()
-        expired = [k for k, last_ts in self._workspace_access.items() if now - last_ts > self.DEMO_WORKSPACE_TTL]
-        for k in expired:
-            dir_to_remove = os.path.join(self.home, "demo_sessions", k)
-            shutil.rmtree(dir_to_remove, ignore_errors=True)
-            self._workspace_access.pop(k, None)
-            self._session_roots.pop(k, None)
-
-        if len(self._workspace_access) > self.MAX_DEMO_WORKSPACES:
-            sorted_keys = sorted(self._workspace_access.keys(), key=lambda k: self._workspace_access[k])
-            excess_count = len(self._workspace_access) - self.MAX_DEMO_WORKSPACES
-            for k in sorted_keys[:excess_count]:
-                dir_to_remove = os.path.join(self.home, "demo_sessions", k)
-                shutil.rmtree(dir_to_remove, ignore_errors=True)
-                self._workspace_access.pop(k, None)
-                self._session_roots.pop(k, None)
-
-    def get_root_for_user(self, user=None):
-        """In demo mode, isolate working git repository per user session to prevent race conditions across concurrent evaluators."""
-        if not self.demo:
-            return self.root
-        ident = (user and user.get("id")) or (user and user.get("email"))
-        if not ident:
-            return self.root
-        key = hashlib.sha256(str(ident).encode()).hexdigest()[:12]
         with self._lock:
-            self._workspace_access[key] = time.time()
-            if key in self._session_roots and os.path.isdir(self._session_roots[key]):
-                return self._session_roots[key]
+            expired = [k for k, last_ts in list(self._workspace_access.items())
+                       if now - last_ts > self.DEMO_WORKSPACE_TTL and self._workspace_refcounts.get(k, 0) == 0]
+            for k in expired:
+                self._delete_workspace(k)
+
+            if len(self._workspace_access) > self.MAX_DEMO_WORKSPACES:
+                sorted_keys = sorted(self._workspace_access.keys(), key=lambda k: self._workspace_access[k])
+                for k in sorted_keys:
+                    if len(self._workspace_access) <= self.MAX_DEMO_WORKSPACES:
+                        break
+                    if self._workspace_refcounts.get(k, 0) == 0:
+                        self._delete_workspace(k)
+
+    def get_workspace_root(self, wid: str):
+        if not self.demo or not wid:
+            return self.root
+        with self._lock:
+            self._workspace_access[wid] = time.time()
+            if wid in self._session_roots and os.path.isdir(self._session_roots[wid]):
+                return self._session_roots[wid]
             self._cleanup_workspaces()
-            session_repo_dir = os.path.join(self.home, "demo_sessions", key, "repo")
+            session_repo_dir = os.path.join(self.home, "demo_sessions", wid, "repo")
             if not os.path.isdir(session_repo_dir):
                 os.makedirs(os.path.dirname(session_repo_dir), exist_ok=True)
                 try:
                     demo.seed(session_repo_dir)
                 except Exception:
                     return self.root
-            self._session_roots[key] = session_repo_dir
+            self._session_roots[wid] = session_repo_dir
             return session_repo_dir
+
+    def get_root_for_user(self, user=None, wid=None):
+        """In demo mode, isolate working git repository per user session to prevent race conditions across concurrent evaluators."""
+        if not self.demo:
+            return self.root
+        if wid:
+            return self.get_workspace_root(wid)
+        ident = (user and user.get("id")) or (user and user.get("email"))
+        if not ident:
+            return self.root
+        key = hashlib.sha256(str(ident).encode()).hexdigest()[:12]
+        return self.get_workspace_root(key)
 
     def get_base_for_root(self, root=None):
         r = root or self.root
@@ -334,6 +384,8 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
+            if getattr(self, "_new_demo_wid", None):
+                self.send_header("Set-Cookie", f"repobrain_demo_wid={self._new_demo_wid}; HttpOnly; SameSite=Strict; Path=/")
             if self.path.startswith("/api/"):
                 self.send_header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; sandbox")
             else:
@@ -344,6 +396,35 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
                     self.send_header(k, v)
             self.end_headers()
             self.wfile.write(data)
+
+        def _get_demo_wid(self):
+            if not (ctx.demo or open_demo):
+                return None
+            cookie_hdr = self.headers.get("Cookie", "") if hasattr(self, "headers") and self.headers else ""
+            wid = None
+            if cookie_hdr:
+                match = re.search(r'(?:^|;\s*)repobrain_demo_wid=([a-fA-F0-9]{32})(?:;|$)', cookie_hdr)
+                if match:
+                    candidate = match.group(1).lower()
+                    if ctx.is_valid_wid(candidate):
+                        wid = candidate
+            if wid:
+                return wid
+
+            # If no valid cookie, check if request is authenticated by per-run token (CLI)
+            tok_hdr = self.headers.get("X-RepoBrain-Token", "").strip() if hasattr(self, "headers") and self.headers else ""
+            if not tok_hdr:
+                tok_hdr = parse_qs(urlparse(self.path).query).get("t", [""])[0].strip()
+            if tok_hdr and token and secrets.compare_digest(tok_hdr, token) and not open_demo:
+                cli_wid = hashlib.sha256(f"cli:{token}".encode()).hexdigest()[:32]
+                with ctx._lock:
+                    ctx._valid_demo_wids.add(cli_wid)
+                return cli_wid
+
+            # Otherwise, anonymous / browser visitor: issue fresh random 128-bit hex cookie
+            wid = ctx.create_valid_wid()
+            self._new_demo_wid = wid
+            return wid
 
         def _guard(self):
             host_hdr = self.headers.get("X-Forwarded-Host") or self.headers.get("Host", "")
@@ -375,119 +456,122 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
             return u
 
         def do_GET(self):
+            wid = self._get_demo_wid()
             u = urlparse(self.path)
             if u.path == "/healthz":
                 return self._send(200, {"ok": True})
             if not self._guard():
                 return
-            try:
-                if u.path == "/":
-                    with open(find_index_html(), "rb") as f:
-                        return self._send(200, f.read(), "text/html")
-                if u.path in ("/slides", "/docs/slides.html"):
-                    sl = find_slides_html()
-                    if sl and os.path.exists(sl):
-                        with open(sl, "rb") as f:
+            with ctx.acquire_workspace(wid):
+                try:
+                    if u.path == "/":
+                        with open(find_index_html(), "rb") as f:
                             return self._send(200, f.read(), "text/html")
-                if u.path == "/api/auth/me":
-                    usr = self._get_user()
-                    return self._send(200, {
-                        "user": usr,
-                        "roles": auth.ROLES,
-                        "demo_personas": auth.DEFAULT_DEMO_USERS,
-                        "users": ctx.auth.list_users()
-                    })
-                if u.path == "/api/auth/users":
-                    return self._send(200, {"users": ctx.auth.list_users()})
-                if u.path == "/api/state":
-                    return self._send(200, state(ctx, user=self._get_user()))
-                if u.path == "/api/audit":
-                    es = ctx.log.entries()
-                    return self._send(200, {"entries": es, "chain": A.verify_entries(es)})
-                if u.path == "/api/report.md":
-                    with LOCK:
+                    if u.path in ("/slides", "/docs/slides.html"):
+                        sl = find_slides_html()
+                        if sl and os.path.exists(sl):
+                            with open(sl, "rb") as f:
+                                return self._send(200, f.read(), "text/html")
+                    if u.path == "/api/auth/me":
                         usr = self._get_user()
-                        active_root = ctx.get_root_for_user(usr)
+                        return self._send(200, {
+                            "user": usr,
+                            "roles": auth.ROLES,
+                            "demo_personas": auth.DEFAULT_DEMO_USERS,
+                            "users": ctx.auth.list_users()
+                        })
+                    if u.path == "/api/auth/users":
+                        return self._send(200, {"users": ctx.auth.list_users()})
+                    if u.path == "/api/state":
+                        return self._send(200, state(ctx, user=self._get_user(), wid=wid))
+                    if u.path == "/api/audit":
+                        es = ctx.log.entries()
+                        return self._send(200, {"entries": es, "chain": A.verify_entries(es)})
+                    if u.path == "/api/report.md":
+                        with LOCK:
+                            usr = self._get_user()
+                            active_root = ctx.get_workspace_root(wid) if wid else ctx.get_root_for_user(usr)
+                            active_base = ctx.get_base_for_root(active_root)
+                            pol = ctx.policy(active_root)
+                            rev = review.run(active_root, pol, active_base, ctx.home)
+                            return self._send(200, report.compliance(rev, ctx.log.entries(), ctx.log.verify(), pol),
+                                              "text/markdown")
+                    if u.path == "/api/export":
+                        qs = parse_qs(u.query)
+                        fmt = qs.get("fmt", ["json"])[0]
+                        with LOCK:
+                            usr = self._get_user()
+                            active_root = ctx.get_workspace_root(wid) if wid else ctx.get_root_for_user(usr)
+                            active_base = ctx.get_base_for_root(active_root)
+                            pol = ctx.policy(active_root)
+                            rev = review.run(active_root, pol, active_base, ctx.home)
+                            finds = rev["findings"]
+                            gate = rev["gate"]
+                            if fmt == "sarif":
+                                return self._send(200, export.sarif(finds, gate), "application/json",
+                                                  {"content-disposition": "attachment; filename=repobrain.sarif"})
+                            if fmt == "md":
+                                st = state(ctx, user=usr, wid=wid)
+                                st["files"] = rev["files"]
+                                st["findings"] = finds
+                                st["gate"] = gate
+                                st["verdict"] = rev.get("verdict", "ready")
+                                st["risk"] = rev.get("risk", {"score": 0, "level": "low", "factors": []})
+                                st["proposal"] = ctx.last_proposal or {"changed": 0}
+                                st["chain"] = ctx.log.verify()
+                                return self._send(200, export.markdown(st).encode(), "text/markdown; charset=utf-8")
+                            if fmt == "csv":
+                                return self._send(200, export.audit_csv(list(reversed(ctx.log.entries()))).encode(), "text/csv; charset=utf-8",
+                                                  {"content-disposition": "attachment; filename=repobrain-audit.csv"})
+                            if fmt == "html":
+                                report_path = report.build(ctx.home)
+                                return self._send(200, report_path.read_bytes(), "text/html; charset=utf-8")
+                            return self._send(200, {"audit": list(reversed(ctx.log.entries())), "chain": ctx.log.verify()},
+                                              "application/json", {"content-disposition": "attachment; filename=repobrain-audit.json"})
+                    if u.path == "/api/diff":
+                        qs = parse_qs(u.query)
+                        req_path = qs.get("path", [""])[0].strip()
+                        if not req_path:
+                            return self._send(400, {"error": "path parameter required"})
+                        norm = os.path.normpath(req_path).replace("\\", "/")
+                        if norm.startswith("..") or os.path.isabs(req_path) or req_path.startswith("/") or req_path.startswith("\\"):
+                            return self._send(400, {"error": "path traversal refused"})
+                        usr = self._get_user()
+                        active_root = ctx.get_workspace_root(wid) if wid else ctx.get_root_for_user(usr)
                         active_base = ctx.get_base_for_root(active_root)
+                        target = os.path.realpath(os.path.join(active_root, norm))
+                        real_root = os.path.realpath(active_root)
+                        if os.path.commonpath([real_root, target]) != real_root:
+                            return self._send(403, {"error": "path escapes repository"})
+                        changed = {p: s for s, p in gitutil.changed_files(active_root, active_base)}
+                        if norm not in changed:
+                            return self._send(404, {"error": f"file '{norm}' not in current change set"})
+                        status = changed[norm]
+                        diff_text = gitutil.git(active_root, "diff", "-u", f"{active_base}...HEAD", "--", norm, check=False)
+                        if len(diff_text) > 500_000:
+                            diff_text = diff_text[:500_000] + "\n... [diff truncated at 500KB limit]"
                         pol = ctx.policy(active_root)
                         rev = review.run(active_root, pol, active_base, ctx.home)
-                        return self._send(200, report.compliance(rev, ctx.log.entries(), ctx.log.verify(), pol),
-                                          "text/markdown")
-                if u.path == "/api/export":
-                    qs = parse_qs(u.query)
-                    fmt = qs.get("fmt", ["json"])[0]
-                    with LOCK:
-                        usr = self._get_user()
-                        active_root = ctx.get_root_for_user(usr)
-                        active_base = ctx.get_base_for_root(active_root)
-                        pol = ctx.policy(active_root)
-                        rev = review.run(active_root, pol, active_base, ctx.home)
-                        finds = rev["findings"]
-                        gate = rev["gate"]
-                        if fmt == "sarif":
-                            return self._send(200, export.sarif(finds, gate), "application/json",
-                                              {"content-disposition": "attachment; filename=repobrain.sarif"})
-                        if fmt == "md":
-                            st = state(ctx, user=usr)
-                            st["files"] = rev["files"]
-                            st["findings"] = finds
-                            st["gate"] = gate
-                            st["verdict"] = rev.get("verdict", "ready")
-                            st["risk"] = rev.get("risk", {"score": 0, "level": "low", "factors": []})
-                            st["proposal"] = ctx.last_proposal or {"changed": 0}
-                            st["chain"] = ctx.log.verify()
-                            return self._send(200, export.markdown(st).encode(), "text/markdown; charset=utf-8")
-                        if fmt == "csv":
-                            return self._send(200, export.audit_csv(list(reversed(ctx.log.entries()))).encode(), "text/csv; charset=utf-8",
-                                              {"content-disposition": "attachment; filename=repobrain-audit.csv"})
-                        if fmt == "html":
-                            report_path = report.build(ctx.home)
-                            return self._send(200, report_path.read_bytes(), "text/html; charset=utf-8")
-                        return self._send(200, {"audit": list(reversed(ctx.log.entries())), "chain": ctx.log.verify()},
-                                          "application/json", {"content-disposition": "attachment; filename=repobrain-audit.json"})
-                if u.path == "/api/diff":
-                    qs = parse_qs(u.query)
-                    req_path = qs.get("path", [""])[0].strip()
-                    if not req_path:
-                        return self._send(400, {"error": "path parameter required"})
-                    norm = os.path.normpath(req_path).replace("\\", "/")
-                    if norm.startswith("..") or os.path.isabs(req_path) or req_path.startswith("/") or req_path.startswith("\\"):
-                        return self._send(400, {"error": "path traversal refused"})
-                    usr = self._get_user()
-                    active_root = ctx.get_root_for_user(usr)
-                    active_base = ctx.get_base_for_root(active_root)
-                    target = os.path.realpath(os.path.join(active_root, norm))
-                    real_root = os.path.realpath(active_root)
-                    if os.path.commonpath([real_root, target]) != real_root:
-                        return self._send(403, {"error": "path escapes repository"})
-                    changed = {p: s for s, p in gitutil.changed_files(active_root, active_base)}
-                    if norm not in changed:
-                        return self._send(404, {"error": f"file '{norm}' not in current change set"})
-                    status = changed[norm]
-                    diff_text = gitutil.git(active_root, "diff", "-u", f"{active_base}...HEAD", "--", norm, check=False)
-                    if len(diff_text) > 500_000:
-                        diff_text = diff_text[:500_000] + "\n... [diff truncated at 500KB limit]"
-                    pol = ctx.policy(active_root)
-                    rev = review.run(active_root, pol, active_base, ctx.home)
-                    file_findings = [f for f in rev["findings"] if f["file"] == norm]
-                    file_gate = [g for g in rev["gate"] if g["file"] == norm]
-                    return self._send(200, {
-                        "path": norm,
-                        "status": status,
-                        "diff": diff_text,
-                        "findings": file_findings,
-                        "gate": file_gate,
-                        "base": active_base,
-                        "head": gitutil.head(active_root),
-                    })
-                self._send(404, {"error": "not found"})
-            except Exception as e:
-                self._send(500, {"error": str(e)})
+                        file_findings = [f for f in rev["findings"] if f["file"] == norm]
+                        file_gate = [g for g in rev["gate"] if g["file"] == norm]
+                        return self._send(200, {
+                            "path": norm,
+                            "status": status,
+                            "diff": diff_text,
+                            "findings": file_findings,
+                            "gate": file_gate,
+                            "base": active_base,
+                            "head": gitutil.head(active_root),
+                        })
+                    self._send(404, {"error": "not found"})
+                except Exception as e:
+                    self._send(500, {"error": str(e)})
 
         def _client_ip(self):
             return resolve_client_ip(self)
 
         def do_POST(self):
+            wid = self._get_demo_wid()
             if not self._guard():
                 return
             if "application/json" not in self.headers.get("Content-Type", ""):
@@ -513,60 +597,61 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
             req_path = urlparse(self.path).path
             user = self._get_user()
 
-            # Webhook HMAC-SHA256 signature verification
-            if req_path == "/api/webhook":
-                secret = os.environ.get("GITHUB_WEBHOOK_SECRET") or os.environ.get("REPOBRAIN_WEBHOOK_SECRET")
-                sig_header = self.headers.get("X-Hub-Signature-256", "").strip()
-                if secret:
-                    from . import webhook
-                    if not webhook.verify_signature(raw_bytes, secret, sig_header):
-                        return self._send(401, {"error": "invalid webhook HMAC-SHA256 signature"})
-                elif sig_header:
-                    return self._send(401, {"error": "webhook secret not configured on server"})
+            with ctx.acquire_workspace(wid):
+                # Webhook HMAC-SHA256 signature verification
+                if req_path == "/api/webhook":
+                    secret = os.environ.get("GITHUB_WEBHOOK_SECRET") or os.environ.get("REPOBRAIN_WEBHOOK_SECRET")
+                    sig_header = self.headers.get("X-Hub-Signature-256", "").strip()
+                    if secret:
+                        from . import webhook
+                        if not webhook.verify_signature(raw_bytes, secret, sig_header):
+                            return self._send(401, {"error": "invalid webhook HMAC-SHA256 signature"})
+                    elif sig_header:
+                        return self._send(401, {"error": "webhook secret not configured on server"})
 
-            # Auth endpoints run outside global LOCK for concurrency & non-blocking PBKDF2
-            if req_path == "/api/auth/login":
-                client_ip = self._client_ip()
-                login_email = str(body.get("email", "")).strip().lower()
-                ip_key = f"ip:{client_ip}"
-                email_key = f"email:{login_email}" if login_email else None
-                if not LOGIN_LIMITER.check(ip_key) or (email_key and not LOGIN_LIMITER.check(email_key)):
-                    return self._send(429, {"error": "Too many failed login attempts. Please wait 60 seconds before trying again."})
-                try:
-                    res = route(ctx, req_path, body, user=user)
-                    LOGIN_LIMITER.record_success(ip_key)
-                    if email_key:
-                        LOGIN_LIMITER.record_success(email_key)
-                    return self._send(200, res)
-                except ValueError as e:
-                    return self._send(400, {"error": str(e)})
-                except Exception as e:
-                    return self._send(500, {"error": f"{type(e).__name__}: {e}"})
+                # Auth endpoints run outside global LOCK for concurrency & non-blocking PBKDF2
+                if req_path == "/api/auth/login":
+                    client_ip = self._client_ip()
+                    login_email = str(body.get("email", "")).strip().lower()
+                    ip_key = f"ip:{client_ip}"
+                    email_key = f"email:{login_email}" if login_email else None
+                    if not LOGIN_LIMITER.check(ip_key) or (email_key and not LOGIN_LIMITER.check(email_key)):
+                        return self._send(429, {"error": "Too many failed login attempts. Please wait 60 seconds before trying again."})
+                    try:
+                        res = route(ctx, req_path, body, user=user, wid=wid)
+                        LOGIN_LIMITER.record_success(ip_key)
+                        if email_key:
+                            LOGIN_LIMITER.record_success(email_key)
+                        return self._send(200, res)
+                    except ValueError as e:
+                        return self._send(400, {"error": str(e)})
+                    except Exception as e:
+                        return self._send(500, {"error": f"{type(e).__name__}: {e}"})
 
-            if req_path.startswith("/api/auth/"):
+                if req_path.startswith("/api/auth/"):
+                    try:
+                        return self._send(200, route(ctx, req_path, body, user=user, wid=wid))
+                    except PermissionError as e:
+                        return self._send(403, {"error": str(e), "code": "FORBIDDEN"})
+                    except ValueError as e:
+                        return self._send(400, {"error": str(e)})
+                    except Exception as e:
+                        return self._send(500, {"error": f"{type(e).__name__}: {e}"})
+
                 try:
-                    return self._send(200, route(ctx, req_path, body, user=user))
+                    with LOCK:
+                        self._send(200, route(ctx, req_path, body, user=user, wid=wid))
                 except PermissionError as e:
-                    return self._send(403, {"error": str(e), "code": "FORBIDDEN"})
-                except ValueError as e:
-                    return self._send(400, {"error": str(e)})
+                    self._send(403, {"error": str(e), "code": "FORBIDDEN"})
+                except (ValueError, gitutil.GitError, P.PolicyError, KeyError) as e:
+                    self._send(400, {"error": str(e)})
                 except Exception as e:
-                    return self._send(500, {"error": f"{type(e).__name__}: {e}"})
-
-            try:
-                with LOCK:
-                    self._send(200, route(ctx, req_path, body, user=user))
-            except PermissionError as e:
-                self._send(403, {"error": str(e), "code": "FORBIDDEN"})
-            except (ValueError, gitutil.GitError, P.PolicyError, KeyError) as e:
-                self._send(400, {"error": str(e)})
-            except Exception as e:
-                self._send(500, {"error": f"{type(e).__name__}: {e}"})
+                    self._send(500, {"error": f"{type(e).__name__}: {e}"})
 
     return H
 
 
-def state(ctx_or_root, base=None, user=None):
+def state(ctx_or_root, base=None, user=None, wid=None):
     if isinstance(ctx_or_root, Ctx):
         ctx = ctx_or_root
     else:
@@ -580,7 +665,7 @@ def state(ctx_or_root, base=None, user=None):
                 user = p
                 break
 
-    active_root = ctx.get_root_for_user(user)
+    active_root = ctx.get_workspace_root(wid) if wid else ctx.get_root_for_user(user)
     active_base = ctx.get_base_for_root(active_root)
     pol = ctx.policy(active_root)
     try:
@@ -623,9 +708,9 @@ def state(ctx_or_root, base=None, user=None):
     }
 
 
-def route(ctx, path, body, user=None):
+def route(ctx, path, body, user=None, wid=None):
     actor = str(body.get("actor", "")).strip()[:80]
-    active_root = ctx.get_root_for_user(user)
+    active_root = ctx.get_workspace_root(wid) if wid else ctx.get_root_for_user(user)
     active_base = ctx.get_base_for_root(active_root)
     if path == "/api/auth/register":
         u, tok = ctx.auth.register(
