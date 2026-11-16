@@ -604,11 +604,11 @@ def test_item7_pr_adding_repobrain_yml_does_not_affect_its_own_review(tmp_path):
     
     # load_for must load strict built-in defaults, not the PR's repobrain.yml
     pol = P.load_for(root, "main")
-    assert pol.get("_source") == "built-in defaults"
+    assert "built-in defaults" in pol.get("_source", "")
     assert ".github/workflows/" in pol.get("blocked", [])
     
     rev = review.run(root, pol, "main", str(tmp_path / "home"))
-    assert rev["policy_source"] == "built-in defaults"
+    assert "built-in defaults" in rev["policy_source"]
     # Workflow file should be BLOCKED by default policy
     assert rev["decision"] == "BLOCKED"
     assert any(f["severity"] == "block" for f in rev["findings"])
@@ -632,7 +632,7 @@ def test_item7_server_state_does_not_leak_untrusted_working_tree_policy(tmp_path
     subprocess.run(["git", "commit", "-m", "pr with loose policy"], cwd=root, check=True)
     
     st = server.state(root, "main")
-    assert st["policy_source"] == "built-in defaults"
+    assert "built-in defaults" in st["policy_source"]
     assert "999" not in st["policy_yaml"]
 
 

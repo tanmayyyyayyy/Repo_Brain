@@ -181,7 +181,7 @@ def load_for(root, base=None):
         else:
             pol = PolicyResult(DEFAULT)
             pol["_warnings"] = ["base branch has no repobrain.yml - enforcing strict built-in defaults"]
-            pol["_source"] = "built-in defaults"
+            pol["_source"] = "built-in defaults (trusted base fallback)"
             return pol
 
     if os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"):

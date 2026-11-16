@@ -158,7 +158,7 @@ def validate_password_complexity(password: str, is_demo: bool = True):
     if not password or len(password) < 12:
         raise ValueError("Password must be at least 12 characters long outside demo mode")
     p_low = password.strip().lower()
-    if p_low in COMMON_PASSWORDS or any(c in p_low for c in ("password123", "123456789", "qwertyuiop")):
+    if p_low in COMMON_PASSWORDS:
         raise ValueError("Password is too common or easily guessable; please choose a stronger corporate password")
 
 

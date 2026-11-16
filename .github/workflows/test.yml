@@ -38,3 +38,7 @@ jobs:
       - name: Run test suite
         run: |
           python -m pytest -v tests
+
+      - name: Run security probe verification
+        run: |
+          python scripts/security_probe.py
