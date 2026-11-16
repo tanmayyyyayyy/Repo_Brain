@@ -5,6 +5,7 @@ sandboxed demo publicly. Host header is validated (DNS-rebinding), allowed hosts
 be extended with REPOBRAIN_ALLOWED_HOSTS (`*` for any), and POSTs must be JSON (CSRF)."""
 import collections
 import hashlib
+import ipaddress
 import json
 import os
 import pathlib
@@ -48,28 +49,124 @@ def find_slides_html():
 
 STATIC = find_index_html()
 LOCK = threading.RLock()
-_LOGIN_ATTEMPTS = collections.defaultdict(list)
-_RATE_LOCK = threading.Lock()
+
+
+def parse_trusted_proxies(env_val: str = None):
+    val = env_val if env_val is not None else os.environ.get("REPOBRAIN_TRUSTED_PROXIES", "")
+    networks = []
+    for item in val.split(","):
+        s = item.strip()
+        if not s:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(s, strict=False))
+        except ValueError:
+            pass
+    return networks
+
+
+def is_ip_in_networks(ip_str: str, networks: list) -> bool:
+    if not ip_str or not networks:
+        return False
+    try:
+        ip = ipaddress.ip_address(ip_str.strip())
+        return any(ip in net for net in networks)
+    except ValueError:
+        return False
+
+
+def resolve_client_ip(handler) -> str:
+    """Resolve the genuine client IP address.
+    Forwarded headers (X-Forwarded-For / X-Real-IP) are ONLY trusted when the immediate
+    socket peer is within REPOBRAIN_TRUSTED_PROXIES. In that case, the rightmost non-trusted
+    IP in the chain is returned. Otherwise, the socket peer address is returned directly.
+    """
+    peer_ip = "unknown"
+    if handler and getattr(handler, "client_address", None) and len(handler.client_address) > 0:
+        peer_ip = str(handler.client_address[0]).strip()
+
+    trusted_nets = parse_trusted_proxies()
+    # If the direct peer is not in trusted proxies, ignore all forwarded headers completely
+    if not is_ip_in_networks(peer_ip, trusted_nets):
+        return peer_ip
+
+    headers = getattr(handler, "headers", {}) or {}
+    xff = headers.get("X-Forwarded-For", "").strip() if hasattr(headers, "get") else ""
+    if xff:
+        # Split and inspect right-to-left
+        entries = [e.strip() for e in xff.split(",") if e.strip()]
+        for entry in reversed(entries):
+            # Check valid IP syntax
+            try:
+                ipaddress.ip_address(entry)
+            except ValueError:
+                continue
+            if not is_ip_in_networks(entry, trusted_nets):
+                return entry
+
+    x_real = headers.get("X-Real-IP", "").strip() if hasattr(headers, "get") else ""
+    if x_real:
+        try:
+            ipaddress.ip_address(x_real)
+            if not is_ip_in_networks(x_real, trusted_nets):
+                return x_real
+        except ValueError:
+            pass
+
+    return peer_ip
+
+
+class BoundedRateLimiter:
+    """Thread-safe bounded in-memory sliding-window rate limiter with LRU key eviction."""
+
+    def __init__(self, max_keys: int = 10000, window: int = 60, max_attempts: int = 5):
+        self.max_keys = max_keys
+        self.window = window
+        self.max_attempts = max_attempts
+        self._items = collections.OrderedDict()
+        self._lock = threading.Lock()
+
+    def check(self, key: str) -> bool:
+        if not key:
+            return True
+        now = time.time()
+        with self._lock:
+            # Get existing attempts or initialize
+            attempts = [t for t in self._items.get(key, []) if now - t < self.window]
+            if len(attempts) >= self.max_attempts:
+                self._items[key] = attempts
+                self._items.move_to_end(key)
+                return False
+
+            attempts.append(now)
+            self._items[key] = attempts
+            self._items.move_to_end(key)
+
+            # Evict oldest key if exceeding capacity
+            while len(self._items) > self.max_keys:
+                self._items.popitem(last=False)
+            return True
+
+    def record_success(self, key: str):
+        if not key:
+            return
+        with self._lock:
+            self._items.pop(key, None)
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._items)
+
+
+LOGIN_LIMITER = BoundedRateLimiter(max_keys=10000, window=60, max_attempts=5)
 
 
 def check_login_rate(identifier: str) -> bool:
-    if not identifier:
-        return True
-    now = time.time()
-    with _RATE_LOCK:
-        attempts = [t for t in _LOGIN_ATTEMPTS[identifier] if now - t < 60]
-        _LOGIN_ATTEMPTS[identifier] = attempts
-        if len(attempts) >= 5:
-            return False
-        _LOGIN_ATTEMPTS[identifier].append(now)
-        return True
+    return LOGIN_LIMITER.check(identifier)
 
 
 def record_login_success(identifier: str):
-    if not identifier:
-        return
-    with _RATE_LOCK:
-        _LOGIN_ATTEMPTS.pop(identifier, None)
+    LOGIN_LIMITER.record_success(identifier)
 
 
 class Ctx:
@@ -388,17 +485,7 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
                 self._send(500, {"error": str(e)})
 
         def _client_ip(self):
-            xff = self.headers.get("X-Forwarded-For", "").strip()
-            if xff:
-                client = xff.split(",")[0].strip()
-                if re.match(r"^[0-9a-fA-F:.]+$", client):
-                    return client
-            x_real = self.headers.get("X-Real-IP", "").strip()
-            if x_real and re.match(r"^[0-9a-fA-F:.]+$", x_real):
-                return x_real
-            if self.client_address and len(self.client_address) > 0:
-                return str(self.client_address[0])
-            return "unknown"
+            return resolve_client_ip(self)
 
         def do_POST(self):
             if not self._guard():
@@ -441,12 +528,15 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
             if req_path == "/api/auth/login":
                 client_ip = self._client_ip()
                 login_email = str(body.get("email", "")).strip().lower()
-                if not check_login_rate(client_ip) or not check_login_rate(login_email):
+                ip_key = f"ip:{client_ip}"
+                email_key = f"email:{login_email}" if login_email else None
+                if not LOGIN_LIMITER.check(ip_key) or (email_key and not LOGIN_LIMITER.check(email_key)):
                     return self._send(429, {"error": "Too many failed login attempts. Please wait 60 seconds before trying again."})
                 try:
                     res = route(ctx, req_path, body, user=user)
-                    record_login_success(client_ip)
-                    record_login_success(login_email)
+                    LOGIN_LIMITER.record_success(ip_key)
+                    if email_key:
+                        LOGIN_LIMITER.record_success(email_key)
                     return self._send(200, res)
                 except ValueError as e:
                     return self._send(400, {"error": str(e)})
