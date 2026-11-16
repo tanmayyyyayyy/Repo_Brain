@@ -185,6 +185,18 @@ class Ctx:
         self._workspace_refcounts = collections.defaultdict(int)
         self._lock = threading.RLock()
 
+        # One-time bootstrap administrator from startup environment variables
+        boot_email = os.environ.pop("REPOBRAIN_BOOTSTRAP_ADMIN_EMAIL", None)
+        boot_pw = os.environ.pop("REPOBRAIN_BOOTSTRAP_ADMIN_PASSWORD", None)
+        if boot_email and boot_pw:
+            boot_email = boot_email.strip()
+            has_admin = any(u.get("role") == "admin" for u in self.auth.list_users())
+            if not has_admin and len(boot_pw) >= 12:
+                try:
+                    self.auth.bootstrap_admin(boot_email, boot_pw, name="Bootstrap Administrator", audit_log=self.log)
+                except Exception:
+                    pass
+
     def create_valid_wid(self) -> str:
         with self._lock:
             wid = secrets.token_hex(16)

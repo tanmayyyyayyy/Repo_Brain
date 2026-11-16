@@ -6,7 +6,7 @@ import pathlib
 import sys
 
 from . import audit as A
-from . import demo, explainer, export, gitutil, hooks, llm, metrics, mlguard, optimizer, report, review, server, shield
+from . import auth, demo, explainer, export, gitutil, hooks, llm, metrics, mlguard, optimizer, report, review, server, shield
 from . import policy as P
 
 TEST_RX = review.TEST_RX
@@ -280,6 +280,32 @@ def cmd_ci(a):
     return 0 if st["verdict"] == "ready" else 1
 
 
+def cmd_create_admin(a):
+    if not a.password or len(a.password) < 12:
+        print("repobrain create-admin: Password must be at least 12 characters", file=sys.stderr)
+        return 1
+    home = os.path.abspath(a.home) if getattr(a, "home", None) else A.home_for(_root(a))
+    auth_mgr = auth.AuthManager(home, is_demo=False)
+    has_admin = any(u.get("role") == "admin" for u in auth_mgr.list_users())
+    if has_admin:
+        print("repobrain create-admin: An administrator already exists. Role changes must be performed by an existing admin.", file=sys.stderr)
+        return 1
+    try:
+        log = A.AuditLog(home)
+        u, _ = auth_mgr.bootstrap_admin(
+            email=a.email,
+            password=a.password,
+            name=getattr(a, "name", "") or "Administrator",
+            company=getattr(a, "company", ""),
+            audit_log=log
+        )
+        print(f"Successfully bootstrapped system administrator: {u['email']} (ID: {u['id']})")
+        return 0
+    except Exception as e:
+        print(f"repobrain create-admin: {e}", file=sys.stderr)
+        return 1
+
+
 def build():
     ap = argparse.ArgumentParser(prog="repobrain", description=__doc__)
     ap.add_argument("--repo", default=".", help="repository path (default: .)")
@@ -346,6 +372,12 @@ def build():
     sp = add("ci", cmd_ci, help="one command for CI: shield + gate + optimizer")
     sp.add_argument("--base", default="main"); sp.add_argument("--actor", default="ci")
     sp.add_argument("--sarif"); sp.add_argument("--summary")
+
+    sp = add("create-admin", cmd_create_admin, help="bootstrap initial system administrator")
+    sp.add_argument("--email", required=True, help="administrator corporate email")
+    sp.add_argument("--password", required=True, help="administrator password (min 12 chars)")
+    sp.add_argument("--name", default="", help="administrator full name")
+    sp.add_argument("--company", default="", help="company name")
 
     return ap
 

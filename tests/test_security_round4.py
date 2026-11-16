@@ -4,7 +4,7 @@ import os
 import time
 import pytest
 
-from repobrain import server
+from repobrain import auth, server
 
 
 def test_item1_client_ip_ignores_spoofed_xff_when_peer_not_trusted(monkeypatch):
@@ -328,6 +328,74 @@ def test_item3_http_handler_sets_cookie_and_isolates_workspaces(tmp_path):
     assert wid2 is not None
     assert wid2 != "forged000000000000000000000000000"
     assert wid2 != wid1
+
+
+# ==============================================================================
+# ITEM 4: bootstrap_admin restricted to CLI & env vars (never HTTP)
+# ==============================================================================
+
+def test_item4_no_http_endpoint_exposes_bootstrap_admin(tmp_path):
+    root = os.path.join(str(tmp_path), "base_repo")
+    from repobrain import demo
+    demo.seed(root)
+    home = os.path.join(str(tmp_path), "home")
+    ctx = server.Ctx(root, "main", home, is_demo=False)
+    
+    # In route(), neither /api/auth/bootstrap-admin nor /api/bootstrap-admin should exist
+    with pytest.raises(Exception):
+        server.route(ctx, "/api/auth/bootstrap-admin", {"email": "evil@corp.internal", "password": "Password123!"})
+    with pytest.raises(Exception):
+        server.route(ctx, "/api/bootstrap-admin", {"email": "evil@corp.internal", "password": "Password123!"})
+
+
+def test_item4_cli_create_admin_on_empty_db_and_refuses_duplicate(tmp_path):
+    from repobrain import cli
+    home = str(tmp_path)
+    
+    # 1. Success on empty db
+    rc = cli.main(["--home", home, "create-admin", "--email", "admin@enterprise.internal", "--password", "AdminPassword123!", "--name", "Root Admin"])
+    assert rc == 0
+    
+    mgr = auth.AuthManager(home, is_demo=False)
+    admin = mgr._users.get("admin@enterprise.internal")
+    assert admin is not None
+    assert admin["role"] == "admin"
+    assert admin["email_verified"] is True
+    
+    # 2. Second attempt must fail
+    rc2 = cli.main(["--home", home, "create-admin", "--email", "admin2@enterprise.internal", "--password", "AdminPassword123!", "--name", "Second Admin"])
+    assert rc2 != 0
+
+
+def test_item4_cli_create_admin_enforces_password_length(tmp_path):
+    from repobrain import cli
+    home = str(tmp_path)
+    # Password shorter than 12 chars
+    rc = cli.main(["--home", home, "create-admin", "--email", "admin@enterprise.internal", "--password", "Short123!"])
+    assert rc != 0
+
+
+def test_item4_env_vars_create_admin_once_and_are_scrubbed(tmp_path, monkeypatch):
+    monkeypatch.setenv("REPOBRAIN_BOOTSTRAP_ADMIN_EMAIL", "envadmin@enterprise.internal")
+    monkeypatch.setenv("REPOBRAIN_BOOTSTRAP_ADMIN_PASSWORD", "SuperSecurePassword2026!")
+    
+    root = os.path.join(str(tmp_path), "base_repo")
+    from repobrain import demo
+    demo.seed(root)
+    home = os.path.join(str(tmp_path), "home")
+    
+    ctx = server.Ctx(root, "main", home, is_demo=False)
+    
+    # Env vars must be scrubbed from os.environ
+    assert "REPOBRAIN_BOOTSTRAP_ADMIN_EMAIL" not in os.environ
+    assert "REPOBRAIN_BOOTSTRAP_ADMIN_PASSWORD" not in os.environ
+    
+    # Admin must exist
+    mgr = auth.AuthManager(home, is_demo=False)
+    admin = mgr._users.get("envadmin@enterprise.internal")
+    assert admin is not None
+    assert admin["role"] == "admin"
+
 
 
 

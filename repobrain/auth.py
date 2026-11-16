@@ -362,6 +362,8 @@ class AuthManager:
 
     def bootstrap_admin(self, email: str, password: str, name: str, company=None, audit_log=None):
         """Bootstrap the first system administrator account outside demo mode."""
+        if not password or len(password) < 12:
+            raise ValueError("Administrator password must be at least 12 characters")
         with self._lock:
             has_admin = any(u.get("role") == "admin" for u in self._users.values())
             if has_admin:
