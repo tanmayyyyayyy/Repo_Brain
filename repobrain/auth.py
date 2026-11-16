@@ -142,6 +142,26 @@ def validate_company_email(email: str, allowed_domains=None):
     return True, "", domain
 
 
+DUMMY_PBKDF2_HASH = "pbkdf2_sha256$600000$e3b0c44298fc1c149afbf4c8996fb924$e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+COMMON_PASSWORDS = {
+    "password", "password123", "password1234", "12345678", "123456789", "1234567890",
+    "qwerty123456", "admin123456", "welcome1234", "letmein1234", "repobrain1234",
+    "iloveyou1234", "secret123456", "changeme1234", "monkey123456", "dragon123456",
+    "master123456", "sunshine1234", "princess1234", "football1234"
+}
+
+
+def validate_password_complexity(password: str, is_demo: bool = True):
+    if is_demo:
+        return
+    if not password or len(password) < 12:
+        raise ValueError("Password must be at least 12 characters long outside demo mode")
+    p_low = password.strip().lower()
+    if p_low in COMMON_PASSWORDS or any(c in p_low for c in ("password123", "123456789", "qwertyuiop")):
+        raise ValueError("Password is too common or easily guessable; please choose a stronger corporate password")
+
+
 def hash_password(password: str) -> str:
     """Hash password with PBKDF2-HMAC-SHA256, 600,000 iterations and a 16-byte random salt."""
     if not password or len(password) < 6:
@@ -302,6 +322,8 @@ class AuthManager:
         ok, reason, domain = validate_company_email(email, allowed_domains)
         if not ok:
             raise ValueError(reason)
+
+        validate_password_complexity(password, self.is_demo)
 
         email_norm = email.strip().lower()
 
@@ -525,17 +547,16 @@ class AuthManager:
         email_norm = (email or "").strip().lower()
         with self._lock:
             user_rec = self._users.get(email_norm)
-            if not user_rec:
-                if audit_log:
-                    audit_log.append("auth-login-failed", email_norm or "unknown", "REJECTED", "User not found")
-                raise ValueError("Invalid corporate email or password")
-            stored_hash = user_rec.get("password_hash", "")
+            stored_hash = user_rec.get("password_hash", "") if user_rec else DUMMY_PBKDF2_HASH
 
         # Compute password verification outside self._lock so 600,000 PBKDF2 iterations
         # never block concurrent get_user_by_token requests.
-        if not verify_password(password, stored_hash):
+        # Constant-time: always executes PBKDF2 even if user does not exist.
+        valid = verify_password(password or "dummy", stored_hash)
+
+        if not user_rec or not valid:
             if audit_log:
-                audit_log.append("auth-login-failed", email_norm, "REJECTED", "Invalid password credentials")
+                audit_log.append("auth-login-failed", email_norm or "unknown", "REJECTED", "Invalid credentials")
             raise ValueError("Invalid corporate email or password")
 
         with self._lock:
@@ -596,6 +617,20 @@ class AuthManager:
         tok = secrets.token_urlsafe(32)
         h = hash_session_token(tok)
         now = time.time()
+
+        # Purge expired sessions on write
+        expired = [k for k, s in self._sessions.items() if now > s.get("expires_at", 0)]
+        for k in expired:
+            self._sessions.pop(k, None)
+
+        # Cap active sessions per user to 5 (evict oldest)
+        user_email = user_rec["email"]
+        user_sessions = [(k, s.get("created_at", 0)) for k, s in self._sessions.items() if s.get("email") == user_email]
+        user_sessions.sort(key=lambda x: x[1])
+        while len(user_sessions) >= 5:
+            oldest_k, _ = user_sessions.pop(0)
+            self._sessions.pop(oldest_k, None)
+
         self._sessions[h] = {
             "token_hash": h,
             "user_id": user_rec["id"],
@@ -608,6 +643,31 @@ class AuthManager:
         }
         self._save_sessions()
         return tok
+
+    def invalidate_user_sessions(self, email_norm: str):
+        """Invalidate all active sessions for a user (on role change, password change, etc)."""
+        with self._lock:
+            to_del = [k for k, s in self._sessions.items() if s.get("email") == email_norm]
+            for k in to_del:
+                self._sessions.pop(k, None)
+            self._save_sessions()
+
+    def change_password(self, email: str, old_password: str, new_password: str, audit_log=None):
+        """Change user password, verifying complexity outside demo mode, and invalidating existing sessions."""
+        email_norm = email.strip().lower()
+        validate_password_complexity(new_password, self.is_demo)
+        with self._lock:
+            u = self._users.get(email_norm)
+            if not u:
+                raise ValueError("User not found")
+            if not verify_password(old_password, u.get("password_hash", "")):
+                raise ValueError("Invalid current password")
+            u["password_hash"] = hash_password(new_password)
+            self._save_users()
+            self.invalidate_user_sessions(email_norm)
+            if audit_log:
+                audit_log.append("auth-password-change", email_norm, "SUCCESS", "Password updated; all existing sessions invalidated")
+            return {"ok": True}
 
     def get_user_by_token(self, token: str):
         """Retrieve user profile for session token. Returns None if invalid or expired."""
@@ -664,11 +724,8 @@ class AuthManager:
             self._users[email_norm]["title"] = ROLES[new_role]["name"]
             self._save_users()
 
-            # Update active sessions for this user
-            for s in self._sessions.values():
-                if s.get("email") == email_norm:
-                    s["role"] = new_role
-            self._save_sessions()
+            # Invalidate all active sessions on role change (security requirement)
+            self.invalidate_user_sessions(email_norm)
 
             if audit_log:
                 audit_log.append("auth-role-change", actor_email, "UPDATED",

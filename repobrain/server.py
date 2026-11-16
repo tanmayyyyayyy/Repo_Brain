@@ -506,14 +506,17 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
                                 return self._send(200, f.read(), "text/html")
                     if u.path == "/api/auth/me":
                         usr = self._get_user()
+                        raw_users = ctx.auth.list_users()
                         return self._send(200, {
                             "user": usr,
                             "roles": auth.ROLES,
                             "demo_personas": auth.DEFAULT_DEMO_USERS,
-                            "users": ctx.auth.list_users()
+                            "users": mask_user_emails_for_non_admin(raw_users, usr)
                         })
                     if u.path == "/api/auth/users":
-                        return self._send(200, {"users": ctx.auth.list_users()})
+                        usr = self._get_user()
+                        raw_users = ctx.auth.list_users()
+                        return self._send(200, {"users": mask_user_emails_for_non_admin(raw_users, usr)})
                     if u.path == "/api/state":
                         return self._send(200, state(ctx, user=self._get_user(), wid=wid))
                     if u.path == "/api/audit":
@@ -692,7 +695,30 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
     return H
 
 
+def mask_user_emails_for_non_admin(users_list, current_user):
+    usr = current_user[0] if isinstance(current_user, tuple) else current_user
+    is_admin = bool(usr and isinstance(usr, dict) and usr.get("role") == "admin")
+    if is_admin:
+        return users_list
+    current_email = (usr.get("email", "") if isinstance(usr, dict) else "").strip().lower()
+    masked = []
+    for u in users_list:
+        ur = dict(u)
+        em = str(ur.get("email", "")).strip()
+        if em.lower() != current_email:
+            parts = em.split("@")
+            if len(parts) == 2:
+                prefix = parts[0][:2] if len(parts[0]) >= 2 else parts[0][:1]
+                ur["email"] = f"{prefix}***@{parts[1]}"
+            else:
+                ur["email"] = "***"
+        masked.append(ur)
+    return masked
+
+
 def state(ctx_or_root, base=None, user=None, wid=None):
+    if isinstance(user, tuple):
+        user = user[0]
     if isinstance(ctx_or_root, Ctx):
         ctx = ctx_or_root
     else:
@@ -745,8 +771,8 @@ def state(ctx_or_root, base=None, user=None, wid=None):
             "current_user": user,
             "roles": auth.ROLES,
             "demo_personas": auth.DEFAULT_DEMO_USERS,
-            "company": user.get("company", "Acme Corp") if user else "Acme Corp",
-            "users": ctx.auth.list_users()
+            "company": user.get("company", "Acme Corp") if isinstance(user, dict) else "Acme Corp",
+            "users": mask_user_emails_for_non_admin(ctx.auth.list_users(), user)
         }
     }
 

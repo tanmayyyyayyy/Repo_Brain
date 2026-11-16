@@ -197,7 +197,7 @@ def test_item2_stdout_printing_controls(tmp_path, monkeypatch, capsys):
     # 1. Non-demo mode: never print to stdout
     monkeypatch.setenv("REPOBRAIN_SMTP_HOST", "smtp.corp.internal")
     mgr_prod = auth.AuthManager(str(tmp_path / "prod"), is_demo=False)
-    mgr_prod.register("prod@corp.internal", "SecurePassword123!", "Prod")
+    mgr_prod.register("prod@corp.internal", "CorporateSecret#2026!", "Prod")
     captured = capsys.readouterr()
     assert "verification code" not in captured.out.lower()
     
@@ -748,6 +748,125 @@ def test_item9_proposal_reports_sandbox_network_and_rlimits(tmp_path):
     assert "type" in sb
     assert "network_isolated" in sb
     assert "rlimits_applied" in sb
+
+
+# ==============================================================================
+# ITEM 10: Auth Hygiene (Constant-Time Login, Session Caps, Password Complexity)
+# ==============================================================================
+
+def test_item10_constant_time_login_timing(tmp_path):
+    import time
+    from repobrain import auth
+    home = str(tmp_path)
+    mgr = auth.AuthManager(home, is_demo=True)
+    mgr.register("real-user@acmeworks.com", "SecurePassword123!", "Real User")
+    
+    # Measure time for non-existent user
+    t0 = time.perf_counter()
+    try:
+        mgr.login("non-existent-user@acmeworks.com", "WrongPassword123!")
+    except ValueError:
+        pass
+    t_non_existent = time.perf_counter() - t0
+    
+    # Measure time for real user with wrong password
+    t0 = time.perf_counter()
+    try:
+        mgr.login("real-user@acmeworks.com", "WrongPassword123!")
+    except ValueError:
+        pass
+    t_real_user = time.perf_counter() - t0
+    
+    ratio = max(t_non_existent, t_real_user) / max(0.0001, min(t_non_existent, t_real_user))
+    assert ratio < 2.0, f"Timing ratio {ratio:.2f} exceeded 2.0x limit (non_existent={t_non_existent:.4f}s, real={t_real_user:.4f}s)"
+
+
+def test_item10_active_session_cap_and_eviction(tmp_path):
+    from repobrain import auth
+    home = str(tmp_path)
+    mgr = auth.AuthManager(home, is_demo=True)
+    mgr.register("developer@acmeworks.com", "SecurePassword123!", "Developer")
+    
+    tokens = []
+    for i in range(6):
+        _, tok = mgr.login("developer@acmeworks.com", "SecurePassword123!")
+        tokens.append(tok)
+    
+    # 6th login must evict the 1st session
+    assert mgr.get_user_by_token(tokens[0]) is None, "Oldest session (login 1) was not evicted"
+    for tok in tokens[1:]:
+        assert mgr.get_user_by_token(tok) is not None, "Remaining 5 sessions should be valid"
+    
+    dev_sessions = [s for s in mgr._sessions.values() if s.get("email") == "developer@acmeworks.com"]
+    assert len(dev_sessions) == 5, f"Expected exactly 5 active sessions, found {len(dev_sessions)}"
+
+
+def test_item10_role_or_password_change_invalidates_sessions(tmp_path):
+    from repobrain import auth
+    home = str(tmp_path)
+    mgr = auth.AuthManager(home, is_demo=True)
+    mgr.register("admin@acmeworks.com", "AdminPassword123!", "Admin", role="admin")
+    mgr.register("target@acmeworks.com", "SecurePassword123!", "Target", role="developer")
+    
+    _, tok = mgr.login("target@acmeworks.com", "SecurePassword123!")
+    assert mgr.get_user_by_token(tok) is not None
+    
+    # Role change must invalidate target's sessions
+    mgr.update_role("target@acmeworks.com", "security", "admin@acmeworks.com")
+    assert mgr.get_user_by_token(tok) is None, "Session remained valid after role change"
+    
+    # New login
+    _, new_tok = mgr.login("target@acmeworks.com", "SecurePassword123!")
+    assert mgr.get_user_by_token(new_tok) is not None
+    
+    # Password change must invalidate sessions
+    mgr.change_password("target@acmeworks.com", "SecurePassword123!", "NewStrongPassword2026!")
+    assert mgr.get_user_by_token(new_tok) is None, "Session remained valid after password change"
+
+
+def test_item10_password_policy_enforcement(tmp_path):
+    import pytest
+    from repobrain import auth
+    home = str(tmp_path)
+    # Outside demo mode: strict password rules apply
+    mgr = auth.AuthManager(home, is_demo=False)
+    
+    # Short password (<12 chars) rejected
+    with pytest.raises(ValueError, match="at least 12 characters"):
+        mgr.register("user1@acmeworks.com", "Short123!", "User")
+    
+    # Common password rejected
+    with pytest.raises(ValueError, match="too common"):
+        mgr.register("user2@acmeworks.com", "password1234", "User")
+    
+    # Strong password accepted
+    u, _ = mgr.register("user3@acmeworks.com", "StrongEnterpriseCorpPass2026!", "User")
+    assert u["email"] == "user3@acmeworks.com"
+
+
+def test_item10_non_admin_cannot_see_other_users_emails(tmp_path):
+    from repobrain import server, demo, auth
+    root = str(tmp_path / "repo")
+    home = str(tmp_path / "home")
+    demo.seed(root)
+    
+    ctx = server.Ctx(root, "main", home, is_demo=False)
+    admin, _ = ctx.auth.bootstrap_admin("admin@acmeworks.com", "AdminSuperSecret#2026!X", "Admin")
+    dev, _ = ctx.auth.register("dev@acmeworks.com", "DevSuperSecret#2026!Y", "Developer", role="developer")
+    
+    # Dev views state: other users' email addresses must be masked
+    st_dev = server.state(ctx, user=dev)
+    dev_users = st_dev["auth"]["users"]
+    admin_in_dev_view = next(u for u in dev_users if u["role"] == "admin")
+    assert admin_in_dev_view["email"] != "admin@acmeworks.com"
+    assert "***" in admin_in_dev_view["email"]
+    
+    # Admin views state: all email addresses visible
+    st_admin = server.state(ctx, user=admin)
+    admin_users = st_admin["auth"]["users"]
+    admin_in_admin_view = next(u for u in admin_users if u["role"] == "admin")
+    assert admin_in_admin_view["email"] == "admin@acmeworks.com"
+
 
 
 
