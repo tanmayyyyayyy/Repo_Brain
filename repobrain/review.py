@@ -36,13 +36,33 @@ def run(root, policy, base=None, home=None, extra_actor=None):
     added = gitutil.added_lines(root, base)
     actors = gitutil.file_actors(root, base)
     files, findings, gate = [], [], []
+
+    ci_env = bool(os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"))
+    pr_author = os.environ.get("REPOBRAIN_PR_AUTHOR", "").strip()
+    pr_author_type = os.environ.get("REPOBRAIN_PR_AUTHOR_TYPE", "").strip()
+    ci_bot = bool(ci_env and (pr_author_type.lower() == "bot" or pr_author.lower().endswith("[bot]")))
+
+    if policy.get("require_signed_commits", False) and head:
+        sig = gitutil.git(root, "log", "-1", "--format=%G?", head, check=False).strip()
+        if sig not in ("G", "U"):
+            findings.append(shield.finding("block", "unsigned-commit", "(commit)",
+                                           f"commit {head[:7]} is not signed (status %G?='{sig or 'N'}') while policy require_signed_commits is true"))
+
     for status, path in changes:
         ids = set(actors.get(path, set()))
         if extra_actor:
             ids.add(extra_actor)
-        ai = any(P.is_ai(i, policy) for i in ids)
+        if pr_author:
+            ids.add(pr_author)
+        if ci_bot:
+            ai = True
+            file_ai_source = "ci_metadata"
+        else:
+            ai = any(P.is_ai(i, policy) for i in ids)
+            file_ai_source = "heuristic"
         ff = shield.scan_path(path, status, ai, policy)
         entry = {"path": path, "status": status, "actors": sorted(ids), "ai": ai, "findings": ff,
+                 "ai_source": file_ai_source,
                  "violations": [], "added": len(added.get(path, {}))}
         if status != "D":
             text = gitutil.show(root, "HEAD", path)
@@ -96,6 +116,7 @@ def run(root, policy, base=None, home=None, extra_actor=None):
 
     return {"base": base, "head": head, "branch": gitutil.branch(root), "decision": decision,
             "verdict": verdict, "reason": why,
+            "ai_detection_source": ("ci_metadata" if ci_bot else "heuristic"),
             "files": files, "findings": findings, "gate": gate, "waiver": waiver,
             "risk": risk_info,
             "counts": {"files": len(files), "ai_files": len(ai_files), "blocks": len(blocks),

@@ -31,7 +31,10 @@ def test_shield_rules():
     r = shield.check_action({"actor": "copilot[bot]", "path": ".github/workflows/x.yml"}, P)
     assert r["decision"] == "BLOCKED"
     r = shield.check_action({"actor": "Priya", "path": ".github/workflows/x.yml"}, P)
-    assert r["decision"] == "ALLOWED" and r["findings"][0]["severity"] == "warn"
+    assert r["decision"] == "BLOCKED" and r["findings"][0]["severity"] == "block"
+    # Opt-in blocked_for: "ai" keeps human-warning behavior
+    r_ai = shield.check_action({"actor": "Priya", "path": ".github/workflows/x.yml"}, dict(P, blocked_for="ai"))
+    assert r_ai["decision"] == "ALLOWED" and r_ai["findings"][0]["severity"] == "warn"
     # Synthetic AWS documentation example key (not a real credential)
     r = shield.check_action({"actor": "Priya", "path": "a.py", "content": 'token = "AKIAIOSFODNN7EXAMPLE"'}, P)
     assert r["decision"] == "BLOCKED" and "AKIAIOSFODNN7EXAMPLE" not in json.dumps(r)   # evidence is masked

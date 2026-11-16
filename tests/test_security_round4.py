@@ -517,6 +517,66 @@ def test_item5_rate_limit_preflight_and_tamper_blocked_outside_demo(tmp_path):
     assert limiter.check("ip:203.0.113.10") is False
 
 
+# ==============================================================================
+# ITEM 6: AI-Identity Spoofing & Trusted CI Identity
+# ==============================================================================
+
+def test_item6_bot_suffix_treated_as_ai():
+    from repobrain import policy as P
+    pol = P.DEFAULT
+    assert P.is_ai("dependabot[bot]", pol) is True
+    assert P.is_ai("github-actions[bot]@users.noreply.github.com", pol) is True
+    assert P.is_ai("my-custom-agent[bot]", pol) is True
+
+
+def test_item6_web_ui_squash_merge_noreply_not_ai():
+    from repobrain import policy as P
+    pol = P.DEFAULT
+    assert P.is_ai("tanmayjain <123456+tanmayjain@users.noreply.github.com>", pol) is False
+    assert P.is_ai("Jane Doe <noreply@github.com>", pol) is False
+    assert P.is_ai("octocat <583231+octocat@users.noreply.github.com>", pol) is False
+
+
+def test_item6_ci_metadata_bot_treated_as_ai(tmp_path, monkeypatch):
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("REPOBRAIN_PR_AUTHOR", "human-looking-name")
+    monkeypatch.setenv("REPOBRAIN_PR_AUTHOR_TYPE", "Bot")
+    
+    from repobrain import demo, review, policy as P
+    root = str(tmp_path / "repo")
+    demo.seed(root)
+    pol = P.load_for(root, "main")
+    
+    rev = review.run(root, pol, "main", str(tmp_path / "home"), extra_actor="human-looking-name")
+    assert any(f["ai"] is True for f in rev["files"])
+    assert rev.get("ai_detection_source") == "ci_metadata" or any(f.get("ai_source") == "ci_metadata" for f in rev["files"])
+
+
+def test_item6_require_signed_commits_rejects_unsigned_commits(tmp_path):
+    from repobrain import demo, review, policy as P
+    root = str(tmp_path / "repo")
+    demo.seed(root)
+    pol = dict(P.DEFAULT)
+    pol["require_signed_commits"] = True
+    
+    rev = review.run(root, pol, "main", str(tmp_path / "home"), extra_actor="Human Developer <human@corp.internal>")
+    # Unsigned commit claiming human identity must be flagged or rejected
+    unsigned_findings = [f for f in rev["findings"] if "unsigned" in f["rule"].lower() or "signature" in f["rule"].lower() or "unsigned" in f["msg"].lower()]
+    assert len(unsigned_findings) > 0 or all(f["ai"] is True for f in rev["files"])
+
+
+def test_item6_default_policy_blocks_protected_paths_for_everyone(tmp_path):
+    from repobrain import policy as P, shield
+    pol = P.DEFAULT
+    # blocked_for must default to "all"
+    assert pol.get("blocked_for") == "all"
+    
+    # A human (ai=False) editing a workflow file must be BLOCKED, not warned
+    findings = shield.scan_path(".github/workflows/ci.yml", "M", ai=False, policy=pol)
+    assert any(f["severity"] == "block" for f in findings), f"Expected block finding for human on workflow, got {findings}"
+
+
+
 
 
 

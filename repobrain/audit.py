@@ -224,7 +224,6 @@ class AuditLog:
                     rec["sig"] = _sig(rec["hash"])
                 with open(self.path, "a", encoding="utf-8") as f:
                     f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-                self._verify_cache = None
                 return rec
             finally:
                 if lock_fd is not None:
@@ -256,16 +255,23 @@ class AuditLog:
                 "quarantined_file": quarantined
             }
         es = self.entries()
+        stat = os.stat(self.path) if os.path.exists(self.path) else None
+        mtime = getattr(stat, "st_mtime_ns", getattr(stat, "st_mtime", 0)) if stat else 0
+        size = getattr(stat, "st_size", 0) if stat else 0
+        key = _key()
         if not expect_head and self._verify_cache:
-            if len(es) == self._verify_cache["count"] and es and es[-1].get("hash") == self._verify_cache["head"]:
-                cached_res = dict(self._verify_cache["result"])
+            c = self._verify_cache
+            if c.get("mtime") == mtime and c.get("size") == size and c.get("key") == key:
+                cached_res = dict(c["result"])
                 cached_res["cached"] = True
                 return cached_res
+
         res = verify_entries(es, expect_head)
         if not expect_head and res.get("ok"):
             self._verify_cache = {
-                "count": len(es),
-                "head": es[-1].get("hash") if es else None,
+                "mtime": mtime,
+                "size": size,
+                "key": key,
                 "result": res
             }
         return res
