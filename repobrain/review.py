@@ -49,6 +49,8 @@ def run(root, policy, base=None, home=None, extra_actor=None):
                                            f"commit {head[:7]} is not signed (status %G?='{sig or 'N'}') while policy require_signed_commits is true"))
 
     for status, path in changes:
+        if shield.ignored(path, policy):
+            continue
         ids = set(actors.get(path, set()))
         if extra_actor:
             ids.add(extra_actor)

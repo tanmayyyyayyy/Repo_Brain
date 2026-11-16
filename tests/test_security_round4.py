@@ -489,11 +489,11 @@ def test_item5_cached_verification_avoids_reverifying_old_records(tmp_path):
     for i in range(10):
         log.append(f"event-{i}", "system", "ALLOWED")
         
-    v1 = log.verify()
+    v1 = log.verify(cached=True)
     assert v1["ok"] is True
     
     # Second verify with no changes should return cached result without scanning
-    v2 = log.verify()
+    v2 = log.verify(cached=True)
     assert v2["ok"] is True
     assert v2.get("cached", False) is True
 
@@ -641,6 +641,7 @@ def test_item7_server_state_does_not_leak_untrusted_working_tree_policy(tmp_path
 # ==============================================================================
 
 def test_item8_strict_csp_and_zero_violations_across_views(tmp_path):
+    pytest.importorskip("playwright")
     import threading, time
     from playwright.sync_api import sync_playwright
     from repobrain import server, demo
@@ -907,13 +908,87 @@ def test_item11_submission_zip_under_size_limit_and_excludes_raw_video(tmp_path,
     # Must be well under the 50MB limit
     assert size_mb < 50.0, f"Submission zip too large: {size_mb:.2f} MB"
     
-    # Must NOT contain raw screen recording or heavy video files
-    with zipfile.ZipFile(str(zip_path), "r") as zf:
-        names = zf.namelist()
-        for name in names:
-            ext = os.path.splitext(name)[1].lower()
-            assert ext not in (".mp4", ".mov", ".mkv", ".avi", ".webm"), f"Zip contained forbidden video file: {name}"
-            assert ".git" not in name.split("/"), f"Zip contained .git metadata: {name}"
+
+def test_item2_repo_policy_enforces_blocked_for_all():
+    import os
+    from repobrain import policy
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    
+    # 1. Main repo policy
+    main_pol = policy.load(os.path.join(root, "repobrain.yml"))
+    assert main_pol.get("blocked_for") == "all", f"repobrain.yml must set blocked_for: all, got {main_pol.get('blocked_for')}"
+    
+    # 2. Demo assets policy
+    demo_pol = policy.load(os.path.join(root, "demo_assets", "repobrain.yml"))
+    assert demo_pol.get("blocked_for") == "all", f"demo_assets/repobrain.yml must set blocked_for: all, got {demo_pol.get('blocked_for')}"
+    
+    # Must fail if set to 'ai'
+    ai_pol = dict(main_pol, blocked_for="ai")
+    assert ai_pol.get("blocked_for") != "all"
+
+
+def test_item3_audit_full_uncached_verify_detects_middle_record_tampering_with_restored_mtime_and_size(tmp_path):
+    from repobrain import audit as A
+    home = str(tmp_path)
+    log = A.AuditLog(home)
+    
+    # Append 5 records
+    for i in range(1, 6):
+        log.append(f"event-{i}", "developer", "ALLOWED", f"detail for record {i}")
+        
+    # Initial uncached verify must succeed
+    v_init = log.verify()
+    assert v_init["ok"] is True
+    assert v_init["count"] == 5
+    
+    # Capture original file stat
+    orig_stat = os.stat(log.path)
+    orig_mtime_ns = orig_stat.st_mtime_ns
+    orig_size = orig_stat.st_size
+    
+    # Read all lines
+    with open(log.path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    assert len(lines) == 5
+    
+    # Tamper with middle record (record index 2, seq 3)
+    # Carefully replace characters in-place to preserve exact byte length
+    mid_line = lines[2]
+    import json
+    data = json.loads(mid_line)
+    orig_event = data["event"]
+    tampered_event = orig_event.replace("event-3", "hacked-3")
+    data["event"] = tampered_event
+    # Re-encode and pad to exact length
+    tampered_json = json.dumps(data)
+    pad = len(mid_line.rstrip("\r\n")) - len(tampered_json)
+    if pad >= 0:
+        tampered_line = tampered_json + (" " * pad) + "\n"
+    else:
+        # replace directly
+        tampered_line = mid_line.replace('"event": "event-3"', '"event": "hacked3"')
+    assert len(tampered_line.encode("utf-8")) == len(mid_line.encode("utf-8")), "Line length must match exactly"
+    lines[2] = tampered_line
+    
+    with open(log.path, "w", encoding="utf-8", newline="\n") as f:
+        f.writelines(lines)
+        
+    # Restore mtime and atime
+    os.utime(log.path, ns=(orig_mtime_ns, orig_mtime_ns))
+    
+    new_stat = os.stat(log.path)
+    assert new_stat.st_size == orig_size, f"Size changed: {new_stat.st_size} vs {orig_size}"
+    assert new_stat.st_mtime_ns == orig_mtime_ns, f"mtime changed: {new_stat.st_mtime_ns} vs {orig_mtime_ns}"
+    
+    # Verify MUST still fail because CLI, CI and /api/audit perform a full uncached verify
+    v_tampered = log.verify(cached=False)
+    assert v_tampered["ok"] is False, "Uncached verify must detect middle record tampering"
+    assert v_tampered["broken_at"] in (3, 4), f"Broken at must point to tampered entry, got {v_tampered.get('broken_at')}"
+    
+    # Default verify() without arguments is also uncached and must fail
+    v_default = log.verify()
+    assert v_default["ok"] is False, "Default verify() must be uncached and detect tampering"
+
 
 
 

@@ -233,7 +233,18 @@ class Ctx:
 
     def _delete_workspace(self, k: str):
         dir_to_remove = os.path.join(self.home, "demo_sessions", k)
-        shutil.rmtree(dir_to_remove, ignore_errors=True)
+        if os.path.exists(dir_to_remove):
+            import stat
+            def _handle_err(func, p, exc_info):
+                try:
+                    os.chmod(p, stat.S_IWRITE)
+                    func(p)
+                except Exception:
+                    pass
+            try:
+                shutil.rmtree(dir_to_remove, onerror=_handle_err)
+            except Exception:
+                shutil.rmtree(dir_to_remove, ignore_errors=True)
         self._workspace_access.pop(k, None)
         self._session_roots.pop(k, None)
         self._valid_demo_wids.discard(k)

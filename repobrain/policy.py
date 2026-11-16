@@ -42,7 +42,7 @@ DEFAULT = {
     "ml_guard": True,                # learned prompt-injection classifier
     "require_sandbox": False,        # strictly require Bubblewrap container isolation (fails if bwrap unavailable)
     "dependency_guard": True,        # typosquat / dependency-confusion checks
-    "ignore": [],                    # paths Shield will not scan
+    "ignore": ["repobrain/web/app.js", "repobrain/web/app.css"],  # paths Shield will not scan (e.g. web demo fixtures)
 }
 
 _TYPES = {

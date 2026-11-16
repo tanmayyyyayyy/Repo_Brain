@@ -241,7 +241,7 @@ class AuditLog:
                     except (ImportError, OSError):
                         pass
 
-    def verify(self, expect_head=None):
+    def verify(self, expect_head=None, cached=False):
         if self.is_recovery_pending():
             info = self.get_recovery_info()
             quarantined = info.get("quarantined_file", "corrupt file")
@@ -259,7 +259,7 @@ class AuditLog:
         mtime = getattr(stat, "st_mtime_ns", getattr(stat, "st_mtime", 0)) if stat else 0
         size = getattr(stat, "st_size", 0) if stat else 0
         key = _key()
-        if not expect_head and self._verify_cache:
+        if cached and not expect_head and self._verify_cache:
             c = self._verify_cache
             if c.get("mtime") == mtime and c.get("size") == size and c.get("key") == key:
                 cached_res = dict(c["result"])
@@ -267,7 +267,7 @@ class AuditLog:
                 return cached_res
 
         res = verify_entries(es, expect_head)
-        if not expect_head and res.get("ok"):
+        if cached and not expect_head and res.get("ok"):
             self._verify_cache = {
                 "mtime": mtime,
                 "size": size,

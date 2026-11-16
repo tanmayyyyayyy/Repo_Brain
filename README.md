@@ -11,7 +11,7 @@
 > - **Quick Run**: `pip install -r requirements.txt && python server.py` (or Docker CLI: `docker build -t repobrain . && docker run --rm -v "$(pwd)":/repo repobrain review --base origin/main`)
 > - **Measured Impact**: 21 commits / 14,500 diff lines scanned with 0 runtime FPs ([`REAL_WORLD_EVAL.md`](docs/REAL_WORLD_EVAL.md)); 51,781 OSS Python LoC scanned with 0 FPs ([`SHIELD_EVAL.md`](docs/SHIELD_EVAL.md)).
 > - **Enterprise Security**: Corporate email domain enforcement (`@company.com`), 600,000-iteration PBKDF2-HMAC-SHA256 passwords, 4-tier RBAC, and zero-telemetry offline-first architecture.
-> - **Limits**: AST optimizer targets Python only (Shield/Audit are language-agnostic); ML guard warns only (0.625 recall); optional `--ai` refactor tier requires `GROQ_API_KEY` or `ANTHROPIC_API_KEY`.
+> - **Limits**: AST optimizer targets Python only (Shield/Audit are language-agnostic); ML guard warns only (0.639 recall); optional `--ai` refactor tier requires `GROQ_API_KEY` or `ANTHROPIC_API_KEY`.
 
 **A vendor-neutral safety, cleanup and audit layer for repos that AI agents write to.**
 It does not write code. It decides what AI (and humans) may change, cleans up what they wrote
@@ -144,7 +144,7 @@ python -m repobrain demo                                                     # r
 - The **AI refactor tier (`--ai`)** routes to Groq or Anthropic APIs and is validated against local mock servers in CI (`tests/test_ai_tier.py`, `tests/test_llm_providers.py`); live API execution requires `GROQ_API_KEY` or `ANTHROPIC_API_KEY` and is skipped when keys are absent.
 - RepoBrain only governs what passes through it. A direct push to an unprotected branch bypasses it — enforce via GitHub branch rulesets.
 - A hash chain proves *edits* happened; detecting a fully rewritten log needs HMAC signing (`REPOBRAIN_AUDIT_KEY`) paired with an out-of-band anchored head (`--anchor-file` stored in CI artifacts).
-- **Prompt injection and ML Guard limits**: Combines multi-line regex rules with a lightweight Naive Bayes classifier. Evaluated on a 242-sample team-written corpus via 5-fold cross-validation: precision 0.938, recall 0.625, F1 0.75 (hybrid: precision 0.940, recall 0.653, F1 0.770) with a measured 0.03% false-positive rate on 4,000 Python stdlib documentation comments. Because the corpus is small and team-written, these numbers are not a production accuracy claim. Architectural rule: deterministic rules can block; the ML model can only warn.
+- **Prompt injection and ML Guard limits**: Combines multi-line regex rules with a lightweight Naive Bayes classifier. Evaluated on a 772-sample corpus (including a negative corpus of 530 UI strings and JavaScript files) via 5-fold cross-validation: precision 0.939, recall 0.639, F1 0.760 (hybrid: precision 0.941, recall 0.667, F1 0.780) with a measured 0.0% false-positive rate on 530 JS/UI string samples and 0.03% on 4,000 Python stdlib documentation comments. Because the positive attack corpus is small and team-written, these numbers are not a production accuracy claim. Architectural rule: deterministic rules can block; the ML model can only warn.
 - Not a hosted GitHub App yet (multi-repo web dashboard, SAML SSO) — that is on the roadmap.
 
 ## AI assistance & third-party material

@@ -130,6 +130,12 @@ def blocked_by(path, policy):
     return next((p for p in policy.get("blocked", []) if _glob(path, p)), None)
 
 
+# Synthetic sample secrets that are explicitly allowlisted in documentation or test/demo fixtures
+SAMPLE_SECRET_ALLOWLIST = {
+    "AKIAIOSFODNN7EXAMPLE",  # Standard AWS documentation placeholder key
+}
+
+
 def ignored(path, policy):
     return any(_glob(path, p) for p in policy.get("ignore", []))
 
@@ -153,6 +159,8 @@ def finding(sev, rule, path, msg, line=None, evidence=None, **extra):
 
 
 def scan_path(path, status, ai, policy):
+    if ignored(path, policy):
+        return []
     out = []
     pat = P.match_path(path, policy.get("blocked", []))
     if pat:
@@ -173,6 +181,8 @@ def scan_path(path, status, ai, policy):
 def scan_text(path, text, policy, actor=None, only_lines=None):
     """Scan file content. Accepts either (path, text, policy, only_lines)
     or (path, text, policy, actor, only_lines)."""
+    if ignored(path, policy):
+        return []
     if isinstance(actor, (set, list, tuple, dict)) or (hasattr(actor, "__iter__") and not isinstance(actor, str)):
         only_lines = actor
         actor = "unknown"
@@ -209,9 +219,18 @@ def scan_text(path, text, policy, actor=None, only_lines=None):
                     matched_rule = (rule, m.group(0))
                     break
         if matched_rule:
-            out.append(finding("block", "secret", path,
-                               f"possible hardcoded credential ({matched_rule[0]})", n, mask(matched_rule[1])))
-            reported_lines.add(n)
+            sec_val = matched_rule[1]
+            is_allowlisted = (
+                sec_val in SAMPLE_SECRET_ALLOWLIST and (
+                    path.startswith("repobrain/web/") or path.startswith("docs/") or
+                    path.startswith("demo_assets/") or path.endswith((".js", ".html", ".md", ".json")) or
+                    ignored(path, policy) or sec_val in policy.get("allowed_secrets", [])
+                )
+            ) or (sec_val in policy.get("allowed_secrets", []))
+            if not is_allowlisted:
+                out.append(finding("block", "secret", path,
+                                   f"possible hardcoded credential ({matched_rule[0]})", n, mask(matched_rule[1])))
+                reported_lines.add(n)
 
         # 1b. Base64-encoded secret literals (len >= 16)
         if n not in reported_lines:

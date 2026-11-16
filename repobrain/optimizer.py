@@ -209,11 +209,11 @@ def run_tests(root, overrides, policy, cov_funcs=None):
                 bwrap_bin,
                 "--unshare-all",
                 "--ro-bind", "/", "/",
-                "--bind", work, work,
-                "--bind", tmp, tmp,
                 "--dev", "/dev",
                 "--proc", "/proc",
                 "--tmpfs", "/tmp",
+                "--bind", tmp, tmp,
+                "--bind", work, work,
                 "--chdir", work,
                 *cov_cmd
             ]

@@ -63,6 +63,7 @@ def should_exclude(rel_path):
 
 
 def main():
+    os.makedirs(OUT_DIR, exist_ok=True)
     print(f"📦 Packaging RepoBrain submission from: {ROOT}")
     print(f"🎯 Output target: {OUT_PATH}")
 
@@ -85,7 +86,7 @@ def main():
                 if "raw_screen_recording" in fname or fname.endswith(".mov"):
                     continue
 
-                arcname = os.path.join("repobrain-prototype", rel_path)
+                arcname = os.path.join("repobrain-prototype", rel_path).replace("\\", "/")
                 zf.write(full_path, arcname)
                 total_files += 1
                 total_bytes += os.path.getsize(full_path)
