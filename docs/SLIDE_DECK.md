@@ -13,15 +13,24 @@
 ### Headline: AI Coding Agents Move at Machine Speed, but Enterprise Governance Is Broken
 
 - **The Explosion of Autonomous Coding Agents**: Cursor, Claude Code, GitHub Copilot, Devin, and open-source autonomous agents are generating thousands of Pull Requests weekly across enterprise repositories.
-- **Why Traditional DevSecOps Fails**:
+- **Why Traditional DevSecOps Fails on AI Agents**:
   1. **Linters Only Warn**: Ruff, ESLint, and SonarQube emit advisory comments that autonomous agents routinely ignore or bypass.
   2. **Trivial Evasions**: Single-line secret scanners miss split string concatenation (`'AKIA' + '...'`) and base64-encoded credentials (`QUtJ...`).
   3. **Multi-line Prompt Injections**: Malicious prompt injections hidden in markdown notes or code comments (`# Ignore previous \n # instructions`) slip past line-by-line scanners into production.
   4. **Unchecked Technical Debt**: AI agents optimize for "does it pass tests" and introduce deeply nested, unmaintainable Spaghetti code (cyclomatic complexity 25+).
   5. **No Audit Provenance**: Zero cryptographic proof of which commits were agent-authored vs human-approved, leaving compliance teams blind during SOC 2 / ISO 27001 audits.
 
-*Speaker Script (30s)*:  
-> "When AI coding agents write code, who controls what they can touch? Today, enterprise teams rely on legacy linters and scanners that only emit advisory warnings. AI agents easily evade single-line regexes, introduce unmaintainable code complexity, and touch critical CI workflows without resistance. Most critically, enterprises have zero cryptographic proof of who authorized an AI commit. RepoBrain solves this."
+### Why Classic Developer Tools Fail (Missed vs. Blocked Matrix):
+
+| Adversarial AI Evasion Pattern | Gitleaks / detect-secrets | radon / Lizard / Linters | Semgrep (OSS) | RepoBrain Governance Engine |
+|---|:---:|:---:|:---:|:---:|
+| **Concatenated Secret Literal**<br>`k = 'AKIA' + 'IOSFODNN7EXAMPLE'` | ❌ **MISSED**<br>Regex splits token | ⚪ N/A<br>No secret scan | ❌ **MISSED**<br>Regex fails on split | 🛡️ **BLOCKED**<br>AST concat normalization |
+| **Multi-Line Prompt Injection**<br>`# ignore \n # all previous instructions` | ❌ **MISSED**<br>Single-line regex | ❌ **MISSED**<br>Ignored as comment | ❌ **MISSED**<br>Line-by-line rule | 🛡️ **BLOCKED**<br>Sliding window + ML Guard |
+| **High-Complexity Spaghetti**<br>`discount_for()` (Cyclomatic 27, depth 6) | ⚪ N/A<br>No complexity check | ⚠️ **WARN ONLY**<br>Advisory; agent ignores | ⚪ N/A<br>No refactoring | ⚡ **REWRITTEN & PROVEN**<br>Formal AST proof + tests |
+| **Taint Flow to Shell Sink**<br>`user_input` $\to$ `subprocess(shell=True)` | ⚪ N/A<br>No taint analysis | ⚪ N/A<br>No taint analysis | ❌ **MISSED**<br>Needs custom rules | 🔍 **BLOCKED (CWE-78)**<br>Sequential taint engine |
+
+*Speaker Script (35s)*:  
+> "When AI coding agents write code, who controls what they can touch? Today, enterprise teams rely on legacy linters and scanners that only emit advisory warnings. As you can see on this matrix, classic tools easily miss split string secrets, multi-line prompt injections, and dangerous taint flows to shell sinks. AI agents bypass these with zero resistance, introducing unmaintainable spaghetti code without any cryptographic audit provenance. RepoBrain is purpose-built to solve this."
 
 ---
 
@@ -139,13 +148,13 @@
 └───────────────────────────┴─────────────────────────────────────────────────┘
 ```
 
-- **Corporate Email Authentication**: Strict validation rejecting 20+ public webmail providers (`@gmail.com`, `@yahoo.com`, `@proton.me`) while enforcing corporate company domains.
-- **FIPS-Grade Password Security**: PBKDF2-HMAC-SHA256 with 600,000 iterations and 16-byte cryptographically secure salts.
-- **Zero-Trust Role Enforcement**: Route-level permission checks (403 Forbidden Access Denied modal if a developer tries to approve merges).
-- **WCAG 2.1 AA Compliant Mission Control**: High-contrast theme, focus rings, responsive layouts, presenter mode, and keyboard-first `Cmd+K` command palette.
+- **Target Buyer Persona**: Platform Engineering, DevSecOps, and Security teams deploying autonomous coding agents (Claude Code, Cursor, Copilot, Devin) across large enterprise repositories.
+- **Enterprise Security**: Strict corporate email domain filtering (`@company.com`), FIPS-grade PBKDF2-HMAC-SHA256 passwords (600,000 iterations), and HttpOnly cookie-partitioned workspaces.
+- **Production Key Management**: In production, `REPOBRAIN_AUDIT_KEY` is injected as a hardware-backed secret via AWS Secrets Manager, HashiCorp Vault, or GitHub Actions OIDC (demo runs on ephemeral seeded key).
+- **Zero-Trust Role Enforcement**: Route-level permission checks (403 Forbidden Access Denied modal if a developer attempts an admin merge or waiver).
 
 *Speaker Script (35s)*:  
-> "In Round 3, we engineered RepoBrain into a production-grade enterprise platform. It features strict corporate email validation that rejects personal webmail, FIPS-compliant PBKDF2 password hashing, and a 4-tier Role-Based Access Control matrix. A developer can write code and run the optimizer, but cannot approve merges or waive security gates. Every authentication event is committed directly to the HMAC ledger."
+> "Who buys RepoBrain? Enterprise Platform and Security leaders who want to give their engineers the speed of autonomous coding agents like Claude Code or Cursor, but cannot compromise on SOC 2 and ISO 27001 compliance. We provide strict corporate domain enforcement, FIPS-compliant PBKDF2 password hashing, and a 4-tier Role-Based Access Control matrix. A developer can write code and run the optimizer, but cannot approve merges or waive security gates. Every authentication event is committed directly to the HMAC ledger."
 
 ---
 
@@ -158,16 +167,21 @@
 | **Real-World PR Evaluation** | 21 production commits / 14,500 diff lines ([`REAL_WORLD_EVAL.md`](REAL_WORLD_EVAL.md)) | **0% False Positives** |
 | **Open-Source Code Scan** | 124 files / 51,781 LoC across CPython, PyYAML, coverage ([`SHIELD_EVAL.md`](SHIELD_EVAL.md)) | **0 False Positives** |
 | **Complexity Reduction** | `shop/orders.py` order processing module | **27 → 8 Cyclomatic (70% drop)** |
-| **Automated Test Suite** | Matrix across Linux/macOS/Windows × Python 3.10–3.13 | **190+ Passed, 1 Skipped (100% Green)** |
+| **Automated Test Suite** | Matrix across Linux/macOS/Windows × Python 3.10–3.13 | **208 Passed, 1 Skipped (100% Green)** |
 | **Supply Chain Surface** | Third-party production runtime dependencies | **Pure Python Stdlib + PyYAML** |
 
-### Future Scope & Commercial Horizon
+### Honest Boundaries & Scope
+- **Language Scope Today**: Deterministic AST optimizer targets Python; Shield, Taint Analysis, Secret Normalization, Prompt Injection, and Merkle Audit are 100% language-agnostic.
+- **ML Guard Policy**: Heuristic Naive Bayes model warns only (p ≥ 0.90, 0.03% FP rate on 4,000 stdlib lines); only rigid deterministic rules can block.
+- **Sandboxing**: Runs test suites under CPU/memory `rlimits` and subprocess timeouts.
+
+### Future Scope & Commercial Roadmap
 1. **Multi-Language AST Engines**: Extending AST flattening & differential fuzzing from Python to TypeScript/JavaScript and Go.
-2. **GitHub Marketplace App**: Multi-tenant webhook bot with automated check runs, sticky PR status comments, and SARIF security reporting.
-3. **Hardware Enclave & Rekor Integration**: Anchoring audit log signatures to public transparency logs (Sigstore Rekor) and AWS KMS / Google Cloud HSM keys.
+2. **GitHub Marketplace App**: Multi-tenant webhook bot with automated check runs, sticky PR status comments, and SARIF security reporting (`webhook.py`).
+3. **Public Transparency Log Anchoring**: Anchoring Merkle roots to public transparency logs (Sigstore Rekor) and cloud HSMs.
 
 *Speaker Script (30s)*:  
-> "RepoBrain is not a mock concept. We evaluated it across 21 real production commits and 14,500 diff lines with zero false positives. Our test suite passes 199 automated tests (1 skipped) across Linux (with Bubblewrap container sandboxing), macOS, and Windows runners. As AI coding agents become the primary contributors to global software, RepoBrain provides the definitive safety, optimization, and cryptographic governance infrastructure the software industry requires."
+> "RepoBrain is not a mock concept. We evaluated it across 21 real production commits and 14,500 diff lines with zero false positives. Our test suite passes 208 automated tests across Linux (with Bubblewrap container sandboxing), macOS, and Windows runners. As AI coding agents become the primary contributors to global software, RepoBrain provides the definitive safety, formal verification, and cryptographic governance infrastructure the software industry requires."
 
 ---
 

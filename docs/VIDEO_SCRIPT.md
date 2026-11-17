@@ -1,55 +1,84 @@
-# RepoBrain Video Demo Script (2:30 Exact Presentation)
+# RepoBrain 90-Second Demo Video Script (Finals Master Arc)
 
-> **Theme**: Flight recorder & mission control for repositories touched by AI coding agents.
-> **Length**: ~2 minutes 05 seconds (`docs/demo/repobrain_demo_edited.mp4`).
-> **Screen Setup**: Full-frame 1600×900 dark mode scaled cleanly to 1920×1080 60fps with narrated AAC audio and large lower-third captions.
-
----
-
-## ⏱️ Video Timeline & Cues
-
-### [0:00 - 0:30] Hook & Mission Control
-- **On Screen**: Show RepoBrain web console hero section. Point to persistent left rail with 5-stage pipeline stepper (Shield -> Gate -> Optimizer -> Human -> Audit).
-- **Spoken Audio**:
-  > "Autonomous coding agents like Claude Code, Cursor, and Devin are generating massive pull requests. But engineering teams face a dilemma: either spend hours reviewing AI spaghetti code, or risk accidental credential leaks, corrupted CI workflows, and prompt injection attacks.
-  >
-  > This is **RepoBrain**: an open-source, vendor-neutral governance, cleanup, and audit layer for repositories that AI agents write to. It doesn't write code—it decides what agents may touch, cleans up what they write using your existing tests as the judge, and keeps cryptographic proof of every decision."
+> **Core Arc**: **"Agent Tries Bad → Blocked Instantly → Fixed & Mathematically Proven → Named Human Approves → Cryptographically Proven"**  
+> **Target Duration**: Exactly 90 seconds (1:30)  
+> **Resolution & Framerate**: 1920×1080 60fps, dark mode, high-contrast typography, crisp voiceover & synchronized captions.
 
 ---
 
-### [0:30 - 1:10] Scenario A: The Risky AI PR (Shield Defense)
-- **Action**: Click `Scenario A` button (or press `1`). Verdict hero updates to **BLOCKED**. Click `.github/workflows/ci.yml` in the PR map to open the unified diff with red inline annotations.
-- **Spoken Audio**:
-  > "Here in Scenario A, an AI agent attempted to update configuration. Shield immediately flags three blocking violations:
-  > First, a hardcoded AWS key in `shop/config.py`, automatically masked.
-  > Second, an unauthorized modification to our protected deployment workflow in `.github/workflows/ci.yml`.
-  > And third, an indirect prompt injection hidden in markdown instructing future agents to exfiltrate secrets.
+## ⏱️ Timeline & Precise Cues
+
+### [0:00 - 0:15] The Hook: The AI Coding Agent Dilemma
+- **Visual**: Mission Control Console at `http://127.0.0.1:8765`. Camera pans across the persistent left telemetry rail showing the 5-stage pipeline: `Shield → Gate → Optimizer → Human → Audit`.
+- **Narration**:
+  > "AI coding agents like Cursor, Claude Code, and Devin are generating massive pull requests. But standard tools only emit advisory warnings, regexes miss split secrets, and agents can easily evade line-by-line linters.
   >
-  > Notice the policy source: `origin/main`. Even if an AI agent edits `repobrain.yml` in its PR branch, RepoBrain reads policy strictly from the trusted base ref. The agent cannot loosen its own rules."
+  > This is **RepoBrain**: an open-source, vendor-neutral governance and cryptographic audit layer for repos that AI agents write to."
 
 ---
 
-### [1:10 - 1:55] Scenario B: The Messy AI PR & Verified AST Optimizer
-- **Action**: Click `Scenario B` (or press `2`). Verdict updates to yellow **CHANGES REQUIRED**. Point out `discount_for` exceeding nesting depth (4 > 3) and cognitive complexity (15 > 10). Click **Optimize** button.
-- **Spoken Audio**:
-  > "Now let's switch to Scenario B. The code is secure, but it's classic AI slop: deep nesting, redundant else-branches, and high cognitive complexity.
+### [0:15 - 0:35] Step 1: Agent Tries Something Bad (The Adversarial PR)
+- **Visual**: Switch to `Scenario A: risky AI PR` (press `1`). The screen renders a bold red **`BLOCKED`** hero with 4 critical violations. Click `.github/workflows/ci.yml` in the PR map to show the unified diff with red inline annotations.
+- **Narration**:
+  > "Here, an autonomous agent opens a PR containing four classic evasions:
+  > A concatenated AWS secret key (`'AKIA' + '...'`) that defeats standard scanners;
+  > An unauthorized modification to our deployment workflow in `.github/workflows/ci.yml`;
+  > A multi-line prompt injection hidden across comment lines;
+  > And an untrusted data flow into a shell execution sink.
   >
-  > Instead of sending code back for another hallucinatory review loop, we click **Optimize**.
-  > On a temporary scratch copy with resource limits, RepoBrain applies semantic-preserving AST rewrites, runs our unit tests (`26 passed`), and verifies behavior using differential fuzzing.
-  >
-  > Cognitive complexity drops from 15 to 10; nesting depth drops from 4 to 3. Inline comments and line endings are strictly preserved.
-  > RepoBrain never merges on its own: a named human, Priya Sharma, approves the proposal, committing it with an `Approved-by:` trailer. Re-running the review now flips the verdict to **ALLOWED**."
+  > Notice the policy provenance: `origin/main`. Even if the agent edits `repobrain.yml` in its PR branch, RepoBrain reads policy strictly from the trusted base. The agent cannot loosen its own rules."
 
 ---
 
-### [1:55 - 2:30] Cryptographic Audit Trail & Tamper Detection
-- **Action**: Click **Audit** tab (or press `5`). Point out the vertical timeline blockchain ledger and the `HMAC-signed` status pill. Click **Simulate tampering**.
-- **Spoken Audio**:
-  > "Underneath every check is an append-only JSONL audit ledger. Every review, waiver, and human approval is anchored in a SHA-256 hash chain and HMAC-signed with `REPOBRAIN_AUDIT_KEY`.
+### [0:35 - 0:55] Step 2 & 3: Complexity Gate & AST Optimizer with Formal Proof
+- **Visual**: Switch to `Scenario B: messy AI PR` (press `2`). The verdict changes to yellow **`CHANGES REQUIRED`** with `discount_for()` flagged for nesting depth 4 > 3 and cognitive complexity 15 > 10. Click **Run optimizer**.
+- **Narration**:
+  > "In Scenario B, the code is safe but introduces unmaintainable spaghetti debt.
   >
-  > If someone tampers with historical block #8 in memory—even if they recompute the SHA-256 hashes—the cryptographic HMAC signature fails immediately, invalidating every downstream block in the chain.
+  > Instead of hallucinations, we click **Run optimizer**.
+  > Inside an isolated sandbox, RepoBrain executes semantics-preserving AST rewrites, passes the repo's test suite, and differentially fuzzes 500 edge inputs with zero divergences.
   >
-  > With zero heavy runtime dependencies, 190+ passing automated tests, and a measured 0.03% false-positive rate across 4,000 stdlib prose samples, RepoBrain gives engineering leaders complete confidence to adopt AI coding agents at scale. Thank you."
+  > Crucially, our **Symbolic Formal Prover** mathematically proves that original and optimized AST execution paths are 100% equivalent across all inputs—emitting an immutable theorem hash. Cognitive complexity drops from 15 to 10."
+
+---
+
+### [0:55 - 1:15] Step 4: Named Human Approval & Policy Clearance
+- **Visual**: Focus on the human approval card. Type `Priya Sharma` into the full name field. Click **Approve & apply**. The commit is created with git trailer `Approved-by: Priya Sharma`. Return to PR Review and click **Re-run**; verdict flips to bold green **`ALLOWED`**.
+- **Narration**:
+  > "RepoBrain strictly enforces `approval: human`. The optimizer never commits on its own.
+  >
+  > Release manager Priya Sharma signs off with one click, creating a clean git commit with an `Approved-by:` trailer.
+  >
+  > We re-evaluate the change: with complexity resolved and human sign-off recorded, the verdict flips to **ALLOWED**."
+
+---
+
+### [1:15 - 1:30] Step 5: Cryptographic Merkle Proof & Tamper Evidence
+- **Visual**: Switch to **Audit & report** view (press `5`). Show the vertical blockchain ledger with the `HMAC-signed` green pill. Click **Simulate tampering**; show the red **`IN-MEMORY TAMPERING DETECTED`** banner. Click **Merkle Inclusion Proof**, enter sequence `8`, and click **Generate Proof**.
+- **Narration**:
+  > "Every single decision is committed to an HMAC-SHA256 append-only ledger.
+  >
+  > If an attacker tampers with historical block #8 in memory, the signature instantly breaks downstream verification.
+  >
+  > And using our **RFC-6962 Binary Merkle Tree**, any team can generate an $O(\log N)$ zero-knowledge inclusion proof—cryptographically proving a commit was reviewed and authorized without exposing other repository history.
+  >
+  > Pure Python standard library, zero runtime dependencies, 208 passing tests. RepoBrain: deterministic governance for the AI agent era."
+
+---
+
+## 🎬 Technical Shot & Caption Checklist
+
+| Second | Screen Action | Lower-Third Caption Overlay |
+|---|---|---|
+| **0:05** | Mission Control home view | `RepoBrain: Vendor-Neutral AI Code Governance & Audit` |
+| **0:20** | Scenario A blocked verdict | `BLOCKED: Policy enforced strictly from trusted base branch (origin/main)` |
+| **0:30** | Unified diff annotations | `Multi-Vector Shield: Normalized concat secrets + multi-line injection` |
+| **0:45** | Complexity gate table | `Complexity Gate: Cyclomatic ≤ 10, Cognitive ≤ 15 on PR diffs only` |
+| **0:52** | Optimizer telemetry card | `Symbolic Prover: Mathematical proof ∀ input: f_orig ≡ f_opt (0 regressions)` |
+| **1:05** | Human approval input | `Human-in-the-Loop: Mandatory sign-off commits Approved-by: trailer` |
+| **1:12** | PR review green verdict | `Verdict: ALLOWED · Clean merge readiness certified` |
+| **1:20** | Tamper detection sweep | `Cryptographic HMAC-SHA256 Ledger: Historical edits immediately detected` |
+| **1:28** | Merkle proof certificate | `RFC-6962 Merkle Tree: O(log N) Zero-Knowledge Inclusion Proofs` |
 
 ---
 
