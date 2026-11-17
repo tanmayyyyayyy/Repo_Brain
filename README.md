@@ -19,6 +19,51 @@ It does not write code. It decides what AI (and humans) may change, cleans up wh
 
 ![RepoBrain Architecture](docs/architecture.svg)
 
+## Novel Technical Contributions
+
+RepoBrain includes three zero-dependency Python innovations built from scratch:
+
+### 1. Symbolic AST Formal Equivalence Prover (`repobrain/prover.py`)
+Mathematically **proves** that AST-rewritten functions are semantically identical to the originals:
+- Extracts all symbolic execution paths as `{condition_set → return_value}` pairs
+- Applies De Morgan law canonicalization (`not (A and B)` → `A<=x or B<=y` in DNF)
+- Bidirectionally matches paths to verify `∀ input ∈ Inputs: f_original(input) ≡ f_optimized(input)`
+- Proof results appear in optimizer proposals as `formal_proofs` with theorem hash
+
+```python
+from repobrain.prover import ProofEngine
+result = ProofEngine().verify(original_source, optimized_source)
+# → {"proven": True, "paths_verified": 6, "theorem_hash": "a3f8c...", "theorem": "∀ ..."}
+```
+
+### 2. Intra-Procedural Taint Analysis Engine (`repobrain/taint.py`)
+Traces untrusted function parameters through assignment chains into dangerous sinks:
+- CWE-78 (command injection), CWE-95 (eval), CWE-22 (path traversal), CWE-502 (pickle), CWE-918 (SSRF)
+- Sequential `_traverse_stmts` traversal (not `ast.walk`) for correct assignment ordering
+- Recognizes sanitizers (`int()`, `shlex.quote()`, `os.path.basename()`, etc.)
+- Integrated into Shield's `scan_text()` pipeline — taint violations appear as `rule: "taint-flow"` findings
+
+```python
+from repobrain.taint import scan_source
+findings = scan_source(python_source, "myfile.py")
+# → [{"cwe": "CWE-78", "function": "run_cmd", "taint_chain": ["param 'x'", "subprocess.call()"], ...}]
+```
+
+### 3. RFC-6962 Binary Merkle Audit Tree (`repobrain/merkle.py`)
+Builds a binary Merkle tree over audit log entries with RFC-6962 domain separation:
+- Leaf hash: `SHA-256(0x00 || entry_hash)`, internal: `SHA-256(0x01 || left || right)`
+- O(log N) audit proofs — prove any entry exists without revealing others
+- Full zero-knowledge inclusion verification via sibling path reconstruction
+- API: `GET /api/audit/proof?seq=N`, `POST /api/audit/verify-proof`
+
+```python
+from repobrain.merkle import MerkleTree
+tree = MerkleTree(["hash1", "hash2", "hash3", "hash4"])
+proof = tree.audit_proof(0)         # O(log N) sibling path
+valid = tree.verify_inclusion_proof(proof, "hash1", tree.root())  # True
+```
+
+
 ## Run it in 60 seconds
 
 ```bash

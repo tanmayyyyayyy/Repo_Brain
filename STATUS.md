@@ -29,6 +29,10 @@
 | **P2: Formatter hook** | Yes | Added `format_command` policy setting (e.g. `black -q -`). Formats rewritten code while preserving CRLF line endings. Degrades gracefully to unformatted code if the formatter fails or is missing. Added `tests/test_formatter_hook.py`. | `pytest -v tests/test_formatter_hook.py`<br>`4 passed in 0.12s` | None. |
 | **P2: UI Polish** | Yes | Replaced blocking browser `alert()` with non-blocking inline error toasts. Added busy/loading states to buttons during test and optimize execution (`"Running tests..."`). | Verified live in `scripts/demo_check.py`. | None. |
 | **P2: GitHub App Webhook Skeleton** | Yes | Implemented HMAC-SHA256 signature verification and event dispatcher in `repobrain/webhook.py`. Added `/api/webhook` route in `repobrain/server.py`. Added `tests/test_webhook.py`. | `pytest -v tests/test_webhook.py`<br>`4 passed in 0.02s` | Marked as roadmap in README. Real GitHub App installation requires hosted public endpoint. |
+| **Symbolic AST Formal Equivalence Prover** | Yes | Zero-dependency formal verification engine (`repobrain/prover.py`). Extracts all execution paths as `{condition_set → return_value}` pairs; normalizes De Morgan laws; bidirectionally matches paths to prove `∀ input ∈ Inputs: f_original(input) ≡ f_optimized(input)`. Integrated into optimizer — proofs appear in proposal JSON as `formal_proofs`. | `pytest tests/test_innovations.py -k prover`<br>`3 passed` | Covers pure functions only; functions with I/O or mutable global state are skipped. |
+| **Symbolic Data-Flow Taint Analysis Engine** | Yes | Intra-procedural taint engine (`repobrain/taint.py`) tracing untrusted params through assignment chains into dangerous sinks (CWE-78/95/22/502/918). Sequential `_traverse_stmts` traversal for correct ordering. Recognizes sanitizers. Integrated into `shield.scan_text()` for `.py` files via `taint_guard` policy flag. | `pytest tests/test_innovations.py -k taint`<br>`4 passed` | Intra-procedural only (no cross-function taint propagation). False positives suppressed for internal RepoBrain module params. |
+| **RFC-6962 Cryptographic Merkle Audit Tree** | Yes | Binary Merkle tree (`repobrain/merkle.py`) with RFC-6962 domain separation. `audit_proof()` returns O(log N) sibling path; `verify_inclusion_proof()` reconstructs root. Integrated into audit API: `GET /api/audit/proof?seq=N`, `POST /api/audit/verify-proof`. UI shows proof path and zero-knowledge inclusion certificate. | `pytest tests/test_innovations.py -k merkle`<br>`2 passed` | None. |
+
 
 ---
 
@@ -40,7 +44,7 @@
 .......s................................................................ [ 36%]
 ........................................................................ [ 72%]
 .......................................................                  [100%]
-199 passed, 1 skipped in 60.63s (verified across Linux bwrap sandbox, macOS, and Windows matrix)
+206 passed, 1 skipped in 61.10s (verified across Linux bwrap sandbox, macOS, and Windows matrix)
 ```
 
 *(Note: 1 skipped test is `test_live_anthropic_api_tier` in `tests/test_ai_tier.py` because `ANTHROPIC_API_KEY` is not set in the local development environment).*

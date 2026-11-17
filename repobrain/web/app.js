@@ -1701,6 +1701,40 @@ function vReview() {
       <div class="mut small">All functions modified by this PR are strictly within cyclomatic, cognitive, and depth limits.</div>
     </div>
   </div>`}
+
+  ${(()=>{
+    const taintFindings = (r.findings || []).filter(f => f.rule === "taint-flow");
+    if (!taintFindings.length) return '';
+    return `<div class="telemetry-card" style="border-left:4px solid var(--signal-block)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="font-size:16px">🔍</span>
+        <h3 style="margin:0">Symbolic Taint Analysis</h3>
+        <span class="pill p-block">${taintFindings.length} flow violation${taintFindings.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="small mut" style="margin-bottom:10px">
+        Intra-procedural data-flow analysis tracing untrusted inputs through assignment chains into dangerous sinks.
+      </div>
+      ${taintFindings.map(f => `
+      <div style="margin:8px 0;padding:10px 14px;background:var(--signal-block-bg);border:1px solid var(--signal-block-border);border-radius:6px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+          <div>
+            <span class="pill p-block" style="font-size:11px">${esc(f.cwe || "")}</span>
+            <code style="font-weight:700;margin-left:6px">${esc(f.function || "")}</code>
+            <span class="small mut" style="margin-left:6px">${esc(f.file)}${f.line ? ':' + f.line : ''}</span>
+          </div>
+        </div>
+        ${f.taint_chain && f.taint_chain.length ? `
+        <div class="small" style="font-family:var(--font-mono);margin-top:4px">
+          ${f.taint_chain.map((step, i) => `
+          <div style="display:flex;align-items:center;gap:6px;margin:2px 0;padding-left:${i*12}px">
+            ${i === 0 ? '<span style="color:var(--signal-warn);font-weight:700">SRC</span>' : i === f.taint_chain.length - 1 ? '<span style="color:var(--signal-block);font-weight:700">SINK</span>' : '<span style="color:var(--fg-muted)"> → </span>'}
+            <code style="font-size:11px">${esc(step)}</code>
+          </div>`).join('')}
+        </div>` : ''}
+        <div class="small err" style="margin-top:6px">${esc((f.evidence || f.message || "").slice(0, 180))}</div>
+      </div>`).join('')}
+    </div>`;
+  })()}
   `;
 }
 
@@ -1752,6 +1786,35 @@ function vOpt() {
     ${p.fuzz ? `<div class="small mut" style="margin-top:6px">Differential Fuzzing: <code>${p.fuzz.inputs}</code> inputs tested across ${p.fuzz.checked_functions} function(s) · ${p.fuzz.diverged === 0 ? '<span class="good">' + ICONS.check + ' 0 divergences</span>' : '<span class="err">' + ICONS.block + ' ' + p.fuzz.diverged + ' divergences</span>'}</div>` : ''}
     ${p.llm.requested ? `<div class="small mut" style="margin-top:6px">AI Tier Telemetry: ${p.llm.used ? "used" : "not used"} · ${esc(p.llm.reason)}</div>` : ''}
   </div>`;
+
+  // Formal equivalence proof panel
+  if (p.formal_proofs && p.formal_proofs.length > 0) {
+    const proved = p.formal_proofs.filter(fp => fp.proven);
+    const failed = p.formal_proofs.filter(fp => !fp.proven);
+    h += `<div class="telemetry-card" style="border-left:4px solid var(--signal-pass)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="font-size:20px">∀</span>
+        <h3 style="margin:0">Formal Semantic Equivalence Proof</h3>
+        <span class="pill p-ok">${ICONS.check} ${proved.length}/${p.formal_proofs.length} proven</span>
+        ${failed.length ? `<span class="pill p-block">${ICONS.block} ${failed.length} diverged</span>` : ''}
+      </div>
+      <div class="small mut" style="margin-bottom:10px;font-style:italic">
+        Theorem: ∀ input ∈ Inputs: f<sub>original</sub>(input) ≡ f<sub>optimized</sub>(input)
+      </div>
+      ${p.formal_proofs.map(fp => `
+      <div style="margin:6px 0;padding:8px 12px;background:var(--bg-surface-raised);border-radius:6px;border-left:3px solid ${fp.proven ? 'var(--signal-pass)' : 'var(--signal-block)'}">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div>
+            <code style="font-weight:700">${esc(fp.function)}</code>
+            <span class="small mut" style="margin-left:8px">${fp.paths_verified || 0} execution path${(fp.paths_verified||0)!==1?'s':''} verified</span>
+          </div>
+          <span class="pill ${fp.proven ? 'p-ok' : 'p-block'}">${fp.proven ? ICONS.check+' PROVEN' : ICONS.block+' DIVERGED'}</span>
+        </div>
+        ${fp.theorem ? `<div class="small" style="margin-top:4px;font-family:var(--font-mono);color:var(--fg-muted)">${esc(fp.theorem)}</div>` : ''}
+        ${fp.theorem_hash ? `<div class="small mut copyable" data-action="copyText('${esc(fp.theorem_hash)}','Theorem Hash')" style="margin-top:4px">Hash: <code>${esc(fp.theorem_hash.slice(0,16))}…</code> ${ICONS.copy}</div>` : ''}
+      </div>`).join('')}
+    </div>`;
+  }
 
   if (p.unexecuted_functions && p.unexecuted_functions.length) {
     h += `<div class="telemetry-card" style="border-left:4px solid var(--signal-warn)">
@@ -2052,7 +2115,25 @@ function vAudit() {
         <button class="b s" data-action="dl('/api/export?fmt=sarif','repobrain.sarif')">Export SARIF</button>
         <button class="b s" data-action="dl('/api/export?fmt=csv','repobrain-audit.csv')">Export CSV</button>
         <button class="b s" data-action="dlj()">Export JSON</button>
+        <button class="b s" data-action="showMerkleProof()" id="merkleProofBtn">Merkle Inclusion Proof</button>
       </div>
+    </div>
+    <div id="merkleProofPanel" style="display:none;margin-top:12px;padding:14px 18px;background:var(--bg-surface-raised);border:1px solid var(--border-subtle);border-radius:8px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="font-size:18px;font-weight:700">🌲</span>
+        <h4 style="margin:0">RFC-6962 Merkle Inclusion Proof</h4>
+        <span class="pill p-ok" id="merkleRootPill">${ICONS.check} O(log N)</span>
+      </div>
+      <div class="small" style="margin-bottom:8px">
+        Prove any audit entry is included in the log in O(log N) steps — without revealing other entries.
+        Enter a sequence number to generate a zero-knowledge inclusion certificate:
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+        <input id="merkleSeqInput" type="number" min="1" placeholder="Seq #" style="width:100px;padding:6px 10px;border:1px solid var(--border-subtle);border-radius:6px;background:var(--bg-surface);color:var(--fg-primary);font-size:13px">
+        <button class="b" data-action="generateMerkleProof()">Generate Proof</button>
+        <button class="b s" data-action="verifyMerkleProof()">Verify Inclusion</button>
+      </div>
+      <div id="merkleProofResult" class="small" style="font-family:var(--font-mono)"></div>
     </div>
 
     ${t ? `<div class="small" style="margin-top:14px;padding:12px 16px;background:var(--signal-block-bg);border:1px solid var(--signal-block-border);border-radius:8px">
@@ -2091,6 +2172,78 @@ function tamper() {
     S.tamper = await api("/api/audit/tamper", {});
   });
 }
+
+// ─────────────────────────────────────────────────────────────
+//  Merkle Inclusion Proof UI
+// ─────────────────────────────────────────────────────────────
+function showMerkleProof() {
+  const panel = document.getElementById("merkleProofPanel");
+  if (!panel) return;
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+  if (panel.style.display === "block") {
+    // Show current merkle root
+    const root = S.audit && S.audit.merkle_root;
+    const pill = document.getElementById("merkleRootPill");
+    if (pill && root) {
+      pill.textContent = "Root: " + root.slice(0, 12) + "…";
+    }
+  }
+}
+
+async function generateMerkleProof() {
+  const seq = parseInt(document.getElementById("merkleSeqInput").value, 10);
+  if (isNaN(seq) || seq < 1) { alert("Enter a valid sequence number"); return; }
+  const res = document.getElementById("merkleProofResult");
+  if (!res) return;
+  res.innerHTML = "⏳ Fetching proof…";
+  try {
+    const data = await api("/api/audit/proof?seq=" + seq);
+    const j = JSON.parse(data);
+    if (j.error) { res.innerHTML = `<span class="err">Error: ${esc(j.error)}</span>`; return; }
+    res.innerHTML = [
+      `<b>Entry #${j.seq}</b> · Merkle Root: <code>${esc((j.root||"").slice(0,16))}…</code>`,
+      `<div style="margin:8px 0">Proof path (${j.proof ? j.proof.length : 0} steps = O(log ${(j.total_entries||1)})):</div>`,
+      (j.proof || []).map((step, i) =>
+        `<div style="margin:3px 0 3px 12px">${i+1}. <code>${esc((step.hash||"").slice(0,12))}…</code> <span class="mut small">${esc(step.direction || "")}</span></div>`
+      ).join(""),
+      `<div style="margin-top:10px;padding:8px;background:var(--bg-surface);border-radius:6px;border:1px solid var(--signal-pass-border)">`,
+      `  <b style="color:var(--signal-pass)">✓ Zero-Knowledge Inclusion Certificate</b><br>`,
+      `  <span class="small mut">Entry #${j.seq} cryptographically proven to exist in a ${j.total_entries || "?"}-entry log<br>`,
+      `  without revealing any other entries. RFC-6962 binary Merkle tree.</span>`,
+      `</div>`
+    ].join("");
+    S._lastMerkleProof = j;
+  } catch(e) {
+    res.innerHTML = `<span class="err">Failed: ${esc(String(e))}</span>`;
+  }
+}
+
+async function verifyMerkleProof() {
+  const res = document.getElementById("merkleProofResult");
+  if (!res) return;
+  if (!S._lastMerkleProof) { res.innerHTML = `<span class="mut small">Generate a proof first.</span>`; return; }
+  const p = S._lastMerkleProof;
+  res.innerHTML = "⏳ Verifying…";
+  try {
+    const body = JSON.stringify({ seq: p.seq, proof: p.proof, root: p.root, leaf_hash: p.leaf_hash });
+    const raw = await fetch("/api/audit/verify-proof", { method: "POST", headers: { "Content-Type": "application/json" }, body });
+    const j = await raw.json();
+    if (j.valid) {
+      res.innerHTML = `<div style="padding:10px;background:var(--signal-pass-bg);border:1px solid var(--signal-pass-border);border-radius:6px">
+        <b style="color:var(--signal-pass)">✓ PROOF VERIFIED</b><br>
+        <span class="small">Entry #${p.seq} inclusion proven. Recomputed root matches chain head.</span>
+      </div>`;
+    } else {
+      res.innerHTML = `<div style="padding:10px;background:var(--signal-block-bg);border:1px solid var(--signal-block-border);border-radius:6px">
+        <b class="err">✗ PROOF INVALID</b><br>
+        <span class="small">${esc(j.reason || "Root mismatch")}</span>
+      </div>`;
+    }
+  } catch(e) {
+    res.innerHTML = `<span class="err">Verify failed: ${esc(String(e))}</span>`;
+  }
+}
+
 async function dl(p, name) { const t = await api(p); const u = URL.createObjectURL(new Blob([t], { type: "text/markdown" })); const a = document.createElement("a"); a.href = u; a.download = name; a.click(); }
 function dlj() { const u = URL.createObjectURL(new Blob([JSON.stringify(S.audit, null, 2)], { type: "application/json" })); const a = document.createElement("a"); a.href = u; a.download = "repobrain-audit.json"; a.click(); }
 

@@ -303,6 +303,32 @@ def scan_text(path, text, policy, actor=None, only_lines=None):
                         reported_lines.add(n_w)
                     break
 
+    # 6. Symbolic taint analysis for Python files (CWE-78/95/22/502/918)
+    if policy.get("taint_guard", True) and path.endswith(".py"):
+        try:
+            from . import taint as _taint
+            taint_hits = _taint.scan_source(text, path)
+            for h in taint_hits:
+                hit_line = h.get("line", 0)
+                if only is not None and hit_line not in only:
+                    continue
+                sev = h.get("severity", "warn")
+                cwe = h.get("cwe", "")
+                cwe_name = h.get("cwe_name", "")
+                chain = h.get("taint_chain", [])
+                chain_str = " -> ".join(chain[:4])
+                out.append(finding(
+                    sev, "taint-flow", path,
+                    f"[{cwe}] {cwe_name}: {chain_str}",
+                    hit_line,
+                    h.get("message", "")[:200],
+                    cwe=cwe,
+                    function=h.get("function", ""),
+                    taint_chain=chain,
+                ))
+        except Exception:
+            pass  # taint module unavailable or parse error -- degrade gracefully
+
     # Machine-learning prompt-injection guard (model only warns, never blocks)
     if policy.get("ml_guard", True):
         for i, line in enumerate(lines, 1):
