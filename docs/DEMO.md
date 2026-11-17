@@ -32,7 +32,7 @@
 3. Point out the findings table:
    - `shop/config.py:1`: `secret` (concatenated AWS access key normalized and masked).
    - `.github/workflows/ci.yml`: `blocked-path` (AI changes to protected paths are forbidden).
-   - `docs/AGENT_NOTES.md:5`: `prompt-injection` (multi-line sliding window catches instructions to exfiltrate tokens).
+   - `docs/AGENT_NOTES.md:5`: `prompt-injection` (multi-line sliding window catches adversarial agent instructions).
 4. **Key Point**: "Notice the policy source: `origin/main`. Even if the AI modifies `repobrain.yml` in its PR branch, RepoBrain reads policy strictly from the trusted base branch. The agent cannot loosen its own rules."
 
 ---
