@@ -70,7 +70,7 @@ def main():
             # Optimizer
             print("[5/7] Running optimizer on Scenario B...")
             page.locator("button:has-text('Run optimizer')").click()
-            page.wait_for_selector(".pill:has-text('verified')", timeout=15000)
+            page.wait_for_selector("#pipeOptBadge:has-text('verified')", timeout=15000)
             content = page.content()
             assert "cognitive" in content and "15" in content and "10" in content, "Expected cognitive reduction 15->10"
             assert "tests" in content.lower(), "Expected tests report"

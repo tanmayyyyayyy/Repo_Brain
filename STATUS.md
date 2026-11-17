@@ -13,7 +13,7 @@
 | Item | Done | Verified How | Evidence (Command + Output) | Known Gaps |
 |---|---|---|---|---|
 | **Differential Fuzzing Engine** | Yes | Added `repobrain/fuzz.py`. Mines function constants & applies type confusion (ints, floats, strings, booleans, empty containers, None) across rewritten pure-looking functions in a resource-limited subprocess. Compares return values, exceptions, and argument mutations. Any divergence immediately rejects proposal. | `pytest tests/test_engine.py -k fuzz`<br>`2 passed in 0.85s` | Impure functions (I/O, global state) are safely detected and skipped from fuzzing. |
-| **Learned Prompt Injection Guard (ML Guard)** | Yes | Added `repobrain/mlguard.py` with zero-dependency Naive Bayes classifier. Rules block; ML model warns on paraphrased directives (p ≥ 0.90). Evaluated via 5-fold cross validation on 242-sample team-written corpus: precision 0.938, recall 0.625, F1 0.750 (hybrid: precision 0.940, recall 0.653, F1 0.770); measured 0.03% false-positive rate on 4,000 stdlib prose comments. The corpus is small and team-written (not a production claim); rules can block, model only warns. | `python -m repobrain ml-eval`<br>`ml: precision 0.938, recall 0.625, f1 0.750; hybrid: precision 0.940, recall 0.653, f1 0.770; stdlib_fp: 0.03%` | Heuristic classifier warns only; never blocks alone. |
+| **Learned Prompt Injection Guard (ML Guard)** | Yes | Added `repobrain/mlguard.py` with zero-dependency Naive Bayes classifier. Rules block; ML model warns on paraphrased directives (p ≥ 0.90). Evaluated via 5-fold cross validation on expanded 772-sample corpus (including 530 JavaScript & UI tokens): precision 0.939, recall 0.639, F1 0.760 (hybrid: precision 0.941, recall 0.667, F1 0.780); measured 0.0% false-positive rate on JS/UI strings and 0.03% on 4,000 stdlib prose comments. The corpus is team-written & benchmarked; rules block, model only warns. | `python -m repobrain ml-eval`<br>`ml: precision 0.939, recall 0.639, f1 0.760; hybrid: precision 0.941, recall 0.667, f1 0.780; js_ui_fp: 0.0%; stdlib_fp: 0.03%` | Heuristic classifier warns only; never blocks alone. |
 | **Dependency Typosquatting & Supply-Chain Guard** | Yes | Added `repobrain/deps.py`. Scans package manifests (`requirements.txt`, `pyproject.toml`, `package.json`) using Damerau-Levenshtein distance against a curated list of 289 popular packages (198 PyPI, 91 npm). Flags typosquats, homoglyphs, VCS URLs, and unpinned dependencies. | `pytest tests/test_engine.py -k typosquat`<br>`1 passed in 0.12s` | Custom internal private registries need whitelist in policy. |
 | **Cryptographic HMAC Audit Ledger** | Yes | Added HMAC-SHA256 signing via `REPOBRAIN_AUDIT_KEY` in `repobrain/audit.py`. Protects against full hash chain regeneration attacks. Functional API (`verify_detail`, `log`, `read`) verifies hash links and HMAC signatures. | `pytest tests/test_engine.py -k hmac`<br>`1 passed in 0.08s` | Key must be set in environment for signing; falls back to SHA-256 hash chaining when absent. |
 | **Agent Preflight API & Hook** | Yes | Added `/api/preflight` in `repobrain/server.py` and `repobrain preflight` CLI. Allows external AI coding agents (Claude Code, Cursor, Copilot, AutoGPT) to validate file changes before disk writes. Added example wrapper `examples/agent_guard.py`. | Verified with `python examples/agent_guard.py` and `pytest tests/test_engine.py` | Requires local server running or integrated CLI invocation. |
@@ -37,9 +37,10 @@
 ### Final Test Run: `python -m pytest -q tests`
 
 ```text
-.......s................................................................ [ 56%]
+.......s................................................................ [ 36%]
+........................................................................ [ 72%]
 .......................................................                  [100%]
-190+ passed, 1 skipped (verified across Linux, macOS, and Windows matrix)
+199 passed, 1 skipped in 60.63s (verified across Linux bwrap sandbox, macOS, and Windows matrix)
 ```
 
 *(Note: 1 skipped test is `test_live_anthropic_api_tier` in `tests/test_ai_tier.py` because `ANTHROPIC_API_KEY` is not set in the local development environment).*

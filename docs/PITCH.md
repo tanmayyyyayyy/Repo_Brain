@@ -22,5 +22,5 @@
 ## Hard Questions (Honest Answers)
 - *"Why not just prompt the model to be safe?"* Prompts are non-deterministic and un-auditable; a base-branch policy file + signed audit log is enforceable.
 - *"Can an agent bypass it?"* Yes, if pushed directly without CI branch protection, pre-commit hooks, or preflight checks—which is why `repobrain.yml` and GitHub rulesets are paired.
-- *"Is the ML guard accurate?"* Evaluated via 5-fold cross-validation on a 242-sample team-written corpus: precision 0.938, recall 0.625, F1 0.750 (hybrid: precision 0.940, recall 0.653, F1 0.770) and 0.03% FP rate on 4,000 Python stdlib prose lines. Rules block; the ML guard warns only.
+- *"Is the ML guard accurate?"* Evaluated via 5-fold cross-validation on an expanded 772-sample corpus (including 530 UI/JS tokens): precision 0.939, recall 0.639, F1 0.760 (hybrid: precision 0.941, recall 0.667, F1 0.780) with 0.0% FP on UI strings and 0.03% on 4,000 Python stdlib prose lines. Rules block; the ML guard warns only.
 - *"Is the optimizer safe?"* Executes unit tests on a scratch copy with CPU/memory rlimits and runs differential fuzzing (constants + type mutations). Comments are preserved and rewrites apply only on named human approval.

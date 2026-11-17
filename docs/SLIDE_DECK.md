@@ -149,7 +149,7 @@
 3. **Hardware Enclave & Rekor Integration**: Anchoring audit log signatures to public transparency logs (Sigstore Rekor) and AWS KMS / Google Cloud HSM keys.
 
 *Speaker Script (30s)*:  
-> "RepoBrain is not a mock concept. We evaluated it across 21 real production commits and 14,500 diff lines with zero false positives. Our test suite passes 190+ automated tests across multiple Python versions and operating systems. As AI coding agents become the primary contributors to global software, RepoBrain provides the definitive safety, optimization, and cryptographic governance infrastructure the software industry requires."
+> "RepoBrain is not a mock concept. We evaluated it across 21 real production commits and 14,500 diff lines with zero false positives. Our test suite passes 199 automated tests (1 skipped) across Linux (with Bubblewrap container sandboxing), macOS, and Windows runners. As AI coding agents become the primary contributors to global software, RepoBrain provides the definitive safety, optimization, and cryptographic governance infrastructure the software industry requires."
 
 ---
 

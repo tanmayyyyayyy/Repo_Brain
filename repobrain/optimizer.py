@@ -146,7 +146,18 @@ def run_tests(root, overrides, policy, cov_funcs=None):
                 "cmd": "",
                 "sandbox": sb_default
             }
-    cmd = policy.get("test_command") or [sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider"]
+    cmd = policy.get("test_command")
+    if not cmd:
+        has_pytest = False
+        try:
+            import pytest  # noqa: F401
+            has_pytest = True
+        except ImportError:
+            has_pytest = False
+        if has_pytest:
+            cmd = [sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider"]
+        else:
+            cmd = [sys.executable, "-m", "repobrain.minitest"]
     posix_mode = (os.name == "posix")
     cmd = shlex.split(cmd, posix=posix_mode) if isinstance(cmd, str) else list(cmd)
     tmp = tempfile.mkdtemp(prefix="repobrain-")
@@ -309,7 +320,7 @@ def run_tests(root, overrides, policy, cov_funcs=None):
                     pass
             return {"ran": True, "ok": returncode == 0, "output": out,
                     "cmd": " ".join(cmd) if isinstance(cmd, list) else str(cmd),
-                    "runner": "pytest" if "pytest" in str(cmd) else "custom",
+                    "runner": "pytest" if "pytest" in str(cmd) else "minitest" if "minitest" in str(cmd) else "custom",
                     "coverage": cov_info,
                     "sandbox": sandbox_info}
         except subprocess.TimeoutExpired:

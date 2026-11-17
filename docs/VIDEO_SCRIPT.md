@@ -56,7 +56,7 @@
 ## 🎤 Judge Q&A Cheat Sheet
 
 1. **"How accurate is your prompt injection detector?"**
-   > *Answer*: "We believe in honest metrics: our zero-dependency Naive Bayes classifier was evaluated on a 242-sample team-written corpus via 5-fold cross-validation, achieving 0.938 precision, 0.625 recall, and 0.75 F1 (0.77 hybrid). On 4,000 benign Python standard library comments, its measured false-positive rate is 0.03%. Crucially, rigid deterministic rules can block; the ML model only warns and elevates risk—it never blocks on its own."
+   > *Answer*: "We believe in honest metrics: our zero-dependency Naive Bayes classifier was evaluated on an expanded 772-sample corpus via 5-fold cross-validation, achieving 0.939 precision, 0.639 recall, and 0.760 F1 (0.780 hybrid). On 530 real-world frontend UI/JS strings its false-positive rate is 0.0%, and on 4,000 benign Python standard library comments it is 0.03%. Crucially, rigid deterministic rules can block; the ML model only warns and elevates risk—it never blocks on its own."
 
 2. **"Does the optimizer send my proprietary code to OpenAI or Anthropic?"**
    > *Answer*: "No. By default, RepoBrain's AST optimizer runs 100% locally on your machine or CI runner using standard library Python AST rules. External LLM APIs are only engaged if you explicitly set `allow_llm: true` and configure `GROQ_API_KEY` or `ANTHROPIC_API_KEY` for high-complexity Scenario C function refactoring."

@@ -478,7 +478,7 @@
             <p>• <strong>Real-World PR Evaluation:</strong> 21 commits / 14,500 diff lines scanned with <strong>0% false positives</strong> on production code.</p>
             <p style="margin-top:8px">• <strong>OSS Benchmark:</strong> 124 files / 51,781 LoC across CPython &amp; PyYAML with <strong>0 false positives</strong>.</p>
             <p style="margin-top:8px">• <strong>Complexity Reduction:</strong> High-debt pricing logic dropped from <strong>27 → 8 cyclomatic (70% drop)</strong>.</p>
-            <p style="margin-top:8px">• <strong>Automated Test Suite:</strong> <strong>137 tests passed</strong> across Ubuntu &amp; macOS (Python 3.10–3.13).</p>
+            <p style="margin-top:8px">• <strong>Automated Test Suite:</strong> <strong>199 tests passed, 1 skipped</strong> across Linux (Bubblewrap sandbox), macOS, and Windows matrix (Python 3.10–3.13).</p>
           </div>
         </div>
 
@@ -518,7 +518,7 @@
       2: "RepoBrain is a vendor-neutral governance and audit system. It reads policy directly from the trusted base branch—meaning an agent can never weaken the rules it is subjected to. Every commit passes through five deterministic gates: Shield threat prevention, targeted complexity analysis, sandbox-verified AST optimization, mandatory human sign-off, and an immutable HMAC-signed audit ledger.",
       3: "What makes RepoBrain technically distinctive? First, our Shield Engine normalizes concatenated and base64 strings before scanning, preventing the simplest evasions that defeat standard tools. Second, our AST Optimizer doesn't just guess—it rewrites code in an isolated sandbox, runs the repository's tests, and differentially fuzzes 500 generated inputs to empirically verify behavioral equivalence across edge cases. Third, our cryptographic audit ledger provides HMAC-SHA256 signed tamper-evident proof of compliance for enterprise security teams.",
       4: "In Round 3, we engineered RepoBrain into a production-grade enterprise platform. It features strict corporate email validation that rejects personal webmail, FIPS-compliant PBKDF2 password hashing, and a 4-tier Role-Based Access Control matrix. A developer can write code and run the optimizer, but cannot approve merges or waive security gates. Every authentication event is committed directly to the HMAC ledger.",
-      5: "RepoBrain is not a mock concept. We evaluated it across 21 real production commits and 14,500 diff lines with zero false positives. Our test suite passes 137 tests across multiple Python versions and operating systems. As AI coding agents become the primary contributors to global software, RepoBrain provides the definitive safety, optimization, and cryptographic governance infrastructure the software industry requires."
+      5: "RepoBrain is not a mock concept. We evaluated it across 21 real production commits and 14,500 diff lines with zero false positives. Our test suite passes 199 tests across Linux (with Bubblewrap container sandboxing), macOS, and Windows. As AI coding agents become the primary contributors to global software, RepoBrain provides the definitive safety, optimization, and cryptographic governance infrastructure the software industry requires."
     };
 
     function showSlide(n) {
