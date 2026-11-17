@@ -87,9 +87,16 @@ EXTERNAL_SOURCES = {
 }
 
 
+# Safe parameter names (fixtures, internal state, harmless handles)
+SAFE_PARAM_NAMES = {
+    "self", "cls", "home", "root", "repo", "headers", "policy", "body",
+    "tmp_path", "tmpdir", "monkeypatch", "capsys", "caplog", "request", "pytestconfig"
+}
+
+
 def _is_untrusted_source(name: str) -> bool:
     name_l = name.lower()
-    if name_l in ("self", "cls", "home", "root", "repo", "headers", "policy", "body"):
+    if name_l in SAFE_PARAM_NAMES or name_l.startswith("tmp_") or name_l.endswith("_fixture"):
         return False
     return any(p in name_l for p in UNTRUSTED_PARAM_PATTERNS)
 

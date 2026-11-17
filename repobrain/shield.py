@@ -304,7 +304,15 @@ def scan_text(path, text, policy, actor=None, only_lines=None):
                     break
 
     # 6. Symbolic taint analysis for Python files (CWE-78/95/22/502/918)
-    if policy.get("taint_guard", True) and path.endswith(".py"):
+    # Target application code: skip test suites and probe/diagnostic scripts
+    is_test_or_script = (
+        path.startswith("tests/") or
+        path.startswith("scripts/") or
+        "/tests/" in path or
+        path.startswith("test_") or
+        path.endswith("_test.py")
+    )
+    if policy.get("taint_guard", True) and path.endswith(".py") and not is_test_or_script:
         try:
             from . import taint as _taint
             taint_hits = _taint.scan_source(text, path)

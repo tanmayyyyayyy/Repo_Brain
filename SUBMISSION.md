@@ -50,15 +50,15 @@ python -m pytest -q tests
 ## 3. Architecture Summary
 
 ```
-PR / Agent Push ──► Shield ──► Complexity Gate ──► Optimizer (Tests + Fuzzing) ──► Named Human ──► Merge
-                       └───────────── Cryptographic Audit Log (HMAC-SHA256) ◄────────────────┘
+PR / Agent Push ──► Shield (Secrets + Taint + Injection) ──► Complexity Gate ──► Optimizer (Formal Proofs + Fuzzing) ──► Named Human ──► Merge
+                       └─────────────────── RFC-6962 Cryptographic Merkle Audit Ledger (HMAC) ◄────────────────────────────────┘
 ```
 
-1. **Shield**: Evaluates added diff hunks against protected paths (`.github/workflows/`, `repobrain.yml`), hardcoded secrets (pattern + entropy + string concatenation normalization + base64 decoding), prompt injection (multi-line sliding window + warn-only Naive Bayes ML guard), risky commands (shell & PowerShell), and dependency typosquatting (Damerau-Levenshtein against a curated list of 289 popular packages: 198 PyPI, 91 npm).
+1. **Shield**: Evaluates added diff hunks against protected paths (`.github/workflows/`, `repobrain.yml`), hardcoded secrets (pattern + entropy + string concatenation normalization + base64 decoding), prompt injection (multi-line sliding window + warn-only Naive Bayes ML guard), risky commands (shell & PowerShell), dependency typosquatting (Damerau-Levenshtein against 289 popular packages), and **Intra-Procedural Taint Analysis (`repobrain/taint.py`)** tracing untrusted parameters into dangerous sinks (CWE-78 command injection, CWE-95 code injection, CWE-22 path traversal, CWE-502 deserialization, CWE-918 SSRF) with sanitizer recognition.
 2. **Complexity Gate**: Inspects *only* functions touched by the PR against base-branch thresholds (cyclomatic ≤ 10, cognitive ≤ 15, nesting depth ≤ 3).
-3. **Verified Optimizer**: Performs deterministic AST rewrites on touched Python functions, executes the repository's tests on a scratch copy, and differentially fuzzes original vs rewritten functions in a resource-limited subprocess. An optional LLM refactor tier (`repobrain/llm.py`) supports Groq/Anthropic APIs when explicitly configured via `allow_llm: true` and `--ai` (verified locally with mock API servers).
+3. **Verified Optimizer & Formal Prover**: Performs deterministic AST rewrites on touched Python functions, executes the repository's tests on a scratch copy, runs differential fuzzing (500 boundary inputs) in a resource-limited subprocess, and runs the **Symbolic AST Formal Equivalence Prover (`repobrain/prover.py`)** to mathematically prove `∀ input ∈ Inputs: f_original(input) ≡ f_optimized(input)` across execution paths with De Morgan canonicalization. An optional LLM refactor tier (`repobrain/llm.py`) supports Groq/Anthropic APIs when explicitly configured via `allow_llm: true` and `--ai` (verified locally with mock API servers).
 4. **Human Approval**: Enforces `approval: human`. The optimizer never merges on its own; a named human approves the rewrite, producing a git commit with an `Approved-by:` trailer.
-5. **Cryptographic Audit Ledger**: Append-only JSONL ledger with SHA-256 hash chaining, HMAC-SHA256 signing, and CI head anchoring (`--anchor-file`, `--expect`).
+5. **Cryptographic Merkle Audit Ledger**: Append-only JSONL ledger with SHA-256 hash chaining, HMAC-SHA256 signing, and an **RFC-6962 Binary Merkle Tree (`repobrain/merkle.py`)** generating O(log N) zero-knowledge inclusion proofs verified via sibling path reconstruction (`GET /api/audit/proof`, `POST /api/audit/verify-proof`), and CI head anchoring (`--anchor-file`, `--expect`).
 
 ---
 

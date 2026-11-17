@@ -44,7 +44,7 @@
 .......s................................................................ [ 36%]
 ........................................................................ [ 72%]
 .......................................................                  [100%]
-206 passed, 1 skipped in 61.10s (verified across Linux bwrap sandbox, macOS, and Windows matrix)
+208 passed, 1 skipped in 75.27s (verified across Linux bwrap sandbox, macOS, and Windows matrix)
 ```
 
 *(Note: 1 skipped test is `test_live_anthropic_api_tier` in `tests/test_ai_tier.py` because `ANTHROPIC_API_KEY` is not set in the local development environment).*
