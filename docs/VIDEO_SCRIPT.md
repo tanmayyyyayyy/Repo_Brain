@@ -11,22 +11,20 @@
 ### [0:00 - 0:15] The Hook: The AI Coding Agent Dilemma
 - **Visual**: Mission Control Console at `http://127.0.0.1:8765`. Camera pans across the persistent left telemetry rail showing the 5-stage pipeline: `Shield → Gate → Optimizer → Human → Audit`.
 - **Narration**:
-  > "AI coding agents like Cursor, Claude Code, and Devin are generating massive pull requests. But standard tools only emit advisory warnings, regexes miss split secrets, and agents can easily evade line-by-line linters.
+  > "Autonomous coding agents are shipping thousands of PRs a week. Classic tools only warn, miss split secrets, and get evaded by multi-line injections.
   >
-  > This is **RepoBrain**: an open-source, vendor-neutral governance and cryptographic audit layer for repos that AI agents write to."
+  > **RepoBrain** is vendor-neutral governance, verified AST cleanup, and cryptographic audit—enforced from your trusted base branch."
 
 ---
 
 ### [0:15 - 0:35] Step 1: Agent Tries Something Bad (The Adversarial PR)
 - **Visual**: Switch to `Scenario A: risky AI PR` (press `1`). The screen renders a bold red **`BLOCKED`** hero with 4 critical violations. Click `.github/workflows/ci.yml` in the PR map to show the unified diff with red inline annotations.
 - **Narration**:
-  > "Here, an autonomous agent opens a PR containing four classic evasions:
-  > A concatenated AWS secret key (`'AKIA' + '...'`) that defeats standard scanners;
-  > An unauthorized modification to our deployment workflow in `.github/workflows/ci.yml`;
-  > A multi-line prompt injection hidden across comment lines;
-  > And an untrusted data flow into a shell execution sink.
+  > "Here, an autonomous agent opens a PR containing four evasions that defeat classic tools: a split AWS key, an unauthorized workflow edit, a multi-line comment injection, and an untrusted shell execution sink.
   >
-  > Notice the policy provenance: `origin/main`. Even if the agent edits `repobrain.yml` in its PR branch, RepoBrain reads policy strictly from the trusted base. The agent cannot loosen its own rules."
+  > Gitleaks and Semgrep miss these. RepoBrain normalizes the AST and blocks them instantly.
+  >
+  > Most critically: even if the agent tries to weaken `repobrain.yml` in its PR branch, RepoBrain reads policy strictly from `origin/main`. The agent cannot loosen its own rules."
 
 ---
 
@@ -62,7 +60,9 @@
   >
   > And using our **RFC-6962 Binary Merkle Tree**, any team can generate an $O(\log N)$ zero-knowledge inclusion proof—cryptographically proving a commit was reviewed and authorized without exposing other repository history.
   >
-  > Pure Python standard library, zero runtime dependencies, 208 passing tests. RepoBrain: deterministic governance for the AI agent era."
+  > Pure Python standard library, zero runtime dependencies, 208 passing tests. RepoBrain: deterministic governance for the AI agent era.
+  >
+  > *(brief pause)* Thank you."
 
 ---
 

@@ -9,9 +9,9 @@
 
 ### [0:00 - 0:15] The Hook & Mission Control
 **What to say**:
-> "Autonomous coding agents like Claude Code, Cursor, and Devin are generating massive pull requests. But today, teams face two bad choices: either manually audit thousands of lines of AI spaghetti code, or risk accidental credential leaks, corrupted CI workflows, and prompt injection attacks.
+> "Autonomous coding agents are shipping thousands of PRs a week. Classic tools only warn, miss split secrets, and get evaded by multi-line injections.
 >
-> Meet **RepoBrain**: an open-source, vendor-neutral governance, cleanup, and audit layer for repos that AI agents write to. It does not write new code. It acts as an immutable governor between the AI PR and your main branch."
+> **RepoBrain** is vendor-neutral governance, verified AST cleanup, and cryptographic audit—enforced from your trusted base branch."
 
 **Action**:
 - Show `http://127.0.0.1:8765`. Point to the header showing the current branch, commit SHA, and trusted base branch (`origin/main`).
@@ -20,7 +20,11 @@
 
 ### [0:15 - 0:35] Step 1: Scenario A — The Malicious / Risky AI PR (Shield Defense)
 **What to say**:
-> "Let's start with **Scenario A**. An AI agent was tasked with updating an AWS config. But look at what it actually attempted: it hardcoded a concatenated AWS access key (`'AKIA' + '...'`), silently modified our protected deployment workflow in `.github/workflows/ci.yml`, and ingested an indirect prompt injection hidden across markdown notes."
+> "Here, an autonomous agent opens a PR containing four evasions that defeat classic tools: a split AWS key, an unauthorized workflow edit, a multi-line comment injection, and an untrusted shell execution sink.
+>
+> Gitleaks and Semgrep miss these. RepoBrain normalizes the AST and blocks them instantly.
+>
+> Most critically: even if the agent tries to weaken `repobrain.yml` in its PR branch, RepoBrain reads policy strictly from `origin/main`. The agent cannot loosen its own rules."
 
 **Action**:
 1. Click **A · risky AI PR** (or press `1`).
@@ -81,7 +85,9 @@
 
 ### [1:30] Closing & Deliverables
 **What to say**:
-> "With zero runtime dependencies, 208 passing tests across Linux, macOS, and Windows runners, and proven 0.0% false positives on real UI code, RepoBrain gives engineering leaders complete confidence to adopt AI coding agents at enterprise scale."
+> "With zero runtime dependencies, 208 passing tests across Linux, macOS, and Windows runners, and proven 0.0% false positives on real UI code, RepoBrain provides deterministic governance for the AI agent era.
+>
+> *(brief pause)* Thank you."
 - Show the automated PR comments formatted with markdown tables and status check badges.
 - Conclude: "RepoBrain gives engineering leaders confidence to let AI agents write code at scale, without compromising security, maintainability, or compliance."
 
