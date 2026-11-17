@@ -532,7 +532,13 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
                         return self._send(200, state(ctx, user=self._get_user(), wid=wid))
                     if u.path == "/api/audit":
                         es = ctx.log.entries()
-                        return self._send(200, {"entries": es, "chain": A.verify_entries(es)})
+                        tree = ctx.log.merkle_tree()
+                        return self._send(200, {"entries": es, "chain": A.verify_entries(es), "merkle_root": tree.root})
+                    if u.path == "/api/audit/proof":
+                        qs = parse_qs(u.query)
+                        seq_val = int(qs.get("seq", ["1"])[0])
+                        proof = ctx.log.merkle_proof(seq_val)
+                        return self._send(200, proof)
                     if u.path == "/api/report.md":
                         with LOCK:
                             usr = self._get_user()
@@ -897,6 +903,12 @@ def route(ctx, path, body, user=None, wid=None):
             if not user or not auth.check_permission(user, "simulate_tamper"):
                 raise PermissionError("Permission Denied: simulate_tamper requires security or admin privileges outside demo mode.")
         return A.simulate_tamper(ctx.log.entries())
+    if path == "/api/audit/verify-proof":
+        from . import merkle
+        record = body.get("record", {})
+        proof = body.get("proof", {})
+        valid = merkle.verify_inclusion_proof(record, proof)
+        return {"valid": valid, "merkle_root": proof.get("merkle_root")}
     if path == "/api/audit/ack-recovery":
         if not user or not auth.check_permission(user, "manage_policy"):
             raise PermissionError("Permission Denied: Only Admin can acknowledge audit ledger recovery.")

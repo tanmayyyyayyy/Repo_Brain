@@ -276,6 +276,25 @@ class AuditLog:
             }
         return res
 
+    def merkle_tree(self):
+        from . import merkle
+        return merkle.MerkleTree(self.entries())
+
+    def merkle_root(self):
+        return self.merkle_tree().root
+
+    def merkle_proof(self, seq_or_index):
+        from . import merkle
+        entries = self.entries()
+        idx = None
+        for i, e in enumerate(entries):
+            if e.get("seq") == seq_or_index or i == seq_or_index:
+                idx = i
+                break
+        if idx is None:
+            raise KeyError(f"No audit entry with sequence/index {seq_or_index}")
+        return self.merkle_tree().audit_proof(idx)
+
 
 def verify_entries(es, expect_head=None):
     prev = GENESIS
@@ -325,8 +344,10 @@ def verify_entries(es, expect_head=None):
                         "reason": "head hash differs from the anchored value (log truncated or rewritten)",
                         "signed": hmac_signed, "hmac_signed": hmac_signed}
 
+    from . import merkle
+    tree = merkle.MerkleTree(es)
     return {"ok": True, "count": len(es), "head": prev, "broken_at": None, "reason": "",
-            "signed": hmac_signed, "hmac_signed": hmac_signed}
+            "signed": hmac_signed, "hmac_signed": hmac_signed, "merkle_root": tree.root}
 
 
 def simulate_tamper(es):

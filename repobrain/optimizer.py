@@ -889,6 +889,19 @@ def propose(root, policy, files, home, use_llm=False, ask=None, head=None):
 
     fuzz_total = {"checked_functions": 0, "inputs": 0, "diverged": 0}
     fuzz_diverged = False
+    formal_proofs = []
+    if out_files:
+        from . import prover
+        for r in out_files:
+            ch_names = changed_functions(r["before"], r["after"])
+            for fname in ch_names:
+                try:
+                    p_res = prover.prove_function_equivalence(r["before"], r["after"], fname)
+                    if p_res.get("proven"):
+                        formal_proofs.append(p_res)
+                except Exception:
+                    pass
+
     if policy.get("fuzz", True) and out_files:
         for r in out_files:
             ch_names = changed_functions(r["before"], r["after"])
@@ -945,6 +958,7 @@ def propose(root, policy, files, home, use_llm=False, ask=None, head=None):
             "sandbox": tests.get("sandbox") or sb_default,
             "unexecuted_functions": unexec_rewritten or below_threshold,
             "llm": llm_info,
+            "formal_proofs": formal_proofs,
             "fuzz": fuzz_total if fuzz_total["inputs"] else None,
             "head": gitutil.head(str(root)) if gitutil.is_repo(str(root)) else None,
             "applicable": applicable}
