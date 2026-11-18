@@ -167,7 +167,7 @@
 | **Real-World PR Evaluation** | 21 production commits / 14,500 diff lines ([`REAL_WORLD_EVAL.md`](REAL_WORLD_EVAL.md)) | **0% False Positives** |
 | **Open-Source Code Scan** | 124 files / 51,781 LoC across CPython, PyYAML, coverage ([`SHIELD_EVAL.md`](SHIELD_EVAL.md)) | **0 False Positives** |
 | **Complexity Reduction** | `shop/orders.py` order processing module | **27 → 8 Cyclomatic (70% drop)** |
-| **Automated Test Suite** | Matrix across Linux/macOS/Windows × Python 3.10–3.13 | **208 Passed, 1 Skipped (100% Green)** |
+| **Automated Test Suite** | Matrix across Linux/macOS/Windows × Python 3.10–3.13 | **215 Passed, 1 Skipped (100% Green)** |
 | **Supply Chain Surface** | Third-party production runtime dependencies | **Pure Python Stdlib + PyYAML** |
 
 ### Honest Boundaries & Scope
@@ -181,7 +181,7 @@
 3. **Public Transparency Log Anchoring**: Anchoring Merkle roots to public transparency logs (Sigstore Rekor) and cloud HSMs.
 
 *Speaker Script (30s)*:  
-> "RepoBrain is not a mock concept. We evaluated it across 21 real production commits and 14,500 diff lines with zero false positives. Our test suite passes 208 automated tests across Linux (with Bubblewrap container sandboxing), macOS, and Windows runners. As AI coding agents become the primary contributors to global software, RepoBrain provides the definitive safety, formal verification, and cryptographic governance infrastructure the software industry requires."
+> "RepoBrain is not a mock concept. We evaluated it across 21 real production commits and 14,500 diff lines with zero false positives. Our test suite passes 215 automated tests across Linux (with Bubblewrap container sandboxing), macOS, and Windows runners. As AI coding agents become the primary contributors to global software, RepoBrain provides the definitive safety, formal verification, and cryptographic governance infrastructure the software industry requires."
 
 ---
 

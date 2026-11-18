@@ -85,7 +85,7 @@
 
 ### [1:30] Closing & Deliverables
 **What to say**:
-> "With zero runtime dependencies, 208 passing tests across Linux, macOS, and Windows runners, and proven 0.0% false positives on real UI code, RepoBrain provides deterministic governance for the AI agent era.
+> "With zero runtime dependencies, 215 passing tests across Linux, macOS, and Windows runners, and proven 0.0% false positives on real UI code, RepoBrain provides deterministic governance for the AI agent era.
 >
 > *(brief pause)* Thank you."
 - Show the automated PR comments formatted with markdown tables and status check badges.

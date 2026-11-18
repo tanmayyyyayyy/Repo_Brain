@@ -301,79 +301,86 @@ def prove_function_equivalence(orig_source: str, opt_source: str, func_name: str
     and state-space exploration metrics.
     """
     try:
-        orig_tree = ast.parse(orig_source)
-        opt_tree = ast.parse(opt_source)
-    except SyntaxError as e:
-        return {
-            "proven": False,
-            "reason": f"Syntax error during AST parse: {e}",
-            "method": "symbolic-prover"
-        }
-
-    orig_fn = next((n for n in ast.walk(orig_tree) if isinstance(n, ast.FunctionDef) and n.name == func_name), None)
-    opt_fn = next((n for n in ast.walk(opt_tree) if isinstance(n, ast.FunctionDef) and n.name == func_name), None)
-
-    if not orig_fn or not opt_fn:
-        return {
-            "proven": False,
-            "reason": f"Function '{func_name}' not found in both AST trees",
-            "method": "symbolic-prover"
-        }
-
-    # Extract all symbolic execution paths
-    orig_paths = extract_symbolic_paths(orig_fn)
-    opt_paths = extract_symbolic_paths(opt_fn)
-
-    if not orig_paths or not opt_paths:
-        return {
-            "proven": False,
-            "reason": "No symbolic paths extracted",
-            "method": "symbolic-prover"
-        }
-
-    # Verify bidirectional equivalence
-    # 1. Every path in original has an equivalent path in optimized
-    unmatched_opt = list(opt_paths)
-    for p_orig in orig_paths:
-        match_idx = -1
-        for idx, p_opt in enumerate(unmatched_opt):
-            if p_orig.equivalent_to(p_opt):
-                match_idx = idx
-                break
-        if match_idx == -1:
-            # Check if this original path is redundant / dead code or has equivalent alternative
+        try:
+            orig_tree = ast.parse(orig_source)
+            opt_tree = ast.parse(opt_source)
+        except SyntaxError as e:
             return {
                 "proven": False,
-                "reason": f"Original path [{p_orig}] has no direct equivalent in optimized code",
+                "reason": f"Syntax error during AST parse: {e}",
+                "method": "symbolic-prover"
+            }
+
+        orig_fn = next((n for n in ast.walk(orig_tree) if isinstance(n, ast.FunctionDef) and n.name == func_name), None)
+        opt_fn = next((n for n in ast.walk(opt_tree) if isinstance(n, ast.FunctionDef) and n.name == func_name), None)
+
+        if not orig_fn or not opt_fn:
+            return {
+                "proven": False,
+                "reason": f"Function '{func_name}' not found in both AST trees",
+                "method": "symbolic-prover"
+            }
+
+        # Extract all symbolic execution paths
+        orig_paths = extract_symbolic_paths(orig_fn)
+        opt_paths = extract_symbolic_paths(opt_fn)
+
+        if not orig_paths or not opt_paths:
+            return {
+                "proven": False,
+                "reason": "No symbolic paths extracted",
+                "method": "symbolic-prover"
+            }
+
+        # Verify bidirectional equivalence
+        # 1. Every path in original has an equivalent path in optimized
+        unmatched_opt = list(opt_paths)
+        for p_orig in orig_paths:
+            match_idx = -1
+            for idx, p_opt in enumerate(unmatched_opt):
+                if p_orig.equivalent_to(p_opt):
+                    match_idx = idx
+                    break
+            if match_idx == -1:
+                # Check if this original path is redundant / dead code or has equivalent alternative
+                return {
+                    "proven": False,
+                    "reason": f"Original path [{p_orig}] has no direct equivalent in optimized code",
+                    "paths_orig": len(orig_paths),
+                    "paths_opt": len(opt_paths),
+                    "method": "symbolic-prover"
+                }
+            unmatched_opt.pop(match_idx)
+
+        # 2. No spurious / extra paths in optimized
+        if len(unmatched_opt) > 0:
+            return {
+                "proven": False,
+                "reason": f"Optimized code introduces {len(unmatched_opt)} unmatched symbolic execution paths",
                 "paths_orig": len(orig_paths),
                 "paths_opt": len(opt_paths),
                 "method": "symbolic-prover"
             }
-        unmatched_opt.pop(match_idx)
 
-    # 2. No spurious / extra paths in optimized
-    if len(unmatched_opt) > 0:
+        # If all paths matched bidirectionally:
+        proof_material = f"{func_name}:{len(orig_paths)}:{sorted([str(p) for p in orig_paths])}"
+        proof_hash = hashlib.sha256(proof_material.encode("utf-8")).hexdigest()[:16]
+
+        return {
+            "proven": True,
+            "func_name": func_name,
+            "paths_verified": len(orig_paths),
+            "domain_coverage": "100.0%",
+            "state_space": "Infinite (Symbolic Domain)",
+            "theorem": f"∀ input ∈ Inputs: {func_name}_original(input) ≡ {func_name}_optimized(input)",
+            "formal_method": "Symbolic Execution Path Equivalence with De Morgan Canonicalization",
+            "proof_hash": f"0x{proof_hash}",
+            "paths": [str(p) for p in orig_paths]
+        }
+    except Exception as e:
         return {
             "proven": False,
-            "reason": f"Optimized code introduces {len(unmatched_opt)} unmatched symbolic execution paths",
-            "paths_orig": len(orig_paths),
-            "paths_opt": len(opt_paths),
+            "reason": f"Prover degraded gracefully: {e}",
             "method": "symbolic-prover"
         }
-
-    # If all paths matched bidirectionally:
-    proof_material = f"{func_name}:{len(orig_paths)}:{sorted([str(p) for p in orig_paths])}"
-    proof_hash = hashlib.sha256(proof_material.encode("utf-8")).hexdigest()[:16]
-
-    return {
-        "proven": True,
-        "func_name": func_name,
-        "paths_verified": len(orig_paths),
-        "domain_coverage": "100.0%",
-        "state_space": "Infinite (Symbolic Domain)",
-        "theorem": f"∀ input ∈ Inputs: {func_name}_original(input) ≡ {func_name}_optimized(input)",
-        "formal_method": "Symbolic Execution Path Equivalence with De Morgan Canonicalization",
-        "proof_hash": f"0x{proof_hash}",
-        "paths": [str(p) for p in orig_paths]
-    }
 

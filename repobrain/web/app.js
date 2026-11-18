@@ -328,8 +328,18 @@ async function loadState() {
     <span>${esc(r.base || "")}</span>
   `;
 
-  const scenLabels = { "risky": "A · risky AI PR", "pricing": "B · messy AI PR", "orders": "C · AI refactor" };
-  const currentScen = (r.branch || "").includes("risky") ? "risky" : (r.branch || "").includes("pricing") ? "pricing" : (r.branch || "").includes("orders") ? "orders" : "";
+  const scenLabels = {
+    "risky": "A · risky AI PR",
+    "pricing": "B · messy AI PR",
+    "orders": "C · AI refactor",
+    "clean": "D · clean PR",
+    "polyglot": "E · polyglot PR"
+  };
+  const currentScen = (r.branch || "").includes("risky") ? "risky" :
+                      (r.branch || "").includes("pricing") ? "pricing" :
+                      (r.branch || "").includes("orders") ? "orders" :
+                      (r.branch || "").includes("clean") ? "clean" :
+                      (r.branch || "").includes("polyglot") ? "polyglot" : "";
 
   $("#scen").innerHTML = r.demo ? `
     <span class="scen-label">Scenario:</span>
@@ -2730,6 +2740,8 @@ const COMMANDS = [
   { label: "Switch to Scenario A (Risky AI PR)", action: () => scenario("risky") },
   { label: "Switch to Scenario B (Messy AI PR)", action: () => scenario("pricing") },
   { label: "Switch to Scenario C (AI Refactor)", action: () => scenario("orders") },
+  { label: "Switch to Scenario D (Clean AI PR - Golden Path)", action: () => scenario("clean") },
+  { label: "Switch to Scenario E (Polyglot Full-Stack PR)", action: () => scenario("polyglot") },
   { label: "Go to PR Review", action: () => go("review") },
   { label: "Go to Optimizer", action: () => go("optimizer") },
   { label: "Run AST Optimizer", action: () => { go("optimizer"); runOpt(); } },
@@ -2896,6 +2908,16 @@ const TOUR_STEPS = [
         if (inp) { inp.value = "Priya Sharma"; checkApproverName(); }
       }, 500);
     }
+  },
+  {
+    title: "Scenario D: Clean AI PR (The Golden Path)",
+    desc: "Autonomous agent submits a clean feature with tests. Verdict: ALLOWED (0 findings, 100% compliant, ready to merge). RepoBrain never gets in the way of good code.",
+    action: () => scenario("clean")
+  },
+  {
+    title: "Scenario E: Polyglot Multi-Language Governance",
+    desc: "Full-stack AI governance across TypeScript, Shell, and Dockerfile alongside Python, verifying secrets, permissions, and supply chain integrity.",
+    action: () => scenario("polyglot")
   },
   {
     title: "Cryptographic Tamper-Evident Hash Chain",

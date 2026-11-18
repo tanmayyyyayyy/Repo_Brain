@@ -19,10 +19,13 @@
 ## ⚡ How to Judge RepoBrain in 3 Minutes (Evaluator Quick-Start)
 
 1. **Zero-Install Live Web Console**: Open **[repobrain-demo.onrender.com](https://repobrain-demo.onrender.com)**.
-2. **Instant 30-Second Killer Scenario Walkthrough**:
-   - **Step 1 (Scenario A — Adversarial Agent PR)**: Click `Scenario A` $\to$ **`BLOCKED`**. Notice RepoBrain catches split secret concatenation (`'AKIA' + '...'`), unauthorized workflow edits (`.github/workflows/ci.yml`), and multi-line prompt injections that bypass line-by-line tools.
-   - **Step 2 (Scenario B — AI Spaghetti Code)**: Click `Scenario B` $\to$ click `Run optimizer`. Inspect the **Formal Semantic Equivalence Theorem** ($\forall \text{input}: f_{\text{orig}} \equiv f_{\text{opt}}$) proved by our symbolic prover, plus 500 fuzzed inputs with 0 divergences. Type `Priya Sharma` $\to$ click `Approve & apply` $\to$ review flips to **`ALLOWED`**.
-   - **Step 3 (Audit Ledger & Merkle Proof)**: Click `Audit` $\to$ click `Simulate tampering` (tamper detected instantly) $\to$ click `Merkle Inclusion Proof` $\to$ generate an $O(\log N)$ Zero-Knowledge Inclusion Certificate proving block #8 exists without exposing other records.
+2. **Instant Killer Scenario Walkthrough (Scenarios A through E)**:
+   - **Step 1 (Scenario A — Adversarial Agent PR)**: Click `A · risky AI PR` $\to$ **`BLOCKED`**. Catches split secret concatenation (`'AKIA' + '...'`), unauthorized workflow edits (`.github/workflows/ci.yml`), comment prompt injections, and shell taint flows.
+   - **Step 2 (Scenario B — AI Spaghetti Code)**: Click `B · messy AI PR` $\to$ click `Run optimizer`. Inspect the **Formal Semantic Equivalence Theorem** ($\forall \text{input}: f_{\text{orig}} \equiv f_{\text{opt}}$) proved by our symbolic prover, plus 500 fuzzed inputs with 0 divergences. Type `Priya Sharma` $\to$ click `Approve & apply` $\to$ review flips to **`ALLOWED`**.
+   - **Step 3 (Scenario C — High-Complexity Legacy Refactor)**: Click `C · AI refactor` $\to$ safely handles cyclomatic complexity 27 with base-branch policy gating.
+   - **Step 4 (Scenario D — Clean AI PR / The Golden Path)**: Click `D · clean PR` $\to$ **`ALLOWED`** (0 findings, 100% compliant, ready to merge). Proves 0.0% false positives on clean code.
+   - **Step 5 (Scenario E — Polyglot Full-Stack PR)**: Click `E · polyglot PR` $\to$ full-stack AI governance across TypeScript, Shell, Dockerfile, and Python.
+   - **Step 6 (Audit Ledger & Merkle Proof)**: Click `Audit` $\to$ click `Simulate tampering` (tamper detected instantly) $\to$ click `Merkle Inclusion Proof` $\to$ generate an $O(\log N)$ Zero-Knowledge Inclusion Certificate proving block #8 exists without exposing other records.
 
 ---
 

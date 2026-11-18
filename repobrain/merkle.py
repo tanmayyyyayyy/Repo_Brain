@@ -30,7 +30,10 @@ def hash_leaf(data: Any) -> str:
 
 def hash_children(left_hex: str, right_hex: str) -> str:
     """Compute RFC-6962 interior node hash: SHA-256(0x01 || left_bytes || right_bytes)."""
-    payload = b"\x01" + bytes.fromhex(left_hex) + bytes.fromhex(right_hex)
+    try:
+        payload = b"\x01" + bytes.fromhex(left_hex) + bytes.fromhex(right_hex)
+    except Exception:
+        payload = b"\x01" + str(left_hex).encode("utf-8") + str(right_hex).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
 
@@ -111,22 +114,30 @@ class MerkleTree:
 
 def verify_inclusion_proof(record: Dict[str, Any], proof: Dict[str, Any]) -> bool:
     """Mathematically verify an inclusion proof against expected Merkle root in O(log N) operations."""
-    expected_root = proof.get("merkle_root")
-    proof_path = proof.get("proof_path", [])
-    if not expected_root:
+    try:
+        if not isinstance(record, dict) or not isinstance(proof, dict):
+            return False
+        expected_root = proof.get("merkle_root")
+        proof_path = proof.get("proof_path", [])
+        if not expected_root or not isinstance(proof_path, list):
+            return False
+
+        current_hash = hash_leaf(record)
+        if current_hash != proof.get("leaf_hash"):
+            return False
+
+        for step in proof_path:
+            if not isinstance(step, dict) or "hash" not in step or "position" not in step:
+                return False
+            sibling = step["hash"]
+            position = step["position"]
+            if position == "left":
+                current_hash = hash_children(sibling, current_hash)
+            else:
+                current_hash = hash_children(current_hash, sibling)
+
+        return current_hash == expected_root
+    except Exception:
         return False
 
-    current_hash = hash_leaf(record)
-    if current_hash != proof.get("leaf_hash"):
-        return False
-
-    for step in proof_path:
-        sibling = step["hash"]
-        position = step["position"]
-        if position == "left":
-            current_hash = hash_children(sibling, current_hash)
-        else:
-            current_hash = hash_children(current_hash, sibling)
-
-    return current_hash == expected_root
 

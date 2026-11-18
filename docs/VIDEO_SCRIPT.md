@@ -60,7 +60,7 @@
   >
   > And using our **RFC-6962 Binary Merkle Tree**, any team can generate an $O(\log N)$ zero-knowledge inclusion proof—cryptographically proving a commit was reviewed and authorized without exposing other repository history.
   >
-  > Pure Python standard library, zero runtime dependencies, 208 passing tests. RepoBrain: deterministic governance for the AI agent era.
+  > Pure Python standard library, zero runtime dependencies, 215 passing tests. RepoBrain: deterministic governance for the AI agent era.
   >
   > *(brief pause)* Thank you."
 

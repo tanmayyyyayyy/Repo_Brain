@@ -11,7 +11,7 @@
 4. **Technical Approach**: Zero heavy runtime dependencies (Python stdlib + PyYAML). Deterministic rules can block; the zero-dependency Naive Bayes ML guard warns only (5-fold CV on 772 samples: precision 0.939, recall 0.639, F1 0.760; 0.0% FP on JS/UI strings, 0.03% on 4,000 stdlib prose lines). Single-file WCAG 2.1 AA Mission Control UI with per-run tokens, CSRF protection, and HttpOnly cookie-isolated demo workspaces.
 5. **Impact & Future Scope**:
    - **Measured Evaluation**: 21 commits / 14,500 diff lines scanned with 0% false positives on runtime production code ([`REAL_WORLD_EVAL.md`](REAL_WORLD_EVAL.md)), and 0 false positives across 51,781 LoC of stdlib/OSS Python ([`SHIELD_EVAL.md`](SHIELD_EVAL.md)).
-   - **Full Matrix Verification**: 208 passed, 1 skipped across Linux, macOS, and Windows runners in CI.
+   - **Full Matrix Verification**: 215 passed, 1 skipped across Linux, macOS, and Windows runners in CI.
    - **Roadmap**: TypeScript/Go AST optimizers, GitHub Marketplace App (`webhook.py`), and Sigstore Rekor / AWS KMS hardware key anchoring.
 
 ## Deliverables Status

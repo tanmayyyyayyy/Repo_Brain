@@ -914,10 +914,11 @@ def route(ctx, path, body, user=None, wid=None):
             raise PermissionError("Permission Denied: Only Admin can acknowledge audit ledger recovery.")
         return ctx.log.ack_recovery(user.get("email", actor or "admin"))
     if path == "/api/scenario" and ctx.demo:
-        demo.switch(active_root, body["name"])
+        scen_name = body.get("name", "risky") if isinstance(body, dict) else "risky"
+        demo.switch(active_root, scen_name)
         active_base = ctx.get_base_for_root(active_root)
         ctx.base = active_base
-        return {"branch": gitutil.branch(active_root), "base": active_base}
+        return {"branch": gitutil.branch(active_root), "base": active_base, "scenario": scen_name}
     if path == "/api/reset" and ctx.demo:
         demo.seed(active_root)
         if active_root != ctx.root:

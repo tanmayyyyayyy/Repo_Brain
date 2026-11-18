@@ -4,14 +4,17 @@
 
 > **Judges start here (3-Minute Evaluation Guide):**
 > - **Live Demo (Zero Install)**: **[repobrain-demo.onrender.com](https://repobrain-demo.onrender.com)** — instant 1-click persona switcher (Admin, Developer, Tester, Security).
-> - **Try the Three Killer Scenarios in 30 Seconds**:
->   1. **Scenario A (Adversarial Agent PR)**: Click `Scenario A` $\to$ **`BLOCKED`**. Catches split secret concatenation (`'AKIA' + '...'`), protected workflow tampering, and multi-line prompt injections.
->   2. **Scenario B (AI Spaghetti Code)**: Click `Scenario B` $\to$ click `Run optimizer` $\to$ view the **Symbolic Formal Equivalence Proof** ($\forall \text{input}: f_{\text{orig}} \equiv f_{\text{opt}}$) + 500 fuzzed inputs $\to$ approve as `Priya Sharma` $\to$ flips to **`ALLOWED`**.
->   3. **Audit Ledger & Merkle Proof**: Click `Audit` $\to$ click `Simulate tampering` (instant detection) $\to$ click `Merkle Inclusion Proof` $\to$ generate an $O(\log N)$ Zero-Knowledge Inclusion Certificate.
+> - **Try the Five Killer Scenarios in 60 Seconds**:
+>   1. **Scenario A (Adversarial Agent PR)**: Click `A · risky AI PR` $\to$ **`BLOCKED`**. Catches split secret concatenation (`'AKIA' + '...'`), protected workflow tampering, and multi-line prompt injections.
+>   2. **Scenario B (AI Spaghetti Code)**: Click `B · messy AI PR` $\to$ click `Run optimizer` $\to$ view the **Symbolic Formal Equivalence Proof** ($\forall \text{input}: f_{\text{orig}} \equiv f_{\text{opt}}$) + 500 fuzzed inputs $\to$ approve as `Priya Sharma` $\to$ flips to **`ALLOWED`**.
+>   3. **Scenario C (High-Complexity Refactor)**: Click `C · AI refactor` $\to$ safely refactor legacy code (cyclomatic 27) with base-branch policy gating.
+>   4. **Scenario D (Clean AI PR - The Golden Path)**: Click `D · clean PR` $\to$ **`ALLOWED`** (0 findings, 100% compliant, ready to merge). Proves 0.0% false positives on good code.
+>   5. **Scenario E (Polyglot Multi-Language PR)**: Click `E · polyglot PR` $\to$ full-stack AI governance across TypeScript, Shell, Dockerfile, and Python.
+>   6. **Audit Ledger & Merkle Proof**: Click `Audit` $\to$ click `Simulate tampering` (instant detection) $\to$ click `Merkle Inclusion Proof` $\to$ generate an $O(\log N)$ Zero-Knowledge Inclusion Certificate.
 > - **Master 90s Demo Video**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) (narrated 1080p60 with captions) · **Live PRs**: [`repobrain-demo-eval#1`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/1), [`#2`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/2) & [`Repo_Brain#1`](https://github.com/tanmayyyyayyy/Repo_Brain/pull/1).
 > - **Interactive Pitch Deck**: [`docs/slides.html`](docs/slides.html) (or visit `/slides` in console) · Markdown: [`docs/SLIDE_DECK.md`](docs/SLIDE_DECK.md).
 > - **Quick Local Run**: `pip install -r requirements.txt && python server.py` (or Docker: `docker run --rm -p 8765:8765 repobrain`).
-> - **Empirical Verification**: 208 passed automated tests across Linux (Bubblewrap sandbox), macOS, and Windows runners; 51,781 OSS lines scanned with 0 FPs ([`SHIELD_EVAL.md`](docs/SHIELD_EVAL.md)).
+> - **Empirical Verification**: 215 passed automated tests across Linux (Bubblewrap sandbox), macOS, and Windows runners; 51,781 OSS lines scanned with 0 FPs ([`SHIELD_EVAL.md`](docs/SHIELD_EVAL.md)).
 > - **Zero Runtime Dependencies**: Built purely with the Python standard library (`ast`, `hashlib`, `hmac`, `http.server`) + PyYAML. Fast, portable, and zero supply-chain risk.
 
 **A vendor-neutral safety, cleanup and audit layer for repos that AI agents write to.**
@@ -228,7 +231,7 @@ repobrain/          policy · metrics · gitutil · shield · rewrite · optimiz
 repobrain/web/      index.html single-file WCAG 2.1 AA Mission Control UI
 demo_assets/        files for the seeded demo repo
 integrations/       MCP server and Claude Code pre-execution hook templates
-tests/              208 passing tests (1 skipped) incl. symbolic formal prover, intra-procedural taint analysis, RFC-6962 Merkle tree, security audit fixes, non-demo isolation, differential fuzzing, ML guard evaluation, mock LLM tests, tamper detection, server security, Playwright UI & a11y
+tests/              215 passing tests (1 skipped) incl. symbolic formal prover, intra-procedural taint analysis, RFC-6962 Merkle tree, multi-scenario coverage (A-E), zero-failure resilience, security audit fixes, non-demo isolation, differential fuzzing, ML guard evaluation, mock LLM tests, tamper detection, server security, Playwright UI & a11y
 scripts/            contrast check, screenshot matrix, headless demo check, real-commit evaluator, video pipeline
 ```
 

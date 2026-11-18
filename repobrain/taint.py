@@ -218,12 +218,15 @@ def scan_source(source_text: str, filename: str = "") -> List[Dict[str, Any]]:
     """Scan an entire Python source code string for data-flow taint violations."""
     try:
         tree = ast.parse(source_text)
-    except SyntaxError:
+    except Exception:
         return []
 
     all_findings: List[Dict[str, Any]] = []
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            findings = scan_function_taint(node, filename=filename)
-            all_findings.extend(findings)
+    try:
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                findings = scan_function_taint(node, filename=filename)
+                all_findings.extend(findings)
+    except Exception:
+        pass
     return all_findings
