@@ -10,11 +10,11 @@
 >   3. **Scenario C (High-Complexity Refactor)**: Click `C · AI refactor` $\to$ safely refactor legacy code (cyclomatic 27) with base-branch policy gating.
 >   4. **Scenario D (Clean AI PR - The Golden Path)**: Click `D · clean PR` $\to$ **`ALLOWED`** (0 findings, 100% compliant, ready to merge). Proves 0.0% false positives on good code.
 >   5. **Scenario E (Polyglot Multi-Language PR)**: Click `E · polyglot PR` $\to$ full-stack AI governance across TypeScript, Shell, Dockerfile, and Python.
->   6. **Audit Ledger & Merkle Proof**: Click `Audit` $\to$ click `Simulate tampering` (instant detection) $\to$ click `Merkle Inclusion Proof` $\to$ generate an $O(\log N)$ Zero-Knowledge Inclusion Certificate.
+>   6. **Audit Ledger & Verifiable PR Receipt**: Click `Audit` $\to$ click `Simulate tampering` (instant detection) $\to$ click `Merkle Inclusion Proof` $\to$ generate an $O(\log N)$ offline-verifiable cryptographic inclusion proof $\to$ download the **Verifiable Decision Receipt** (`repobrain verify-receipt <file>`).
 > - **Master 90s Demo Video**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) (narrated 1080p60 with captions) · **Live PRs**: [`repobrain-demo-eval#1`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/1), [`#2`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/2) & [`Repo_Brain#1`](https://github.com/tanmayyyyayyy/Repo_Brain/pull/1).
 > - **Interactive Pitch Deck**: [`docs/slides.html`](docs/slides.html) (or visit `/slides` in console) · Markdown: [`docs/SLIDE_DECK.md`](docs/SLIDE_DECK.md).
 > - **Quick Local Run**: `pip install -r requirements.txt && python server.py` (or Docker: `docker run --rm -p 8765:8765 repobrain`).
-> - **Empirical Verification**: 215 passed automated tests across Linux (Bubblewrap sandbox), macOS, and Windows runners; 51,781 OSS lines scanned with 0 FPs ([`SHIELD_EVAL.md`](docs/SHIELD_EVAL.md)).
+> - **Empirical Verification**: 220 passed automated tests across Linux (Bubblewrap sandbox), macOS, and Windows runners; 51,781 OSS lines scanned with 0 FPs ([`SHIELD_EVAL.md`](docs/SHIELD_EVAL.md)).
 > - **Zero Runtime Dependencies**: Built purely with the Python standard library (`ast`, `hashlib`, `hmac`, `http.server`) + PyYAML. Fast, portable, and zero supply-chain risk.
 
 **A vendor-neutral safety, cleanup and audit layer for repos that AI agents write to.**
@@ -41,20 +41,21 @@ Classic linters and secret scanners emit advisory warnings that autonomous agent
 - **The Competitive Moat**:
   1. **Formal AST Proofs**: Mathematically certified semantic equivalence ($\forall \text{input}: f_{\text{orig}} \equiv f_{\text{opt}}$)—not just heuristic linters.
   2. **Data-Flow Taint Analysis**: Pure Python intra-procedural taint propagation tracing untrusted inputs to dangerous sinks (CWE-78/95/22).
-  3. **Cryptographic Merkle Proofs**: $O(\log N)$ zero-knowledge inclusion certificates verifiable offline or in CI without leaking other repo history.
+  3. **Cryptographic Merkle Proofs & Verifiable Receipts**: $O(\log N)$ offline-verifiable inclusion proofs allowing auditors to verify PR governance decisions without requiring access to other log records.
   4. **Base-Branch Policy Provenance**: Rules are anchored strictly in `origin/main`—an agent's PR can never soften its own compliance gates.
   5. **Enterprise-Grade Access**: 4-tier RBAC, corporate domain enforcement, and FIPS-compliant PBKDF2 password security.
 
 ## Novel Technical Contributions
 
-RepoBrain includes three zero-dependency Python innovations built from scratch:
+RepoBrain includes four zero-dependency Python innovations built from scratch:
 
 ### 1. Symbolic AST Formal Equivalence Prover (`repobrain/prover.py`)
 Mathematically **proves** that AST-rewritten functions are semantically identical to the originals:
-- Extracts all symbolic execution paths as `{condition_set → return_value}` pairs
-- Applies De Morgan law canonicalization (`not (A and B)` → `A<=x or B<=y` in DNF)
-- Bidirectionally matches paths to verify `∀ input ∈ Inputs: f_original(input) ≡ f_optimized(input)`
-- Proof results appear in optimizer proposals as `formal_proofs` with theorem hash
+- Focuses on pure control-flow rewrites: guard clause hoisting, boolean expression simplification, and dead-branch elimination under De Morgan laws.
+- Extracts all symbolic execution paths as `{condition_set → return_value}` pairs.
+- Bidirectionally matches paths to verify `∀ input ∈ Inputs: f_original(input) ≡ f_optimized(input)`.
+- Proof results appear in optimizer proposals and decision receipts as `formal_proofs` with immutable theorem hash.
+- **Graceful Fallback**: If functions contain external side effects or dynamic attributes, RepoBrain falls back to differential fuzzing (500 boundary inputs) and isolated pytest execution in a scratch sandbox.
 
 ```python
 from repobrain.prover import ProofEngine
@@ -78,15 +79,28 @@ findings = scan_source(python_source, "myfile.py")
 ### 3. RFC-6962 Binary Merkle Audit Tree (`repobrain/merkle.py`)
 Builds a binary Merkle tree over audit log entries with RFC-6962 domain separation:
 - Leaf hash: `SHA-256(0x00 || entry_hash)`, internal: `SHA-256(0x01 || left || right)`
-- O(log N) audit proofs — prove any entry exists without revealing others
-- Full zero-knowledge inclusion verification via sibling path reconstruction
+- $O(\log N)$ audit proofs — prove any entry exists without requiring access to other entries
+- Full cryptographic inclusion verification via sibling path reconstruction
 - API: `GET /api/audit/proof?seq=N`, `POST /api/audit/verify-proof`
 
 ```python
-from repobrain.merkle import MerkleTree
-tree = MerkleTree(["hash1", "hash2", "hash3", "hash4"])
+from repobrain.merkle import MerkleTree, verify_inclusion_proof
+tree = MerkleTree(log_records)
 proof = tree.audit_proof(0)         # O(log N) sibling path
-valid = tree.verify_inclusion_proof(proof, "hash1", tree.root())  # True
+valid = verify_inclusion_proof(log_records[0], proof)  # True
+```
+
+### 4. Verifiable PR Decision Receipt Engine (`repobrain/receipt.py`)
+Generates a downloadable, self-contained **Decision Receipt** cryptographically binding review findings, base policy hash (`origin/main`), formal AST theorem proof, differential fuzzing results, human approver, and RFC-6962 Merkle inclusion proof into one verifiable artifact:
+- Offline verification CLI: `repobrain verify-receipt repobrain-receipt.json`
+- Zero external dependencies: verifies file integrity, Merkle root, and policy provenance without network or database access.
+
+```bash
+# Generate decision receipt for current PR
+repobrain receipt --out receipt.json
+
+# Offline verification by external auditors or CI
+repobrain verify-receipt receipt.json
 ```
 
 
@@ -227,17 +241,17 @@ python -m repobrain demo                                                     # r
 ## Layout
 
 ```text
-repobrain/          policy · metrics · gitutil · shield · rewrite · optimizer · fuzz · deps · mlguard · llm · review · explainer · audit · export · report · demo · server · cli
+repobrain/          policy · metrics · gitutil · shield · rewrite · optimizer · prover · taint · merkle · receipt · fuzz · deps · mlguard · llm · review · explainer · audit · export · report · demo · server · cli
 repobrain/web/      index.html single-file WCAG 2.1 AA Mission Control UI
 demo_assets/        files for the seeded demo repo
 integrations/       MCP server and Claude Code pre-execution hook templates
-tests/              215 passing tests (1 skipped) incl. symbolic formal prover, intra-procedural taint analysis, RFC-6962 Merkle tree, multi-scenario coverage (A-E), zero-failure resilience, security audit fixes, non-demo isolation, differential fuzzing, ML guard evaluation, mock LLM tests, tamper detection, server security, Playwright UI & a11y
+tests/              220 passing tests (1 skipped) incl. symbolic formal prover, intra-procedural taint analysis, RFC-6962 Merkle tree, verifiable PR decision receipts, multi-scenario coverage (A-E), zero-failure resilience, security audit fixes, non-demo isolation, differential fuzzing, ML guard evaluation, mock LLM tests, tamper detection, server security, Playwright UI & a11y
 scripts/            contrast check, screenshot matrix, headless demo check, real-commit evaluator, video pipeline
 ```
 
-## Roadmap
+## Roadmap & Future Scope
 
-- **Hosted GitHub App & Multi-Repo Dashboard**: Production GitHub App deployment expanding [`repobrain/webhook.py`](repobrain/webhook.py) with organization-wide policy management and SAML SSO.
+- **Hosted GitHub App & Multi-Repo Dashboard**: Production GitHub App deployment expanding the architectural prototype in [`repobrain/webhook.py`](repobrain/webhook.py) with organization-wide policy management and SAML SSO (GitHub Actions workflow and CLI preflight remain the core production integrations today).
 - **Multi-Language AST Optimizers**: Expand verified AST complexity reduction to TypeScript and Go.
 - **Public Cryptographic Anchoring**: Sigstore Rekor / RFC 3161 timestamping for external audit root attestation.
 - **Native IDE Sidecars**: VS Code and JetBrains extensions wired directly to `/api/preflight`.

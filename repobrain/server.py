@@ -580,6 +580,27 @@ def make_handler(ctx, token, port, host="127.0.0.1", open_demo=False, allowed_ho
                                 return self._send(200, report_path.read_bytes(), "text/html; charset=utf-8")
                             return self._send(200, {"audit": list(reversed(ctx.log.entries())), "chain": ctx.log.verify()},
                                               "application/json", {"content-disposition": "attachment; filename=repobrain-audit.json"})
+                    if u.path in ("/api/receipt", "/api/receipt.json"):
+                        with LOCK:
+                            from . import receipt as R
+                            usr = self._get_user()
+                            active_root = ctx.get_workspace_root(wid) if wid else ctx.get_root_for_user(usr)
+                            active_base = ctx.get_base_for_root(active_root)
+                            pol = ctx.policy(active_root)
+                            rev = review.run(active_root, pol, active_base, ctx.home)
+                            prop = None
+                            if ctx.last_proposal and isinstance(ctx.last_proposal, str):
+                                try:
+                                    prop = optimizer.load_proposal(ctx.home, ctx.last_proposal)
+                                except Exception:
+                                    pass
+                            elif isinstance(ctx.last_proposal, dict):
+                                prop = ctx.last_proposal
+                            actor_name = (usr.get("name") or usr.get("email")) if isinstance(usr, dict) else "Reviewer"
+                            rcpt = R.generate_receipt(active_root, rev, ctx.log, proposal=prop, approver=actor_name, base=active_base)
+                            head_short = str(rcpt["review"]["commit"])[:8]
+                            return self._send(200, rcpt, "application/json",
+                                              {"content-disposition": f"attachment; filename=repobrain-receipt-{head_short}.json"})
                     if u.path == "/api/diff":
                         qs = parse_qs(u.query)
                         req_path = qs.get("path", [""])[0].strip()
@@ -905,10 +926,19 @@ def route(ctx, path, body, user=None, wid=None):
         return A.simulate_tamper(ctx.log.entries())
     if path == "/api/audit/verify-proof":
         from . import merkle
-        record = body.get("record", {})
-        proof = body.get("proof", {})
-        valid = merkle.verify_inclusion_proof(record, proof)
-        return {"valid": valid, "merkle_root": proof.get("merkle_root")}
+        record = body.get("record") if isinstance(body, dict) else None
+        proof = body.get("proof") if isinstance(body, dict) else {}
+        if proof is None:
+            proof = body if isinstance(body, dict) else {}
+        if not record and isinstance(body, dict):
+            target_seq = body.get("seq") or (proof.get("record_seq") if isinstance(proof, dict) else None)
+            if target_seq is not None:
+                for e in ctx.log.entries():
+                    if e.get("seq") == target_seq:
+                        record = e
+                        break
+        valid = merkle.verify_inclusion_proof(record or {}, proof or {})
+        return {"valid": valid, "merkle_root": (proof or {}).get("merkle_root")}
     if path == "/api/audit/ack-recovery":
         if not user or not auth.check_permission(user, "manage_policy"):
             raise PermissionError("Permission Denied: Only Admin can acknowledge audit ledger recovery.")
@@ -927,6 +957,10 @@ def route(ctx, path, body, user=None, wid=None):
             shutil.rmtree(ctx.home, ignore_errors=True)
             ctx.log = A.AuditLog(ctx.home)
         return {"ok": True}
+    if path == "/api/verify-receipt":
+        from . import receipt as R
+        rcpt_data = body.get("receipt", body)
+        return R.verify_receipt(rcpt_data, audit_key=os.environ.get("REPOBRAIN_AUDIT_KEY"))
     if path == "/api/webhook":
         from . import webhook
         return webhook.handle_event(body.get("event", "ping"), body)

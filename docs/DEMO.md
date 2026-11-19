@@ -78,14 +78,17 @@
 3. Click **Simulate tampering**.
    - The system flips to red: **`IN-MEMORY TAMPERING SIMULATED: SHA-256 signature invalidated (#8), downstream links broken`**.
 4. Click **Merkle Inclusion Proof**, enter sequence `8`, and click **Generate Proof**.
-   - Show the $O(\log N)$ sibling path and Zero-Knowledge Inclusion Certificate proving entry #8 exists in the ledger without exposing other records.
-5. "If anyone mutates an audit event or truncates history, the hash chain and Merkle root break instantly."
+   - Show the $O(\log N)$ sibling path and cryptographic inclusion proof proving entry #8 exists in the ledger without requiring access to other records.
+5. Click **Decision Receipt** (or run `repobrain receipt`).
+   - Show the downloadable cryptographic receipt binding the review verdict, base policy hash, formal AST theorem, and Merkle proof.
+   - Run `repobrain verify-receipt repobrain-receipt.json` to prove offline verification with zero external dependencies.
+6. "If anyone mutates an audit event or truncates history, the hash chain and Merkle root break instantly."
 
 ---
 
 ### [1:30] Closing & Deliverables
 **What to say**:
-> "With zero runtime dependencies, 215 passing tests across Linux, macOS, and Windows runners, and proven 0.0% false positives on real UI code, RepoBrain provides deterministic governance for the AI agent era.
+> "With zero runtime dependencies, 220 passing tests across Linux, macOS, and Windows runners, and proven 0.0% false positives on real UI code, RepoBrain provides deterministic governance for the AI agent era.
 >
 > *(brief pause)* Thank you."
 - Show the automated PR comments formatted with markdown tables and status check badges.

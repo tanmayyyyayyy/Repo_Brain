@@ -448,7 +448,7 @@
           <div class="card-desc">
             <span class="pill" style="background:rgba(34,197,94,0.15);color:#86efac;font-size:10px;font-weight:700">O(log N) PROOFS</span>
             <p style="margin-top:8px">• <strong>Domain Separation:</strong> <code>0x00||leaf</code> and <code>0x01||internal</code> cryptographic tree hashing.</p>
-            <p style="margin-top:6px">• <strong>Zero-Knowledge Inclusion:</strong> Proves any log entry exists without revealing any other records.</p>
+            <p style="margin-top:6px">• <strong>Offline-Verifiable Inclusion:</strong> Proves any log entry exists using compact O(log N) sibling hashes without revealing full ledger.</p>
             <p style="margin-top:6px">• <strong>UI Verification:</strong> REST API + 1-click proof generation and verification in Mission Control.</p>
           </div>
         </div>
@@ -542,7 +542,7 @@
             <p>• <strong>Real-World PR Evaluation:</strong> 21 commits / 14,500 diff lines scanned with <strong>0% false positives</strong> on production code.</p>
             <p style="margin-top:8px">• <strong>OSS Benchmark:</strong> 124 files / 51,781 LoC across CPython &amp; PyYAML with <strong>0 false positives</strong>.</p>
             <p style="margin-top:8px">• <strong>Complexity Reduction:</strong> High-debt pricing logic dropped from <strong>27 → 8 cyclomatic (70% drop)</strong>.</p>
-            <p style="margin-top:8px">• <strong>Automated Test Suite:</strong> <strong>215 tests passed, 1 skipped</strong> across Linux (Bubblewrap sandbox), macOS, and Windows matrix (Python 3.10–3.13).</p>
+            <p style="margin-top:8px">• <strong>Automated Test Suite:</strong> <strong>220 tests passed, 1 skipped</strong> across Linux (Bubblewrap sandbox), macOS, and Windows matrix (Python 3.10–3.13).</p>
           </div>
         </div>
 
@@ -580,9 +580,9 @@
     const NOTES = {
       1: "When AI coding agents write code, who controls what they can touch? Today, enterprise teams rely on legacy linters and scanners that only emit advisory warnings. As you can see on this matrix, classic tools easily miss split string secrets, multi-line prompt injections, and dangerous taint flows to shell sinks. AI agents bypass these with zero resistance, introducing unmaintainable spaghetti code without any cryptographic audit provenance. RepoBrain is purpose-built to solve this.",
       2: "RepoBrain is a vendor-neutral governance and audit system. It reads policy directly from the trusted base branch—meaning an agent can never weaken the rules it is subjected to. Every commit passes through five deterministic gates: Shield threat prevention, targeted complexity analysis, sandbox-verified AST optimization, mandatory human sign-off, and an immutable HMAC-signed audit ledger.",
-      3: "RepoBrain ships three zero-dependency innovations built purely with the Python standard library. First: a symbolic formal prover that mathematically certifies every AST rewrite, proving behavioral equivalence across all execution paths. Second: an intra-procedural taint analysis engine that traces untrusted data through assignment chains into dangerous sinks—CWE-78, CWE-22, CWE-95. Third: an RFC-6962 binary Merkle audit tree that generates cryptographic zero-knowledge inclusion certificates in O(log N) steps.",
+      3: "RepoBrain ships zero-dependency innovations built purely with the Python standard library. First: a symbolic formal prover that mathematically certifies AST rewrites across pure execution paths. Second: an intra-procedural taint analysis engine that traces untrusted data through assignment chains into dangerous sinks—CWE-78, CWE-22, CWE-95. Third: an RFC-6962 binary Merkle audit tree that generates cryptographic offline-verifiable inclusion proofs and PR decision receipts in O(log N) steps.",
       4: "Who buys RepoBrain? Enterprise Platform and Security leaders who want to give their engineers the speed of autonomous coding agents like Claude Code or Cursor, but cannot compromise on SOC 2 and ISO 27001 compliance. We provide strict corporate domain enforcement, FIPS-compliant PBKDF2 password hashing, and a 4-tier Role-Based Access Control matrix. A developer can write code and run the optimizer, but cannot approve merges or waive security gates.",
-      5: "RepoBrain is not a mock concept. We evaluated it across 21 real production commits and 14,500 diff lines with zero false positives. Our test suite passes 215 automated tests across Linux (with Bubblewrap container sandboxing), macOS, and Windows runners. As AI coding agents become the primary contributors to global software, RepoBrain provides the definitive safety, formal verification, and cryptographic governance infrastructure the software industry requires."
+      5: "RepoBrain is not a mock concept. We evaluated it across 21 real production commits and 14,500 diff lines with zero false positives. Our test suite passes 220 automated tests across Linux (with Bubblewrap container sandboxing), macOS, and Windows runners. As AI coding agents become the primary contributors to global software, RepoBrain provides the definitive safety, formal verification, and cryptographic governance infrastructure the software industry requires."
     };
 
     function showSlide(n) {

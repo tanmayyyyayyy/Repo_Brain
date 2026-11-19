@@ -58,9 +58,9 @@
   >
   > If an attacker tampers with historical block #8 in memory, the signature instantly breaks downstream verification.
   >
-  > And using our **RFC-6962 Binary Merkle Tree**, any team can generate an $O(\log N)$ zero-knowledge inclusion proof—cryptographically proving a commit was reviewed and authorized without exposing other repository history.
+  > And using our **RFC-6962 Binary Merkle Tree**, any team can download a cryptographically signed **Decision Receipt** with an $O(\log N)$ offline-verifiable inclusion proof—proving a commit was verified and authorized without requiring access to other repository history.
   >
-  > Pure Python standard library, zero runtime dependencies, 215 passing tests. RepoBrain: deterministic governance for the AI agent era.
+  > Pure Python standard library, zero runtime dependencies, 220 passing tests. RepoBrain: deterministic governance for the AI agent era.
   >
   > *(brief pause)* Thank you."
 
@@ -78,7 +78,7 @@
 | **1:05** | Human approval input | `Human-in-the-Loop: Mandatory sign-off commits Approved-by: trailer` |
 | **1:12** | PR review green verdict | `Verdict: ALLOWED · Clean merge readiness certified` |
 | **1:20** | Tamper detection sweep | `Cryptographic HMAC-SHA256 Ledger: Historical edits immediately detected` |
-| **1:28** | Merkle proof certificate | `RFC-6962 Merkle Tree: O(log N) Zero-Knowledge Inclusion Proofs` |
+| **1:28** | Merkle proof certificate | `RFC-6962 Merkle Tree: O(log N) Offline-Verifiable Inclusion Proofs` |
 
 ---
 

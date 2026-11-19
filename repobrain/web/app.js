@@ -1584,6 +1584,9 @@ function vReview() {
       <div class="verdict-action-slot">
         ${actionBtn}
         <button class="b s" data-action="runReview()" title="Re-evaluate change against base">Re-run</button>
+        <button class="b s" style="border-color:var(--accent-primary);color:var(--accent-primary)" data-action="dlReceipt()" title="Download cryptographically verifiable decision receipt (offline verify via repobrain verify-receipt)">
+          <svg style="width:12px;height:12px;vertical-align:-1px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Decision Receipt
+        </button>
       </div>
     </div>
 
@@ -2121,6 +2124,7 @@ function vAudit() {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="b" data-action="verifyChainAnimation()">Verify Chain</button>
         <button class="b s" data-action="tamper()">Simulate tampering</button>
+        <button class="b" style="background:var(--accent-primary);color:#fff" data-action="dlReceipt()" title="Download verifiable PR decision receipt">Decision Receipt</button>
         <button class="b s" data-action="dl('/api/report.md','repobrain-report.md')">Export report (.md)</button>
         <button class="b s" data-action="dl('/api/export?fmt=sarif','repobrain.sarif')">Export SARIF</button>
         <button class="b s" data-action="dl('/api/export?fmt=csv','repobrain-audit.csv')">Export CSV</button>
@@ -2136,7 +2140,7 @@ function vAudit() {
       </div>
       <div class="small" style="margin-bottom:8px">
         Prove any audit entry is included in the log in O(log N) steps — without revealing other entries.
-        Enter a sequence number to generate a zero-knowledge inclusion certificate:
+        Enter a sequence number to generate an offline-verifiable inclusion proof:
       </div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
         <input id="merkleSeqInput" type="number" min="1" placeholder="Seq #" style="width:100px;padding:6px 10px;border:1px solid var(--border-subtle);border-radius:6px;background:var(--bg-surface);color:var(--fg-primary);font-size:13px">
@@ -2205,21 +2209,25 @@ async function generateMerkleProof() {
   if (isNaN(seq) || seq < 1) { alert("Enter a valid sequence number"); return; }
   const res = document.getElementById("merkleProofResult");
   if (!res) return;
-  res.innerHTML = "⏳ Fetching proof…";
+  res.innerHTML = "⏳ Fetching cryptographic proof…";
   try {
     const data = await api("/api/audit/proof?seq=" + seq);
-    const j = JSON.parse(data);
+    const j = typeof data === "string" ? JSON.parse(data) : data;
     if (j.error) { res.innerHTML = `<span class="err">Error: ${esc(j.error)}</span>`; return; }
+    const seqNum = j.record_seq || j.seq;
+    const root = j.merkle_root || j.root || "";
+    const proofSteps = j.proof_path || j.proof || [];
+    const treeSize = j.tree_size || j.total_entries || 1;
     res.innerHTML = [
-      `<b>Entry #${j.seq}</b> · Merkle Root: <code>${esc((j.root||"").slice(0,16))}…</code>`,
-      `<div style="margin:8px 0">Proof path (${j.proof ? j.proof.length : 0} steps = O(log ${(j.total_entries||1)})):</div>`,
-      (j.proof || []).map((step, i) =>
-        `<div style="margin:3px 0 3px 12px">${i+1}. <code>${esc((step.hash||"").slice(0,12))}…</code> <span class="mut small">${esc(step.direction || "")}</span></div>`
+      `<b>Entry #${seqNum}</b> · Merkle Root: <code>${esc(root.slice(0,16))}…</code>`,
+      `<div style="margin:8px 0">Proof path (${proofSteps.length} steps = O(log ${treeSize})):</div>`,
+      proofSteps.map((step, i) =>
+        `<div style="margin:3px 0 3px 12px">${i+1}. <code>${esc((step.hash||"").slice(0,12))}…</code> <span class="mut small">${esc(step.position || step.direction || "")}</span></div>`
       ).join(""),
       `<div style="margin-top:10px;padding:8px;background:var(--bg-surface);border-radius:6px;border:1px solid var(--signal-pass-border)">`,
-      `  <b style="color:var(--signal-pass)">✓ Zero-Knowledge Inclusion Certificate</b><br>`,
-      `  <span class="small mut">Entry #${j.seq} cryptographically proven to exist in a ${j.total_entries || "?"}-entry log<br>`,
-      `  without revealing any other entries. RFC-6962 binary Merkle tree.</span>`,
+      `  <b style="color:var(--signal-pass)">✓ Cryptographic Inclusion Certificate (Offline-Verifiable)</b><br>`,
+      `  <span class="small mut">Entry #${seqNum} cryptographically proven to exist in a ${treeSize}-entry log<br>`,
+      `  using compact O(log N) sibling hashes without full ledger disclosure. RFC-6962 binary Merkle tree.</span>`,
       `</div>`
     ].join("");
     S._lastMerkleProof = j;
@@ -2233,15 +2241,14 @@ async function verifyMerkleProof() {
   if (!res) return;
   if (!S._lastMerkleProof) { res.innerHTML = `<span class="mut small">Generate a proof first.</span>`; return; }
   const p = S._lastMerkleProof;
-  res.innerHTML = "⏳ Verifying…";
+  res.innerHTML = "⏳ Verifying cryptographic proof…";
   try {
-    const body = JSON.stringify({ seq: p.seq, proof: p.proof, root: p.root, leaf_hash: p.leaf_hash });
-    const raw = await fetch("/api/audit/verify-proof", { method: "POST", headers: { "Content-Type": "application/json" }, body });
-    const j = await raw.json();
+    const seqNum = p.record_seq || p.seq;
+    const j = await api("/api/audit/verify-proof", { seq: seqNum, proof: p });
     if (j.valid) {
       res.innerHTML = `<div style="padding:10px;background:var(--signal-pass-bg);border:1px solid var(--signal-pass-border);border-radius:6px">
         <b style="color:var(--signal-pass)">✓ PROOF VERIFIED</b><br>
-        <span class="small">Entry #${p.seq} inclusion proven. Recomputed root matches chain head.</span>
+        <span class="small">Entry #${seqNum} inclusion proven. Recomputed RFC-6962 root matches chain head.</span>
       </div>`;
     } else {
       res.innerHTML = `<div style="padding:10px;background:var(--signal-block-bg);border:1px solid var(--signal-block-border);border-radius:6px">
@@ -2254,7 +2261,23 @@ async function verifyMerkleProof() {
   }
 }
 
-async function dl(p, name) { const t = await api(p); const u = URL.createObjectURL(new Blob([t], { type: "text/markdown" })); const a = document.createElement("a"); a.href = u; a.download = name; a.click(); }
+async function dl(p, name) {
+  const t = await api(p);
+  const payload = typeof t === "object" ? JSON.stringify(t, null, 2) : t;
+  const mime = name.endsWith(".json") ? "application/json" : name.endsWith(".csv") ? "text/csv" : "text/markdown";
+  const u = URL.createObjectURL(new Blob([payload], { type: mime }));
+  const a = document.createElement("a");
+  a.href = u;
+  a.download = name;
+  a.click();
+}
+
+function dlReceipt() {
+  const headShort = (S.rev && S.rev.head) ? String(S.rev.head).slice(0, 8) : "pr";
+  dl('/api/receipt', `repobrain-receipt-${headShort}.json`);
+  toast("Downloaded Cryptographic Decision Receipt (verifiable offline via repobrain verify-receipt)");
+}
+
 function dlj() { const u = URL.createObjectURL(new Blob([JSON.stringify(S.audit, null, 2)], { type: "application/json" })); const a = document.createElement("a"); a.href = u; a.download = "repobrain-audit.json"; a.click(); }
 
 /* ─────────────────────────────────────────────────────────────
@@ -2751,6 +2774,7 @@ const COMMANDS = [
   { label: "Verify Cryptographic Audit Chain", action: () => { go("audit"); setTimeout(verifyChainAnimation, 200); } },
   { label: "Simulate Log Tampering", action: () => { go("audit"); setTimeout(tamper, 200); } },
   { label: "Go to Policy Inspector", action: () => go("policy") },
+  { label: "Download Verifiable Decision Receipt", action: dlReceipt },
   { label: "Export Report (Markdown)", action: () => dl('/api/report.md','repobrain-report.md') },
   { label: "Export SARIF (GitHub Code Scanning)", action: () => dl('/api/export?fmt=sarif','repobrain.sarif') },
   { label: "Export Audit Ledger (CSV)", action: () => dl('/api/export?fmt=csv','repobrain-audit.csv') },

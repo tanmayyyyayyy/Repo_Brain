@@ -25,7 +25,7 @@
    - **Step 3 (Scenario C — High-Complexity Legacy Refactor)**: Click `C · AI refactor` $\to$ safely handles cyclomatic complexity 27 with base-branch policy gating.
    - **Step 4 (Scenario D — Clean AI PR / The Golden Path)**: Click `D · clean PR` $\to$ **`ALLOWED`** (0 findings, 100% compliant, ready to merge). Proves 0.0% false positives on clean code.
    - **Step 5 (Scenario E — Polyglot Full-Stack PR)**: Click `E · polyglot PR` $\to$ full-stack AI governance across TypeScript, Shell, Dockerfile, and Python.
-   - **Step 6 (Audit Ledger & Merkle Proof)**: Click `Audit` $\to$ click `Simulate tampering` (tamper detected instantly) $\to$ click `Merkle Inclusion Proof` $\to$ generate an $O(\log N)$ Zero-Knowledge Inclusion Certificate proving block #8 exists without exposing other records.
+   - **Step 6 (Audit Ledger & Verifiable PR Receipt)**: Click `Audit` $\to$ click `Simulate tampering` (tamper detected instantly) $\to$ click `Merkle Inclusion Proof` $\to$ generate an $O(\log N)$ offline-verifiable inclusion proof $\to$ download the **Verifiable Decision Receipt** (`repobrain verify-receipt <file>`).
 
 ---
 
@@ -40,10 +40,11 @@
 | **High-Complexity Spaghetti**<br>`discount_for()` (Cyclomatic 27, depth 6) | ⚪ N/A<br>No complexity check | ⚠️ **WARN ONLY**<br>Advisory; agent ignores | ⚪ N/A<br>No refactoring | ⚡ **REWRITTEN & PROVEN**<br>Formal AST proof + tests |
 | **Taint Flow to Shell Sink**<br>`user_input` $\to$ `subprocess(shell=True)` | ⚪ N/A<br>No taint analysis | ⚪ N/A<br>No taint analysis | ❌ **MISSED**<br>Needs custom rules | 🔍 **BLOCKED (CWE-78)**<br>Sequential taint engine |
 
-- **Three Novel Zero-Dependency Innovations (Pure Python Standard Library)**:
-  1. **Symbolic AST Formal Equivalence Prover (`repobrain/prover.py`)**: Mathematically proves $\forall \text{input} \in \text{Inputs}: f_{\text{orig}}(\text{input}) \equiv f_{\text{opt}}(\text{input})$ via symbolic execution path extraction, De Morgan DNF canonicalization, and bidirectional path matching with cryptographic theorem hashes.
+- **Four Novel Zero-Dependency Innovations (Pure Python Standard Library)**:
+  1. **Symbolic AST Formal Equivalence Prover (`repobrain/prover.py`)**: Mathematically proves $\forall \text{input} \in \text{Inputs}: f_{\text{orig}}(\text{input}) \equiv f_{\text{opt}}(\text{input})$ for pure control-flow functions via symbolic execution path extraction, De Morgan DNF canonicalization, and bidirectional path matching with cryptographic theorem hashes (with differential fuzzing + pytest execution fallback when side effects or dynamic attributes are present).
   2. **Intra-Procedural Taint Analysis Engine (`repobrain/taint.py`)**: Traces untrusted parameters through assignment chains into dangerous sinks (CWE-78, CWE-95, CWE-22, CWE-502, CWE-918) with sanitizer awareness.
-  3. **RFC-6962 Binary Merkle Audit Tree (`repobrain/merkle.py`)**: Generates $O(\log N)$ zero-knowledge inclusion certificates verifiable offline or in CI (`GET /api/audit/proof`, `POST /api/audit/verify-proof`).
+  3. **RFC-6962 Binary Merkle Audit Tree (`repobrain/merkle.py`)**: Generates $O(\log N)$ cryptographic offline-verifiable inclusion proofs verifiable without network access or leaking other log entries (`GET /api/audit/proof`, `POST /api/audit/verify-proof`).
+  4. **Verifiable PR Decision Receipt Engine (`repobrain/receipt.py`)**: Binds review findings, base policy hash, formal theorem, fuzz results, human approver, and Merkle inclusion proof into a standalone verifiable JSON artifact verified offline via `repobrain verify-receipt <file>`.
 - **Verified Code Remediation Without Regressions**: When an AI PR exceeds complexity limits (cyclomatic, cognitive, nesting depth), RepoBrain's deterministic AST optimizer simplifies the code directly via semantics-preserving rewrites, runs your repository's test suite on a scratch copy with CPU/memory resource limits, and runs differential fuzzing (constants + type mutations) to catch behavioral regressions before proposing changes to a human.
 - **Tamper-Evident Proof of Everything**: RepoBrain records every review, preflight check, waiver, and human approval in an append-only JSONL ledger hash-chained with SHA-256 and signed via HMAC-SHA256 (`REPOBRAIN_AUDIT_KEY`). In `--demo` mode and CI with keys enabled, altering any historical block—even while recomputing SHA-256 hashes—immediately breaks signature and chain verification.
 
@@ -84,7 +85,7 @@ PR / Agent Push ──► Shield (Secrets + Taint + Injection) ──► Complex
 2. **Complexity Gate**: Inspects *only* functions touched by the PR against base-branch thresholds (cyclomatic ≤ 10, cognitive ≤ 15, nesting depth ≤ 3).
 3. **Verified Optimizer & Formal Prover**: Performs deterministic AST rewrites on touched Python functions, executes the repository's tests on a scratch copy, runs differential fuzzing (500 boundary inputs) in a resource-limited subprocess, and runs the **Symbolic AST Formal Equivalence Prover (`repobrain/prover.py`)** to mathematically prove `∀ input ∈ Inputs: f_original(input) ≡ f_optimized(input)` across execution paths with De Morgan canonicalization. An optional LLM refactor tier (`repobrain/llm.py`) supports Groq/Anthropic APIs when explicitly configured via `allow_llm: true` and `--ai` (verified locally with mock API servers).
 4. **Human Approval**: Enforces `approval: human`. The optimizer never merges on its own; a named human approves the rewrite, producing a git commit with an `Approved-by:` trailer.
-5. **Cryptographic Merkle Audit Ledger**: Append-only JSONL ledger with SHA-256 hash chaining, HMAC-SHA256 signing, and an **RFC-6962 Binary Merkle Tree (`repobrain/merkle.py`)** generating O(log N) zero-knowledge inclusion proofs verified via sibling path reconstruction (`GET /api/audit/proof`, `POST /api/audit/verify-proof`), and CI head anchoring (`--anchor-file`, `--expect`).
+5. **Cryptographic Merkle Audit Ledger & Decision Receipts**: Append-only JSONL ledger with SHA-256 hash chaining, HMAC-SHA256 signing, an **RFC-6962 Binary Merkle Tree (`repobrain/merkle.py`)** generating O(log N) offline-verifiable inclusion proofs verified via sibling path reconstruction (`GET /api/audit/proof`, `POST /api/audit/verify-proof`), and standalone **Verifiable Decision Receipts (`repobrain/receipt.py`)** verified via `repobrain verify-receipt <file>`.
 
 ---
 

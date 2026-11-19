@@ -311,6 +311,62 @@ def cmd_create_admin(a):
         return 1
 
 
+def cmd_receipt(a):
+    root, base, pol, home, log = _ctx(a)
+    rev = review.run(root, pol, base=base, extra_actor=getattr(a, "actor", None))
+    prop = None
+    try:
+        pdir = os.path.join(home, "proposals")
+        if os.path.isdir(pdir):
+            pfiles = sorted([f for f in os.listdir(pdir) if f.endswith(".json")])
+            if pfiles:
+                with open(os.path.join(pdir, pfiles[-1]), encoding="utf-8") as pf:
+                    prop = json.load(pf)
+    except Exception:
+        pass
+
+    from . import receipt as R
+    rcpt = R.generate_receipt(root, rev, log, proposal=prop, approver=getattr(a, "actor", None), base=base)
+
+    if getattr(a, "json", False):
+        print(json.dumps(rcpt, indent=2))
+    else:
+        out_path = getattr(a, "out", None) or "repobrain-receipt.json"
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(rcpt, f, indent=2)
+        print(f"✅ Verifiable PR decision receipt generated: {out_path}")
+        print(f"   Commit: {str(rcpt['review']['commit'])[:12]} vs {rcpt['review']['base']}")
+        print(f"   Verdict: {rcpt['review']['decision']} ({rcpt['review']['findings_count']['blocking']} blocking findings)")
+        print(f"   Merkle Root: {str(rcpt['audit']['merkle_root'])[:16]}... (tree size {rcpt['audit']['merkle_proof']['tree_size']})")
+        print(f"   Offline verify via: repobrain verify-receipt {out_path}")
+    return 0
+
+
+def cmd_verify_receipt(a):
+    from . import receipt as R
+    receipt_file = getattr(a, "receipt_file", "")
+    if not os.path.exists(receipt_file):
+        print(f"Error: receipt file not found: {receipt_file}", file=sys.stderr)
+        return 1
+
+    try:
+        with open(receipt_file, "r", encoding="utf-8") as f:
+            rcpt_data = json.load(f)
+    except Exception as e:
+        print(f"Error reading receipt JSON: {e}", file=sys.stderr)
+        return 1
+
+    audit_key = os.environ.get("REPOBRAIN_AUDIT_KEY")
+    result = R.verify_receipt(rcpt_data, audit_key=audit_key)
+
+    if getattr(a, "json", False):
+        print(json.dumps(result, indent=2))
+    else:
+        print(R.format_verification_report(result, rcpt_data))
+
+    return 0 if result["valid"] else 1
+
+
 def build():
     ap = argparse.ArgumentParser(prog="repobrain", description=__doc__)
     ap.add_argument("--repo", default=".", help="repository path (default: .)")
@@ -385,6 +441,16 @@ def build():
     sp.add_argument("--password", required=True, help="administrator password (min 12 chars)")
     sp.add_argument("--name", default="", help="administrator full name")
     sp.add_argument("--company", default="", help="company name")
+
+    sp = add("receipt", cmd_receipt, help="generate a downloadable cryptographic PR decision receipt")
+    sp.add_argument("--base", help="base git ref (default: main)")
+    sp.add_argument("--actor", help="actor generating the receipt")
+    sp.add_argument("--out", help="output file path (default: repobrain-receipt.json)")
+    sp.add_argument("--json", action="store_true", help="output receipt JSON to stdout")
+
+    sp = add("verify-receipt", cmd_verify_receipt, help="cryptographically verify a PR decision receipt offline")
+    sp.add_argument("receipt_file", help="path to receipt JSON file to verify")
+    sp.add_argument("--json", action="store_true", help="output verification results as JSON")
 
     return ap
 

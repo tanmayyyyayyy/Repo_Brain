@@ -4,10 +4,10 @@ Implements a binary cryptographic Merkle Tree with RFC-6962 domain separation:
 - Leaf Hash:     SHA-256(0x00 || canonical_json(record))
 - Internal Node: SHA-256(0x01 || left_hash || right_hash)
 
-Provides O(log N) zero-knowledge inclusion proofs allowing external auditors,
+Provides O(log N) offline-verifiable cryptographic inclusion proofs allowing external auditors,
 compliance officers (SOC 2, ISO 27001), or CI pipelines to mathematically verify
 that a specific review, approval, or waiver event is permanently committed to
-the cryptographic Merkle root without disclosing or reading other records.
+the cryptographic Merkle root without requiring access to other log records.
 """
 
 from __future__ import annotations

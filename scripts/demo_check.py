@@ -92,6 +92,16 @@ def main():
             page.screenshot(path=os.path.join(SCREENSHOTS_DIR, "05_review_allowed.png"))
             print("  ✓ Re-run PR review: verdict is now ALLOWED")
 
+            # Verify Decision Receipt endpoint and cryptographic proof
+            rcpt_data = page.evaluate("() => api('/api/receipt')")
+            assert rcpt_data and rcpt_data.get("receipt_version") == "1.0", f"Invalid receipt response: {rcpt_data}"
+            assert rcpt_data["review"]["decision"] == "ALLOWED"
+            assert rcpt_data["remediation"]["remediated"] is True
+            from repobrain import receipt as R
+            ver_res = R.verify_receipt(rcpt_data)
+            assert ver_res["valid"] is True, f"Receipt verification failed: {ver_res['errors']}"
+            print("  ✓ Cryptographic Decision Receipt downloaded and verified offline: VALID & UNTAMPERED")
+
             # Audit trail & Tamper detection
             print("[7/7] Verifying audit hash chain & tamper detection...")
             page.locator("#btnTabAudit").click()

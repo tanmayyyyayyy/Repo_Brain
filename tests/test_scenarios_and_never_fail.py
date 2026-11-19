@@ -154,3 +154,4 @@ def test_shield_scan_never_fails_on_binary_or_extreme_inputs():
     # Extreme line length
     extreme_line = "x = '" + ("A" * 5000) + "'\n"
     assert shield.scan_text("long.py", extreme_line, pol) == []
+
