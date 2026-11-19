@@ -192,8 +192,8 @@ def test_receipt_trust_anchor_independent_verification(seeded_repo, tmp_path):
 
 def test_receipt_hmac_key_verification(seeded_repo, monkeypatch):
     """Verifies that audit key authentication rejects forged or unsigned receipts."""
-    secret_key = "repo-governance-production-hmac-key-2026"
-    monkeypatch.setenv("REPOBRAIN_AUDIT_KEY", secret_key)
+    auth_fixture = "mock-key-for-test-suite"
+    monkeypatch.setenv("REPOBRAIN_AUDIT_KEY", auth_fixture)
 
     demo.switch(seeded_repo, "pricing")
     pol = policy.load_for(seeded_repo, "main")
@@ -206,12 +206,12 @@ def test_receipt_hmac_key_verification(seeded_repo, monkeypatch):
     assert rcpt["audit"]["target_record"].get("sig") is not None
 
     # Verification with correct key passes
-    ver_key_ok = receipt.verify_receipt(rcpt, audit_key=secret_key)
+    ver_key_ok = receipt.verify_receipt(rcpt, audit_key=auth_fixture)
     assert ver_key_ok["valid"] is True
     assert ver_key_ok["checks"]["trust_anchor"]["status"] == "verified"
 
     # Verification with attacker's wrong key fails
-    ver_wrong_key = receipt.verify_receipt(rcpt, audit_key="attacker-wrong-key-999")
+    ver_wrong_key = receipt.verify_receipt(rcpt, audit_key="untrusted-wrong-key")
     assert ver_wrong_key["valid"] is False
     assert any("HMAC authentication failure" in err for err in ver_wrong_key["errors"])
 
