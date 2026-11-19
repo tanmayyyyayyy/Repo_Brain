@@ -60,7 +60,7 @@
   >
   > And using our **RFC-6962 Binary Merkle Tree**, any team can download a cryptographically signed **Decision Receipt** with an $O(\log N)$ offline-verifiable inclusion proof—proving a commit was verified and authorized without requiring access to other repository history.
   >
-  > Pure Python standard library, zero runtime dependencies, 220 passing tests. RepoBrain: deterministic governance for the AI agent era.
+  > Pure Python standard library, zero runtime dependencies, 223 passing tests. RepoBrain: deterministic governance for the AI agent era.
   >
   > *(brief pause)* Thank you."
 

@@ -131,20 +131,129 @@ def test_receipt_tamper_detection(seeded_repo):
     assert ver3["valid"] is False
 
 
+def test_receipt_trust_anchor_independent_verification(seeded_repo, tmp_path):
+    """Verifies that an internally recomputed fake receipt fails against an independent trusted anchor."""
+    demo.switch(seeded_repo, "risky")
+    pol = policy.load_for(seeded_repo, "main")
+    rev = review.run(seeded_repo, pol, base="main")
+    home = os.path.join(seeded_repo, ".repobrain")
+    log = audit.AuditLog(home)
+    rcpt = receipt.generate_receipt(seeded_repo, rev, log, base="main")
+
+    trusted_merkle_root = rcpt["audit"]["merkle_root"]
+    assert len(trusted_merkle_root) == 64
+
+    # 1. Correct trusted root passes
+    ver_ok = receipt.verify_receipt(rcpt, trusted_root=trusted_merkle_root)
+    assert ver_ok["valid"] is True
+    assert ver_ok["checks"]["trust_anchor"]["status"] == "verified"
+
+    # 2. Anchor file verification passes
+    anchor_file = str(tmp_path / "ci-audit-anchor.txt")
+    with open(anchor_file, "w") as f:
+        f.write(trusted_merkle_root + "\n")
+    ver_anchor_ok = receipt.verify_receipt(rcpt, anchor_file=anchor_file)
+    assert ver_anchor_ok["valid"] is True
+
+    # 3. Attacker fabricates an altered receipt:
+    # They change decision to ALLOWED, modify audit entry, rebuild Merkle tree, and re-hash receipt.
+    # The receipt is "internally consistent" with its own fake root, BUT fails against the trusted root!
+    forged = json.loads(json.dumps(rcpt))
+    forged["review"]["decision"] = "ALLOWED"
+    forged["audit"]["decision"] = "ALLOWED"
+    forged["audit"]["target_record"]["decision"] = "ALLOWED"
+    # Recompute entry hash
+    from repobrain import audit as A
+    forged["audit"]["target_record"]["hash"] = A._hash(forged["audit"]["target_record"])
+    forged["audit"]["entry_hash"] = forged["audit"]["target_record"]["hash"]
+    # Rebuild a single-entry fake tree
+    fake_tree = receipt.merkle.MerkleTree([forged["audit"]["target_record"]])
+    forged["audit"]["merkle_root"] = fake_tree.root
+    forged["audit"]["merkle_proof"] = fake_tree.audit_proof(0)
+    # Recompute receipt hash
+    copy_obj = dict(forged)
+    copy_obj.pop("receipt_hash", None)
+    forged["receipt_hash"] = receipt._sha256_hex(receipt._canonical_json_bytes(copy_obj))
+
+    # Without trusted anchor, it's internally self-consistent:
+    ver_self = receipt.verify_receipt(forged)
+    assert ver_self["checks"]["trust_anchor"]["status"] == "self-consistent"
+
+    # WITH independent trusted anchor, it is IMMEDIATELY DETECTED AND REJECTED!
+    ver_anchor_rejected = receipt.verify_receipt(forged, trusted_root=trusted_merkle_root)
+    assert ver_anchor_rejected["valid"] is False
+    assert any("Trust anchor mismatch" in err for err in ver_anchor_rejected["errors"])
+
+    # Also fails against the saved CI anchor file:
+    ver_file_rejected = receipt.verify_receipt(forged, anchor_file=anchor_file)
+    assert ver_file_rejected["valid"] is False
+    assert any("Trust anchor mismatch" in err for err in ver_file_rejected["errors"])
+
+
+def test_receipt_hmac_key_verification(seeded_repo, monkeypatch):
+    """Verifies that audit key authentication rejects forged or unsigned receipts."""
+    secret_key = "repo-governance-production-hmac-key-2026"
+    monkeypatch.setenv("REPOBRAIN_AUDIT_KEY", secret_key)
+
+    demo.switch(seeded_repo, "pricing")
+    pol = policy.load_for(seeded_repo, "main")
+    rev = review.run(seeded_repo, pol, base="main")
+    home = os.path.join(seeded_repo, ".repobrain")
+    log = audit.AuditLog(home)
+    rcpt = receipt.generate_receipt(seeded_repo, rev, log, base="main")
+
+    # Receipt must carry an HMAC signature
+    assert rcpt["audit"]["target_record"].get("sig") is not None
+
+    # Verification with correct key passes
+    ver_key_ok = receipt.verify_receipt(rcpt, audit_key=secret_key)
+    assert ver_key_ok["valid"] is True
+    assert ver_key_ok["checks"]["trust_anchor"]["status"] == "verified"
+
+    # Verification with attacker's wrong key fails
+    ver_wrong_key = receipt.verify_receipt(rcpt, audit_key="attacker-wrong-key-999")
+    assert ver_wrong_key["valid"] is False
+    assert any("HMAC authentication failure" in err for err in ver_wrong_key["errors"])
+
+
+def test_receipt_audit_commit_and_verdict_binding(seeded_repo):
+    """Verifies that an attacker cannot reuse an audit record for a different commit or verdict."""
+    demo.switch(seeded_repo, "risky")
+    pol = policy.load_for(seeded_repo, "main")
+    rev = review.run(seeded_repo, pol, base="main")
+    home = os.path.join(seeded_repo, ".repobrain")
+    log = audit.AuditLog(home)
+    rcpt = receipt.generate_receipt(seeded_repo, rev, log, base="main")
+
+    # Attacker re-points review to a clean commit SHA while keeping original audit record
+    forged_commit = json.loads(json.dumps(rcpt))
+    forged_commit["review"]["commit"] = "0123456789abcdef0123456789abcdef01234567"
+    copy_obj = dict(forged_commit)
+    copy_obj.pop("receipt_hash", None)
+    forged_commit["receipt_hash"] = receipt._sha256_hex(receipt._canonical_json_bytes(copy_obj))
+
+    ver_commit = receipt.verify_receipt(forged_commit)
+    assert ver_commit["valid"] is False
+    assert any("Audit entry binding mismatch" in err for err in ver_commit["errors"])
+
+
 def test_cli_receipt_and_verify(seeded_repo, tmp_path, capsys):
     """Verifies CLI subcommands 'repobrain receipt' and 'repobrain verify-receipt'."""
     out_file = str(tmp_path / "test-receipt.json")
+    anchor_file = str(tmp_path / "test-anchor.txt")
 
-    # 1. Run 'repobrain receipt'
-    rc_receipt = cli_main(["--repo", seeded_repo, "receipt", "--base", "main", "--out", out_file])
+    # 1. Run 'repobrain receipt' with --write-anchor
+    rc_receipt = cli_main(["--repo", seeded_repo, "receipt", "--base", "main", "--out", out_file, "--write-anchor", anchor_file])
     assert rc_receipt == 0
     assert os.path.exists(out_file)
+    assert os.path.exists(anchor_file)
 
-    # 2. Run 'repobrain verify-receipt'
-    rc_verify = cli_main(["verify-receipt", out_file])
+    # 2. Run 'repobrain verify-receipt' with --anchor-file
+    rc_verify = cli_main(["verify-receipt", out_file, "--anchor-file", anchor_file])
     assert rc_verify == 0
     captured = capsys.readouterr()
     assert "VALID & UNTAMPERED" in captured.out
+    assert "VERIFIED against independent trusted root" in captured.out
 
     # 3. Tamper with output file and verify non-zero exit code
     with open(out_file, "r") as f:
@@ -153,7 +262,7 @@ def test_cli_receipt_and_verify(seeded_repo, tmp_path, capsys):
     with open(out_file, "w") as f:
         json.dump(data, f)
 
-    rc_verify_tampered = cli_main(["verify-receipt", out_file])
+    rc_verify_tampered = cli_main(["verify-receipt", out_file, "--anchor-file", anchor_file])
     assert rc_verify_tampered == 1
     captured_tampered = capsys.readouterr()
     assert "TAMPERED / VERIFICATION FAILED" in captured_tampered.out

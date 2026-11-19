@@ -86,11 +86,11 @@
 
 ### Headline: Formal Proofs · Taint Analysis · Merkle Certificates · Differential Fuzzing · ML Guard · HMAC Audit
 
-### 1. Symbolic AST Formal Equivalence Prover *(new — not found in existing tools)*
-- Mathematically **proves** `∀ input ∈ Inputs: f_original(input) ≡ f_optimized(input)` — no sampling, no inference.
+### 1. Symbolic AST Formal Equivalence Prover *(zero-dependency pure stdlib)*
+- Mathematically **proves** `∀ input ∈ Inputs: f_original(input) ≡ f_optimized(input)` across pure control-flow paths (guard hoisting, boolean simplification, De Morgan laws).
 - Extracts all symbolic execution paths as `{condition_set → return_value}` pairs; normalizes De Morgan laws (DNF).
 - Bidirectional path matching with commutative equality canonicalization.
-- **Result**: Theorem hash included in every optimizer proposal. Zero-dependency pure stdlib.
+- **Result**: Theorem hash included in optimizer proposals and receipts; differential fuzzing (500 inputs) covers dynamic behaviors.
 
 ### 2. Intra-Procedural Taint Analysis Engine *(new — not found in existing tools)*
 - Traces untrusted function parameters through sequential assignment chains into dangerous sinks.
@@ -98,12 +98,12 @@
 - Sanitizer recognition (`int()`, `shlex.quote()`, `os.path.basename()`) reduces false positives.
 - Integrated into Shield: taint violations surface as `taint-flow` findings in every Python PR review.
 
-### 3. RFC-6962 Merkle Audit Tree with O(log N) Inclusion Proofs *(new — not found in existing tools)*
+### 3. RFC-6962 Merkle Audit Tree & Verifiable PR Decision Receipts *(new)*
 - Binary Merkle tree with RFC-6962 domain separation (`0x00||leaf`, `0x01||left||right`).
 - `audit_proof(seq)` returns a sibling path; `verify_inclusion_proof()` reconstructs root in O(log N).
-- **Cryptographic Inclusion Proofs**: Proves entry existence without requiring access to other log entries.
-- **Verifiable PR Decision Receipts**: Downloadable receipt (`repobrain-receipt.json`) verifiable offline via `repobrain verify-receipt <file>`.
-- API: `GET /api/audit/proof?seq=N` · `POST /api/audit/verify-proof` · `GET /api/receipt` · UI Decision Receipt button.
+- **Verifiable PR Decision Receipts**: Self-contained cryptographic receipt binding review verdict, policy hash, formal proof evidence, and Merkle root.
+- **Independent CI Trust Anchor**: Verified offline against CI-anchored Merkle roots (`repobrain verify-receipt <file> --anchor-file <anchor.txt>`) or HMAC audit keys.
+- API: `GET /api/audit/proof?seq=N` · `POST /api/audit/verify-proof` · `GET /api/receipt` · `POST /api/verify-receipt`.
 
 ### 4. Multi-Vector Shield Engine
 - **Secret Normalization**: Catches plain-text, Shannon high-entropy tokens, string concatenation, base64 payloads.
@@ -120,8 +120,8 @@
 - **HMAC-SHA256 Signing**: Every entry is cryptographically signed with `REPOBRAIN_AUDIT_KEY`.
 - **Instant Tamper Invalidation**: Any historical entry modification breaks downstream hash verification, flagged in real-time.
 
-*Speaker Script (60s)*:  
-> "RepoBrain ships three innovations we believe are entirely new to this space. First: a symbolic formal prover that mathematically certifies every AST rewrite — not just testing, but proving behavioral equivalence across all inputs. Second: an intra-procedural taint analysis engine that traces untrusted data through assignment chains to dangerous sinks — CWE-78, CWE-22, CWE-95 — entirely in pure Python with zero dependencies. Third: a RFC-6962 binary Merkle audit tree that generates cryptographic inclusion certificates for any log entry in O(log N) steps, without revealing any other entries. These are built from scratch, no external libraries, fully tested, integrated into the live UI."
+*Speaker Script (35s)*:  
+> "RepoBrain is built with zero runtime dependencies using the pure Python standard library. First: a symbolic formal prover that certifies pure control-flow rewrites with fuzzing fallback. Second: an intra-procedural taint analysis engine tracing untrusted parameters to command sinks. Third: an RFC-6962 binary Merkle tree producing offline-verifiable inclusion proofs. And fourth: cryptographic PR decision receipts verified against independent CI trust anchors."
 
 ---
 
@@ -168,7 +168,7 @@
 | **Real-World PR Evaluation** | 21 production commits / 14,500 diff lines ([`REAL_WORLD_EVAL.md`](REAL_WORLD_EVAL.md)) | **0% False Positives** |
 | **Open-Source Code Scan** | 124 files / 51,781 LoC across CPython, PyYAML, coverage ([`SHIELD_EVAL.md`](SHIELD_EVAL.md)) | **0 False Positives** |
 | **Complexity Reduction** | `shop/orders.py` order processing module | **27 → 8 Cyclomatic (70% drop)** |
-| **Automated Test Suite** | Matrix across Linux/macOS/Windows × Python 3.10–3.13 | **220 Passed, 1 Skipped (100% Green)** |
+| **Automated Test Suite** | Matrix across Linux/macOS/Windows × Python 3.10–3.13 | **223 Passed, 1 Skipped (100% Green)** |
 | **Supply Chain Surface** | Third-party production runtime dependencies | **Pure Python Stdlib + PyYAML** |
 
 ### Honest Boundaries & Scope
@@ -182,7 +182,7 @@
 3. **Public Transparency Log Anchoring**: Anchoring Merkle roots to public transparency logs (Sigstore Rekor) and cloud HSMs.
 
 *Speaker Script (30s)*:  
-> "RepoBrain is not a mock concept. We evaluated it across 21 real production commits and 14,500 diff lines with zero false positives. Our test suite passes 220 automated tests across Linux (with Bubblewrap container sandboxing), macOS, and Windows runners. As AI coding agents become the primary contributors to global software, RepoBrain provides the definitive safety, formal verification, and cryptographic governance infrastructure the software industry requires."
+> "RepoBrain is not a mock concept. We evaluated it across 21 real production commits and 14,500 diff lines with zero false positives. Our test suite passes 223 automated tests across Linux (with Bubblewrap container sandboxing), macOS, and Windows runners. As AI coding agents become the primary contributors to global software, RepoBrain provides the definitive safety, formal verification, and cryptographic governance infrastructure the software industry requires."
 
 ---
 

@@ -14,7 +14,7 @@
 > - **Master 90s Demo Video**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) (narrated 1080p60 with captions) · **Live PRs**: [`repobrain-demo-eval#1`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/1), [`#2`](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/2) & [`Repo_Brain#1`](https://github.com/tanmayyyyayyy/Repo_Brain/pull/1).
 > - **Interactive Pitch Deck**: [`docs/slides.html`](docs/slides.html) (or visit `/slides` in console) · Markdown: [`docs/SLIDE_DECK.md`](docs/SLIDE_DECK.md).
 > - **Quick Local Run**: `pip install -r requirements.txt && python server.py` (or Docker: `docker run --rm -p 8765:8765 repobrain`).
-> - **Empirical Verification**: 220 passed automated tests across Linux (Bubblewrap sandbox), macOS, and Windows runners; 51,781 OSS lines scanned with 0 FPs ([`SHIELD_EVAL.md`](docs/SHIELD_EVAL.md)).
+> - **Empirical Verification**: 223 passed automated tests across Linux (Bubblewrap sandbox), macOS, and Windows runners; 51,781 OSS lines scanned with 0 FPs ([`SHIELD_EVAL.md`](docs/SHIELD_EVAL.md)).
 > - **Zero Runtime Dependencies**: Built purely with the Python standard library (`ast`, `hashlib`, `hmac`, `http.server`) + PyYAML. Fast, portable, and zero supply-chain risk.
 
 **A vendor-neutral safety, cleanup and audit layer for repos that AI agents write to.**
@@ -245,7 +245,7 @@ repobrain/          policy · metrics · gitutil · shield · rewrite · optimiz
 repobrain/web/      index.html single-file WCAG 2.1 AA Mission Control UI
 demo_assets/        files for the seeded demo repo
 integrations/       MCP server and Claude Code pre-execution hook templates
-tests/              220 passing tests (1 skipped) incl. symbolic formal prover, intra-procedural taint analysis, RFC-6962 Merkle tree, verifiable PR decision receipts, multi-scenario coverage (A-E), zero-failure resilience, security audit fixes, non-demo isolation, differential fuzzing, ML guard evaluation, mock LLM tests, tamper detection, server security, Playwright UI & a11y
+tests/              223 passing tests (1 skipped) incl. symbolic formal prover, intra-procedural taint analysis, RFC-6962 Merkle tree, verifiable PR decision receipts with CI trust anchors, multi-scenario coverage (A-E), zero-failure resilience, security audit fixes, non-demo isolation, differential fuzzing, ML guard evaluation, mock LLM tests, tamper detection, server security, Playwright UI & a11y
 scripts/            contrast check, screenshot matrix, headless demo check, real-commit evaluator, video pipeline
 ```
 

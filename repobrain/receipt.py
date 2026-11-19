@@ -152,26 +152,25 @@ def generate_receipt(
     target_record: Optional[Dict[str, Any]] = None
     target_index = -1
 
-    # Search for matching record in audit ledger
+    # Search for matching record in audit ledger specifically binding to head_sha and decision
     for idx in range(len(entries) - 1, -1, -1):
         e = entries[idx]
-        if e.get("head") == head_sha or e.get("decision") == rev.get("decision"):
+        if e.get("event") == "review" and e.get("head") == head_sha and e.get("decision") == rev.get("decision"):
             target_record = e
             target_index = idx
             break
 
-    if target_record is None and entries:
-        target_record = entries[-1]
-        target_index = len(entries) - 1
-
-    # If no entries exist yet, log the review now to ensure cryptographic backing
+    # If no matching entry with matching head & decision exists, log one now
     if target_record is None:
         rec = log.append(
             "review",
             approver or "repobrain",
             rev.get("decision", "UNKNOWN"),
             f"PR review receipt generated for {head_sha[:8]}",
-            head=head_sha
+            head=head_sha,
+            base=base_ref,
+            verdict=rev.get("verdict"),
+            policy_hash=policy_hash
         )
         entries = log.entries()
         target_record = rec
@@ -185,6 +184,7 @@ def generate_receipt(
         "seq": target_record.get("seq", target_index + 1),
         "event": target_record.get("event", "review"),
         "decision": target_record.get("decision", rev.get("decision")),
+        "head": target_record.get("head", head_sha),
         "actor": target_record.get("actor", approver or "system"),
         "timestamp": target_record.get("ts"),
         "entry_hash": target_record.get("hash"),
@@ -212,15 +212,26 @@ def generate_receipt(
     return receipt
 
 
-def verify_receipt(receipt: Dict[str, Any], audit_key: Optional[str] = None) -> Dict[str, Any]:
+def verify_receipt(
+    receipt: Dict[str, Any],
+    trusted_root: Optional[str] = None,
+    audit_key: Optional[str] = None,
+    anchor_file: Optional[str] = None
+) -> Dict[str, Any]:
     """Cryptographically verify an offline decision receipt.
     
     Verifies:
     1. Receipt Hash Integrity: Ensures JSON content has not been tampered with.
-    2. Merkle Inclusion Proof: Reconstructs root in O(log N) from sibling path.
-    3. Audit Entry Consistency: Verifies canonical entry hash.
-    4. Policy & Findings Consistency: Verifies verdict matches finding counts.
+    2. Audit Entry Canonical Hash: Ensures target audit record is untampered.
+    3. Audit Entry Binding: Ensures audit record binds to reviewed commit and verdict.
+    4. Merkle Inclusion Proof: Reconstructs root in O(log N) from sibling path.
+    5. Independent Trust Anchor: Validates Merkle root against a trusted anchor
+       (or verifies HMAC signature against a trusted secret audit key).
+    6. Policy & Findings Consistency: Verifies verdict matches finding counts.
+    7. Formal Proof Evidence: Certifies included proof evidence recorded at proposal.
     """
+    from . import audit as A
+
     report: Dict[str, Any] = {
         "valid": True,
         "errors": [],
@@ -251,7 +262,7 @@ def verify_receipt(receipt: Dict[str, Any], audit_key: Optional[str] = None) -> 
         else:
             report["checks"]["receipt_hash"] = {"valid": True, "hash": stored_hash}
 
-    # 2. Merkle Inclusion Proof Verification
+    # 2. Audit Record & Entry Hash Verification
     audit_data = receipt.get("audit", {})
     target_record = audit_data.get("target_record")
     merkle_proof = audit_data.get("merkle_proof")
@@ -261,24 +272,125 @@ def verify_receipt(receipt: Dict[str, Any], audit_key: Optional[str] = None) -> 
         report["valid"] = False
         report["errors"].append("Missing audit record or Merkle proof details.")
         report["checks"]["merkle_proof"] = {"valid": False, "error": "Incomplete audit data"}
-    else:
-        is_proof_valid = merkle.verify_inclusion_proof(target_record, merkle_proof)
-        if not is_proof_valid or merkle_proof.get("merkle_root") != expected_root:
-            report["valid"] = False
-            err_msg = f"RFC-6962 Merkle proof failed: sibling path does not reconstruct root {expected_root[:16]}..."
-            report["errors"].append(err_msg)
-            report["checks"]["merkle_proof"] = {"valid": False, "error": err_msg}
-        else:
-            report["checks"]["merkle_proof"] = {
-                "valid": True,
-                "merkle_root": expected_root,
-                "leaf_hash": merkle_proof.get("leaf_hash"),
-                "tree_size": merkle_proof.get("tree_size"),
-                "proof_steps": len(merkle_proof.get("proof_path", []))
-            }
+        return report
 
-    # 3. Policy & Verdict Consistency
+    computed_entry_hash = A._hash(target_record)
+    record_hash = target_record.get("hash")
+    if record_hash != computed_entry_hash:
+        report["valid"] = False
+        err_msg = f"Audit entry hash mismatch: computed {computed_entry_hash[:16]}... vs record hash {str(record_hash)[:16]}... (audit record modified)"
+        report["errors"].append(err_msg)
+        report["checks"]["entry_hash"] = {"valid": False, "error": err_msg}
+    else:
+        report["checks"]["entry_hash"] = {"valid": True, "hash": record_hash}
+
+    # 3. Audit Entry Binding to Review Commit & Verdict
     rev_data = receipt.get("review", {})
+    rec_commit = target_record.get("head")
+    claim_commit = rev_data.get("commit")
+    rec_decision = target_record.get("decision")
+    claim_decision = rev_data.get("decision")
+
+    binding_errs = []
+    if rec_commit and claim_commit and str(rec_commit)[:12] != str(claim_commit)[:12]:
+        err = f"Audit entry binding mismatch: audit record binds to commit {str(rec_commit)[:12]}, but receipt claims commit {str(claim_commit)[:12]}."
+        binding_errs.append(err)
+    if rec_decision and claim_decision and rec_decision != claim_decision:
+        err = f"Audit entry decision mismatch: audit record says {rec_decision}, but receipt claims {claim_decision}."
+        binding_errs.append(err)
+
+    if binding_errs:
+        report["valid"] = False
+        for err in binding_errs:
+            report["errors"].append(err)
+        report["checks"]["audit_binding"] = {"valid": False, "errors": binding_errs}
+    else:
+        report["checks"]["audit_binding"] = {
+            "valid": True,
+            "bound_commit": str(claim_commit)[:12] if claim_commit else "unknown",
+            "bound_decision": claim_decision
+        }
+
+    # 4. Merkle Inclusion Proof Verification
+    is_proof_valid = merkle.verify_inclusion_proof(target_record, merkle_proof)
+    if not is_proof_valid or merkle_proof.get("merkle_root") != expected_root:
+        report["valid"] = False
+        err_msg = f"RFC-6962 Merkle proof failed: sibling path does not reconstruct root {expected_root[:16]}..."
+        report["errors"].append(err_msg)
+        report["checks"]["merkle_proof"] = {"valid": False, "error": err_msg}
+    else:
+        report["checks"]["merkle_proof"] = {
+            "valid": True,
+            "merkle_root": expected_root,
+            "leaf_hash": merkle_proof.get("leaf_hash"),
+            "tree_size": merkle_proof.get("tree_size"),
+            "proof_steps": len(merkle_proof.get("proof_path", []))
+        }
+
+    # 5. Independent Trust Anchor Verification
+    if not trusted_root and anchor_file and os.path.isfile(anchor_file):
+        try:
+            with open(anchor_file, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if content.startswith("{"):
+                    data = json.loads(content)
+                    trusted_root = data.get("merkle_root") or data.get("head")
+                else:
+                    trusted_root = content.split()[0]
+        except Exception as exc:
+            report["warnings"].append(f"Failed to read anchor file '{anchor_file}': {exc}")
+
+    if not audit_key:
+        audit_key = os.environ.get("REPOBRAIN_AUDIT_KEY")
+
+    has_external_anchor = False
+    anchor_checks: Dict[str, Any] = {}
+
+    if trusted_root:
+        has_external_anchor = True
+        clean_trusted = trusted_root.strip()
+        receipt_root = audit_data.get("merkle_root", "")
+        if receipt_root != clean_trusted:
+            report["valid"] = False
+            err_msg = f"Trust anchor mismatch: receipt Merkle root {receipt_root[:16]}... does not match trusted root {clean_trusted[:16]}... (untrusted or forged tree)"
+            report["errors"].append(err_msg)
+            anchor_checks["trusted_root"] = {"valid": False, "error": err_msg}
+        else:
+            anchor_checks["trusted_root"] = {"valid": True, "trusted_root": clean_trusted}
+
+    if audit_key:
+        has_external_anchor = True
+        import hmac
+        key_bytes = audit_key.encode() if isinstance(audit_key, str) else audit_key
+        record_sig = target_record.get("sig")
+        if not record_sig:
+            report["valid"] = False
+            err_msg = "HMAC authentication failure: audit record lacks HMAC signature required by trusted audit key."
+            report["errors"].append(err_msg)
+            anchor_checks["hmac_signature"] = {"valid": False, "error": err_msg}
+        else:
+            expected_sig = hmac.new(key_bytes, record_hash.encode(), hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(record_sig, expected_sig):
+                report["valid"] = False
+                err_msg = "HMAC authentication failure: audit entry signature is invalid for the trusted audit key (forged record or wrong key)."
+                report["errors"].append(err_msg)
+                anchor_checks["hmac_signature"] = {"valid": False, "error": err_msg}
+            else:
+                anchor_checks["hmac_signature"] = {"valid": True, "sig_preview": record_sig[:16] + "..."}
+
+    if has_external_anchor:
+        is_anchor_ok = all(c.get("valid", False) for c in anchor_checks.values())
+        report["checks"]["trust_anchor"] = {
+            "status": "verified" if is_anchor_ok else "failed",
+            "details": anchor_checks
+        }
+    else:
+        report["checks"]["trust_anchor"] = {
+            "status": "self-consistent",
+            "note": "Receipt is internally consistent; verify against --trusted-root, --anchor-file, or --key for independent root-of-trust authorization."
+        }
+
+    # 6. Policy & Verdict Consistency
     decision = rev_data.get("decision")
     findings = rev_data.get("findings", [])
     blocking = [f for f in findings if f.get("severity") == "block"]
@@ -292,7 +404,7 @@ def verify_receipt(receipt: Dict[str, Any], audit_key: Optional[str] = None) -> 
     else:
         report["checks"]["verdict_consistency"] = {"valid": True, "decision": decision}
 
-    # 4. Formal Proof Verification (if remediation present)
+    # 7. Formal Proof Evidence Included in Receipt
     rem_data = receipt.get("remediation", {})
     if rem_data.get("remediated") and rem_data.get("formal_proof", {}).get("proven"):
         fp = rem_data["formal_proof"]
@@ -300,12 +412,15 @@ def verify_receipt(receipt: Dict[str, Any], audit_key: Optional[str] = None) -> 
         theorem = fp.get("theorem", "")
         if not proof_hash.startswith("0x") or len(proof_hash) < 6:
             report["warnings"].append("Formal proof hash format is non-standard.")
-        report["checks"]["formal_proof"] = {
+        proof_check = {
             "valid": True,
             "theorem": theorem,
             "proof_hash": proof_hash,
-            "method": fp.get("formal_method")
+            "method": fp.get("formal_method"),
+            "note": "Formal AST equivalence proof evidence recorded in receipt (certified at proposal time for pure control-flow rewrites; fuzzing covers dynamic behavior)"
         }
+        report["checks"]["formal_proof_evidence"] = proof_check
+        report["checks"]["formal_proof"] = proof_check
 
     return report
 
@@ -344,6 +459,32 @@ def format_verification_report(report: Dict[str, Any], receipt: Dict[str, Any]) 
     else:
         lines.append(f"  Inclusion Proof:  FAILED ({merkle_check.get('error', 'unknown error')})")
 
+    binding_check = report.get("checks", {}).get("audit_binding", {})
+    if binding_check.get("valid"):
+        lines.append(f"  Commit Binding:   BOUND to commit {binding_check.get('bound_commit')} and verdict {binding_check.get('bound_decision')}")
+    elif "errors" in binding_check:
+        lines.append(f"  Commit Binding:   VIOLATED ({'; '.join(binding_check.get('errors', []))})")
+
+    # Trust Anchor Status
+    anchor_check = report.get("checks", {}).get("trust_anchor", {})
+    lines.append("-" * 68)
+    lines.append("INDEPENDENT ROOT-OF-TRUST ANCHOR:")
+    if anchor_check.get("status") == "verified":
+        lines.append("  Anchor Status:    ✅ VERIFIED against independent trusted root / secret key")
+        details = anchor_check.get("details", {})
+        if "trusted_root" in details:
+            lines.append(f"  Trusted Root:     {str(details['trusted_root'].get('trusted_root', ''))[:24]}... (matches receipt)")
+        if "hmac_signature" in details:
+            lines.append("  HMAC Signature:   AUTHENTIC (signed by trusted repository audit key)")
+    elif anchor_check.get("status") == "failed":
+        lines.append("  Anchor Status:    ❌ FAILED (receipt does not match trusted anchor or key)")
+        details = anchor_check.get("details", {})
+        for k, v in details.items():
+            if not v.get("valid"):
+                lines.append(f"  Failure:          {v.get('error', '')}")
+    else:
+        lines.append("  Anchor Mode:      Self-Consistent (pass --trusted-root, --anchor-file, or --key to enforce independent anchor)")
+
     if rem.get("remediated"):
         lines.append("-" * 68)
         lines.append("VERIFIED REMEDIATION & HUMAN GOVERNANCE:")
@@ -351,7 +492,8 @@ def format_verification_report(report: Dict[str, Any], receipt: Dict[str, Any]) 
         lines.append(f"  Human Approver:   {rem.get('human_approver', 'None')}")
         fp = rem.get("formal_proof", {})
         if fp.get("proven"):
-            lines.append(f"  Formal Theorem:   {fp.get('theorem', '')}")
+            lines.append("  Formal Proof:     EVIDENCE INCLUDED (Pure control-flow AST equivalence)")
+            lines.append(f"  Theorem:          {fp.get('theorem', '')}")
             lines.append(f"  Theorem Hash:     {fp.get('proof_hash', '')}")
         fuzz = rem.get("differential_fuzzing", {})
         lines.append(f"  Diff Fuzzing:     {fuzz.get('inputs_checked', 0)} inputs, {fuzz.get('divergences', 0)} divergences ({fuzz.get('status', 'unknown')})")

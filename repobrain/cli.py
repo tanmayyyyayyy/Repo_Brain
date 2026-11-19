@@ -338,6 +338,15 @@ def cmd_receipt(a):
         print(f"   Commit: {str(rcpt['review']['commit'])[:12]} vs {rcpt['review']['base']}")
         print(f"   Verdict: {rcpt['review']['decision']} ({rcpt['review']['findings_count']['blocking']} blocking findings)")
         print(f"   Merkle Root: {str(rcpt['audit']['merkle_root'])[:16]}... (tree size {rcpt['audit']['merkle_proof']['tree_size']})")
+        if getattr(a, "write_anchor", None):
+            try:
+                os.makedirs(os.path.dirname(os.path.abspath(a.write_anchor)), exist_ok=True)
+                with open(a.write_anchor, "w", encoding="utf-8") as f:
+                    f.write(rcpt["audit"]["merkle_root"] + "\n")
+                print(f"   Anchor written: {rcpt['audit']['merkle_root'][:16]}… -> {a.write_anchor}")
+            except OSError as exc:
+                print(f"repobrain: cannot write anchor file: {exc}", file=sys.stderr)
+                return 2
         print(f"   Offline verify via: repobrain verify-receipt {out_path}")
     return 0
 
@@ -356,8 +365,10 @@ def cmd_verify_receipt(a):
         print(f"Error reading receipt JSON: {e}", file=sys.stderr)
         return 1
 
-    audit_key = os.environ.get("REPOBRAIN_AUDIT_KEY")
-    result = R.verify_receipt(rcpt_data, audit_key=audit_key)
+    audit_key = getattr(a, "key", None) or os.environ.get("REPOBRAIN_AUDIT_KEY")
+    trusted_root = getattr(a, "trusted_root", None)
+    anchor_file = getattr(a, "anchor_file", None)
+    result = R.verify_receipt(rcpt_data, trusted_root=trusted_root, audit_key=audit_key, anchor_file=anchor_file)
 
     if getattr(a, "json", False):
         print(json.dumps(result, indent=2))
@@ -446,10 +457,14 @@ def build():
     sp.add_argument("--base", help="base git ref (default: main)")
     sp.add_argument("--actor", help="actor generating the receipt")
     sp.add_argument("--out", help="output file path (default: repobrain-receipt.json)")
+    sp.add_argument("--write-anchor", dest="write_anchor", help="save Merkle root to anchor file for verification")
     sp.add_argument("--json", action="store_true", help="output receipt JSON to stdout")
 
     sp = add("verify-receipt", cmd_verify_receipt, help="cryptographically verify a PR decision receipt offline")
     sp.add_argument("receipt_file", help="path to receipt JSON file to verify")
+    sp.add_argument("--trusted-root", dest="trusted_root", default=None, help="known trusted Merkle root hex to verify against")
+    sp.add_argument("--anchor-file", dest="anchor_file", default=None, help="path to anchor file containing trusted Merkle root")
+    sp.add_argument("--key", dest="key", default=None, help="HMAC secret audit key to verify entry signature")
     sp.add_argument("--json", action="store_true", help="output verification results as JSON")
 
     return ap

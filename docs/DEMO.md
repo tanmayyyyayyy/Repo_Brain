@@ -1,7 +1,12 @@
 # RepoBrain Demo Script (90-Second Master Walkthrough)
 
-> **Goal**: Demonstrate live, vendor-neutral governance, verified AST cleanup, and cryptographic audit for AI coding agents.  
-> **Key Mantra**: RepoBrain does not write code. It decides what agents may touch, cleans up messy additions using tests and formal proofs as the judge, and keeps tamper-evident proof of everything.
+> **Core Problem & Outcome**: An autonomous AI agent proposes a risky change; RepoBrain deterministically blocks it, provides safe semantics-preserving remediation with formal proof evidence, records named human sign-off, and produces a cryptographically verifiable decision receipt anchored to CI.
+>
+> ⚡ **Live Fallback Ready**: If the hosted instance (`repobrain-demo.onrender.com`) is sleeping or slow, launch the pre-seeded local fallback immediately:
+> ```bash
+> python -m repobrain server --demo --port 8765
+> ```
+> Open `http://127.0.0.1:8765` — all 5 scenarios (A–E) and audit ledgers are pre-seeded and instant.
 
 ---
 
@@ -18,7 +23,7 @@
 
 ---
 
-### [0:15 - 0:35] Step 1: Scenario A — The Malicious / Risky AI PR (Shield Defense)
+### [0:15 - 0:35] Step 1: Scenario A — The Risky AI PR (Deterministic Blocking)
 **What to say**:
 > "Here, an autonomous agent opens a PR containing four evasions that defeat classic tools: a split AWS key, an unauthorized workflow edit, a multi-line comment injection, and an untrusted shell execution sink.
 >
@@ -37,7 +42,7 @@
 
 ---
 
-### [0:35 - 0:55] Step 2 & 3: Scenario B — The Messy AI PR & AST Optimizer with Formal Proof
+### [0:35 - 0:50] Step 2: Scenario B — The Messy AI PR & AST Optimizer with Formal Proof Evidence
 **What to say**:
 > "Now let's switch to **Scenario B**. Here, an AI agent wrote a new pricing discount module. The code is secure—no secrets, no injections—but it's classic AI slop: deep nesting, redundant else-branches, high cognitive complexity."
 
@@ -50,14 +55,14 @@
 4. Click **Run optimizer →** and click **Run optimizer** button.
    - Watch the optimizer execute semantics-preserving AST rewrites on a temporary scratch copy with CPU/memory resource limits.
    - Show the test execution (`26 passed`) and differential fuzzing (500 fuzzed inputs with 0 divergences).
-   - Point out the **Formal Semantic Equivalence Proof**: theorem $\forall \text{input} \in \text{Inputs}: f_{\text{original}}(\text{input}) \equiv f_{\text{optimized}}(\text{input})$ proven across all 6 symbolic paths with cryptographic theorem hash!
+   - Point out the **Formal Proof Evidence**: theorem $\forall \text{input} \in \text{Inputs}: f_{\text{original}}(\text{input}) \equiv f_{\text{optimized}}(\text{input})$ proven across pure control-flow execution paths with cryptographic theorem hash! (Dynamic behavior covered by differential fuzzing).
    - Show the metrics diff: cognitive **15 → 10**, nesting depth **4 → 3**, lines **69 → 47**.
 
 ---
 
-### [0:55 - 1:15] Step 4: Human Approval in the Loop
+### [0:50 - 1:05] Step 3: Human Approval in the Loop & The Golden Path
 **What to say**:
-> "RepoBrain never auto-applies code. It enforces `approval: human` and requires a named human reviewer."
+> "RepoBrain never auto-applies code. It enforces `approval: human` and requires a named human reviewer. And for ordinary, clean PRs, it never gets in the way."
 
 **Action**:
 1. Type `Priya Sharma` into the Approver Full Name input field.
@@ -65,30 +70,38 @@
    - The proposal commits directly to the repo with git trailer: `Approved-by: Priya Sharma`.
 3. Click **PR review** nav tab → click **Re-run**.
    - Verdict flips to bold green: **`ALLOWED`**.
+4. *(5-second Golden Path demo)*: Click **D · clean AI PR** (or press `4`).
+   - Show that an ordinary, well-crafted PR is instantly **`ALLOWED`** with 0 blocking findings and 0 complexity warnings:
+   - *"RepoBrain isn't just an attack shield; clean code flows through with zero friction."*
 
 ---
 
-### [1:15 - 1:30] Step 5: Tamper-Evident Audit Trail & RFC-6962 Merkle Proof
+### [1:05 - 1:25] Step 4: Cryptographic Decision Receipt & Tamper Detection
 **What to say**:
-> "In an enterprise, compliance and security teams need proof of what happened. Every AI file authored, every blocked secret, every optimizer rewrite, and every human approval is recorded in an HMAC-SHA256 cryptographic ledger."
+> "Finally, how do we prove to auditors and CI that this decision was genuine and authorized? RepoBrain generates a cryptographic **PR Decision Receipt** bound to an RFC-6962 Merkle tree and verified against an independent CI trust anchor."
 
 **Action**:
-1. Click **Audit & report** nav tab (or press `5`).
-2. Point out the header pill: `chain ✓ verified` and `HMAC-signed`.
-3. Click **Simulate tampering**.
-   - The system flips to red: **`IN-MEMORY TAMPERING SIMULATED: SHA-256 signature invalidated (#8), downstream links broken`**.
-4. Click **Merkle Inclusion Proof**, enter sequence `8`, and click **Generate Proof**.
-   - Show the $O(\log N)$ sibling path and cryptographic inclusion proof proving entry #8 exists in the ledger without requiring access to other records.
-5. Click **Decision Receipt** (or run `repobrain receipt`).
-   - Show the downloadable cryptographic receipt binding the review verdict, base policy hash, formal AST theorem, and Merkle proof.
-   - Run `repobrain verify-receipt repobrain-receipt.json` to prove offline verification with zero external dependencies.
-6. "If anyone mutates an audit event or truncates history, the hash chain and Merkle root break instantly."
+1. In the green PR review hero, click **Decision Receipt** (or run `repobrain receipt --write-anchor ci-anchor.txt`).
+   - Downloads `repobrain-receipt-pr.json`.
+2. Open terminal and run offline verification against the CI trust anchor:
+   ```bash
+   repobrain verify-receipt repobrain-receipt-pr.json --anchor-file ci-anchor.txt
+   ```
+   - Show the terminal output: **`✅ FINAL VERDICT: [VALID & UNTAMPERED]`**, with Merkle proof verified in $O(\log N)$ steps and anchor verified against the independent root.
+3. Show measurable tamper detection:
+   - Modify the verdict in `repobrain-receipt-pr.json` from `ALLOWED` to `FORGED_ALLOW`.
+   - Run verification again:
+   ```bash
+   repobrain verify-receipt repobrain-receipt-pr.json --anchor-file ci-anchor.txt
+   ```
+   - Instantly fails with exit code 1: **`❌ FINAL VERDICT: [TAMPERED / VERIFICATION FAILED]`** with integrity mismatch and trust anchor rejection visible on screen!
+4. *(Optional)* Click **Audit & report** nav tab (or press `5`) → click **Simulate tampering** to show in-memory chain invalidation on block #8.
 
 ---
 
-### [1:30] Closing & Deliverables
+### [1:25 - 1:30] Closing & Takeaway
 **What to say**:
-> "With zero runtime dependencies, 220 passing tests across Linux, macOS, and Windows runners, and proven 0.0% false positives on real UI code, RepoBrain provides deterministic governance for the AI agent era.
+> "With zero runtime dependencies, 223 passing tests across Linux, macOS, and Windows runners, and proven 0.0% false positives on real UI code, RepoBrain provides deterministic governance for the AI agent era.
 >
 > *(brief pause)* Thank you."
 - Show the automated PR comments formatted with markdown tables and status check badges.
@@ -113,4 +126,3 @@
 > **Honest Answer**:
 > "RepoBrain can only govern what passes through it. If someone has administrator rights to force-push directly to an unprotected `main` branch, no client-side tool can stop them.
 > That is why RepoBrain's production deployment model relies on GitHub Branch Rulesets: `main` requires linear history, blocks force pushes, restricts workflow edits, and mandates the `RepoBrain` status check to pass before merging. That shifts enforcement to the repository host, making bypasses blocked for non-admin tokens."
-
