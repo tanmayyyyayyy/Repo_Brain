@@ -1,0 +1,31 @@
+ENHANCED PROTOTYPE - COPY INTO UNSTOP
+
+RepoBrain is a vendor-neutral governance layer for repositories changed by AI coding agents. It checks proposed changes against policy from the trusted base branch, blocks configured risky edits, supports safe Python cleanup, requires named human approval, and records tamper-evident audit evidence.
+
+The final prototype demonstrates:
+- Scenario A: a seeded risky pull request is blocked with visible secret, protected-path, and prompt-injection findings.
+- Scenario B: a complex Python change is simplified, tested on a scratch copy, and differentially fuzzed. The seeded run reports 26 passing tests, 1,000 fuzz inputs across 4 functions, and 0 divergences; cognitive complexity changes from 15 to 10, nesting depth from 4 to 3, and source lines from 69 to 47.
+- A named human approval is recorded in an Approved-by: commit trailer, followed by an allowed re-review.
+- Receipt verification succeeds against a separately supplied trust anchor and rejects a tampered receipt. The local demo root is not a CI trust anchor.
+- Scenario D shows a clean seeded change allowed with 0 blocking findings; this is a demo example, not a general false-positive benchmark.
+
+Run locally:
+1. Install Python 3.10+ and Git.
+2. Run: python -m pip install -r requirements.txt
+3. Run: python server.py
+4. Open the local URL printed by the server and select the seeded scenarios.
+
+The latest local suite completed with 223 passed and 1 skipped. Seeded metrics are run-specific. Symbolic proof evidence applies only to supported pure control-flow rewrites; tests and fuzzing do not prove arbitrary Python behavior.
+
+Source repository: https://github.com/tanmayyyyayyy/Repo_Brain
+
+TECHNICAL DOCUMENTATION
+Upload RepoBrain_Technical_Documentation.pdf. The editable Markdown source is included as TECHNICAL_DOCUMENTATION.md.
+
+PITCH DECK
+Upload RepoBrain_Pitch_Deck_Final.pptx. It contains exactly 5 slides.
+
+DEMO VIDEO
+Upload RepoBrain_Demo_Video.mp4 to a video host or drive, set access so judges can view it, then paste that share URL into the Unstop Demo Video field. This kit contains the MP4, but does not include a public share URL.
+Suggested title: RepoBrain - CodeQuest 2026 Final Demo
+Suggested description: A 3 minute 43 second walkthrough of RepoBrain's seeded risky-PR block, tested Python rewrite, human approval, and tamper-evident audit checks.
