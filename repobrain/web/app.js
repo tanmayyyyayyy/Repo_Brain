@@ -899,13 +899,13 @@ function renderAuthModal() {
           <div class="telemetry-card" style="margin:0">
             <h4 style="margin:0 0 6px;font-size:13px;font-weight:700">Corporate Domain Isolation</h4>
             <div class="mut small" style="line-height:1.5">
-              Under SOC 2 Type II governance, personal webmail providers (@gmail, @yahoo, @hotmail) are blocked to prevent untrusted agent PR approvals.
+              A configurable corporate-domain allowlist can restrict account registration. It is a prototype identity control, not SSO or a compliance certification.
             </div>
           </div>
           <div class="telemetry-card" style="margin:0">
             <h4 style="margin:0 0 6px;font-size:13px;font-weight:700">PBKDF2-HMAC-SHA256</h4>
             <div class="mut small" style="line-height:1.5">
-              Passwords are hardened using 600,000 FIPS iterations with random 16-byte salt. Session tokens are hashed with SHA-256 before disk persistence.
+              Passwords use PBKDF2-HMAC-SHA256 with 600,000 iterations and a random 16-byte salt. Session tokens are hashed with SHA-256 before disk persistence.
             </div>
           </div>
         </div>
@@ -997,7 +997,7 @@ function renderAuthModal() {
             <div style="font-weight:700;font-size:12px;margin-bottom:6px">Security Architecture Specifications:</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">
               <div>Password Hash: <strong>PBKDF2-HMAC-SHA256</strong></div>
-              <div>Iterations: <strong>600,000 FIPS</strong></div>
+              <div>Iterations: <strong>600,000</strong></div>
               <div>Cryptographic Salt: <strong>16-Byte Random</strong></div>
               <div>Token Storage: <strong>SHA-256 Hashed</strong></div>
               <div>Sandbox: <strong>Bubblewrap / Rlimits</strong></div>
@@ -1584,7 +1584,7 @@ function vReview() {
       <div class="verdict-action-slot">
         ${actionBtn}
         <button class="b s" data-action="runReview()" title="Re-evaluate change against base">Re-run</button>
-        <button class="b s" style="border-color:var(--accent-primary);color:var(--accent-primary)" data-action="dlReceipt()" title="Download cryptographically verifiable decision receipt (offline verify via repobrain verify-receipt)">
+        <button class="b s" style="border-color:var(--accent-primary);color:var(--accent-primary)" data-action="dlReceipt()" title="Download cryptographically verifiable decision receipt (offline verify via python -m repobrain verify-receipt)">
           <svg style="width:12px;height:12px;vertical-align:-1px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Decision Receipt
         </button>
       </div>
@@ -1807,12 +1807,12 @@ function vOpt() {
     h += `<div class="telemetry-card" style="border-left:4px solid var(--signal-pass)">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
         <span style="font-size:20px">∀</span>
-        <h3 style="margin:0">Formal Semantic Equivalence Proof</h3>
+        <h3 style="margin:0">Scoped Formal Equivalence Evidence</h3>
         <span class="pill p-ok">${ICONS.check} ${proved.length}/${p.formal_proofs.length} proven</span>
         ${failed.length ? `<span class="pill p-block">${ICONS.block} ${failed.length} diverged</span>` : ''}
       </div>
       <div class="small mut" style="margin-bottom:10px;font-style:italic">
-        Theorem: ∀ input ∈ Inputs: f<sub>original</sub>(input) ≡ f<sub>optimized</sub>(input)
+        For supported symbolic paths: f<sub>original</sub>(input) ≡ f<sub>optimized</sub>(input)
       </div>
       ${p.formal_proofs.map(fp => `
       <div style="margin:6px 0;padding:8px 12px;background:var(--bg-surface-raised);border-radius:6px;border-left:3px solid ${fp.proven ? 'var(--signal-pass)' : 'var(--signal-block)'}">
@@ -2275,7 +2275,7 @@ async function dl(p, name) {
 function dlReceipt() {
   const headShort = (S.rev && S.rev.head) ? String(S.rev.head).slice(0, 8) : "pr";
   dl('/api/receipt', `repobrain-receipt-${headShort}.json`);
-  toast("Downloaded Cryptographic Decision Receipt (verifiable offline via repobrain verify-receipt)");
+  toast("Downloaded Cryptographic Decision Receipt (verify offline via python -m repobrain verify-receipt)");
 }
 
 function dlj() { const u = URL.createObjectURL(new Blob([JSON.stringify(S.audit, null, 2)], { type: "application/json" })); const a = document.createElement("a"); a.href = u; a.download = "repobrain-audit.json"; a.click(); }
@@ -2581,14 +2581,14 @@ function vAuth() {
           <div class="telemetry-card" style="margin:0">
             <h4 style="margin:0 0 8px;font-size:14px;font-weight:700">Why are personal emails blocked?</h4>
             <div class="mut small" style="line-height:1.55">
-              Under SOC 2 Type II and ISO 27001 compliance, AI agent governance platforms must enforce corporate domain identity isolation. Free webmail providers (@gmail, @yahoo, @proton.me) cannot be cryptographically bound to enterprise directory federation (Okta, Azure AD, Google Workspace).
+              Some organizations use a corporate-domain allowlist as an additional identity check. It is not a substitute for single sign-on or directory federation, and it does not establish compliance certification.
             </div>
           </div>
 
           <div class="telemetry-card" style="margin:0">
             <h4 style="margin:0 0 8px;font-size:14px;font-weight:700">Cryptographic Password Hardening</h4>
             <div class="mut small" style="line-height:1.55">
-              Every password is processed using NIST FIPS-grade PBKDF2-HMAC-SHA256 with 600,000 iterations and a 16-byte cryptographically secure random salt. All registration and authentication events are logged directly into the tamper-evident HMAC audit ledger.
+              Passwords use PBKDF2-HMAC-SHA256 with 600,000 iterations and a 16-byte cryptographically secure random salt. Registration and authentication events are logged in the audit ledger. The implementation makes no FIPS validation claim.
             </div>
           </div>
         </div>
@@ -2670,7 +2670,7 @@ function vAuth() {
             <div style="font-weight:700;margin-bottom:6px">Security Storage Telemetry:</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11.5px">
               <div>Algorithm: <strong>PBKDF2-HMAC-SHA256</strong></div>
-              <div>Rounds: <strong>600,000 FIPS</strong></div>
+              <div>Rounds: <strong>600,000</strong></div>
               <div>Salt: <strong>16-Byte Cryptographic</strong></div>
               <div>Session TTL: <strong>7 Days Rolling</strong></div>
             </div>
@@ -2721,7 +2721,7 @@ function vAuth() {
         </div>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:6px">
-        <span class="pill p-ok">FIPS 140-3 COMPLIANT</span>
+        <span class="pill p-ok">PBKDF2-HMAC-SHA256</span>
         <span class="pill p-ai">600,000 PBKDF2 ROUNDS</span>
         <span class="pill p-block">WEBMAIL BLOCKED</span>
         <span class="pill">HMAC-SIGNED LEDGER</span>
@@ -2935,7 +2935,7 @@ const TOUR_STEPS = [
   },
   {
     title: "Scenario D: Clean AI PR (The Golden Path)",
-    desc: "Autonomous agent submits a clean feature with tests. Verdict: ALLOWED (0 findings, 100% compliant, ready to merge). RepoBrain never gets in the way of good code.",
+    desc: "Autonomous agent submits a clean feature with tests. Verdict: ALLOWED (0 blocking findings). This seeded example shows the clean-change path; repository branch rules still control merging.",
     action: () => scenario("clean")
   },
   {

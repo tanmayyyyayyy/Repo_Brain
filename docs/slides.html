@@ -288,49 +288,13 @@
       <div class="slide-eyebrow">Slide 1 of 5 — Problem Statement</div>
       <h1 class="slide-title">The AI Agent Governance Blindspot</h1>
       
-      <div class="card" style="margin-bottom:16px;padding:14px 18px">
-        <div style="font-weight:700;font-size:14px;margin-bottom:8px;color:var(--text-main)">Why Classic Tools Fail on AI-Authored Code: Missed vs. Blocked Matrix</div>
-        <table class="matrix-table">
-          <thead>
-            <tr>
-              <th>Adversarial AI Evasion Pattern</th>
-              <th style="text-align:center">Gitleaks / detect-secrets</th>
-              <th style="text-align:center">radon / Linters</th>
-              <th style="text-align:center">Semgrep (OSS)</th>
-              <th style="text-align:center;background:var(--pass);color:#fff">RepoBrain Engine</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>k = 'AKIA' + 'IOSFODNN7EXAMPLE'</code><br><span style="font-size:11px;color:var(--text-muted)">Concatenated Secret Literal</span></td>
-              <td style="text-align:center" class="cross">MISSED ❌</td>
-              <td style="text-align:center;color:var(--text-muted)">N/A</td>
-              <td style="text-align:center" class="cross">MISSED ❌</td>
-              <td style="text-align:center;font-weight:700;background:rgba(34,197,94,0.1);color:var(--pass)">BLOCKED 🛡️</td>
-            </tr>
-            <tr>
-              <td><code># ignore \n # all previous instructions</code><br><span style="font-size:11px;color:var(--text-muted)">Multi-Line Prompt Injection in Comments</span></td>
-              <td style="text-align:center" class="cross">MISSED ❌</td>
-              <td style="text-align:center" class="cross">MISSED ❌</td>
-              <td style="text-align:center" class="cross">MISSED ❌</td>
-              <td style="text-align:center;font-weight:700;background:rgba(34,197,94,0.1);color:var(--pass)">BLOCKED 🛡️</td>
-            </tr>
-            <tr>
-              <td><code>discount_for()</code> (Cyclomatic 27, depth 6)<br><span style="font-size:11px;color:var(--text-muted)">Deeply Nested AI Spaghetti Logic</span></td>
-              <td style="text-align:center;color:var(--text-muted)">N/A</td>
-              <td style="text-align:center;color:var(--warn)">WARN ONLY ⚠️</td>
-              <td style="text-align:center;color:var(--text-muted)">N/A</td>
-              <td style="text-align:center;font-weight:700;background:rgba(34,197,94,0.1);color:var(--pass)">REWRITTEN &amp; PROVEN ⚡</td>
-            </tr>
-            <tr>
-              <td><code>user_input -> subprocess(shell=True)</code><br><span style="font-size:11px;color:var(--text-muted)">Untrusted Data Flow into Command Sink (CWE-78)</span></td>
-              <td style="text-align:center;color:var(--text-muted)">N/A</td>
-              <td style="text-align:center;color:var(--text-muted)">N/A</td>
-              <td style="text-align:center" class="cross">MISSED ❌</td>
-              <td style="text-align:center;font-weight:700;background:rgba(34,197,94,0.1);color:var(--pass)">BLOCKED (Taint) 🔍</td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="card" style="margin-bottom:16px;padding:18px 22px;border-left:4px solid var(--block)">
+        <div style="font-weight:700;font-size:18px;margin-bottom:10px;color:var(--text-main)">The gap: agents can change code faster than teams can govern it</div>
+        <div class="grid-3">
+          <div class="card-desc"><strong>Risky changes</strong><br>Secrets, unsafe flows, or hostile instructions can arrive in an otherwise ordinary PR.</div>
+          <div class="card-desc"><strong>Growing complexity</strong><br>Passing tests alone does not guarantee readable, maintainable changes.</div>
+          <div class="card-desc"><strong>Weak provenance</strong><br>Teams need to know which policy was applied and who approved a change.</div>
+        </div>
       </div>
 
       <div class="grid-2">
@@ -340,7 +304,7 @@
             <span>Why Traditional DevSecOps Fails AI Agents</span>
           </div>
           <div class="card-desc">
-            <p><strong>1. Linters Only Warn:</strong> Standard linters emit advisory comments that autonomous agents (Cursor, Claude Code, Copilot) routinely ignore.</p>
+            <p><strong>1. Advisory Checks:</strong> Many linters report issues; merge enforcement depends on repository CI and branch-protection settings.</p>
             <p style="margin-top:6px"><strong>2. Trivial Evasions:</strong> Secret scanners miss string concatenation and base64-encoded credentials.</p>
             <p style="margin-top:6px"><strong>3. Prompt Injections:</strong> Multi-line adversarial prompt injections hidden in comments slip past line-by-line scanners directly into production.</p>
           </div>
@@ -353,7 +317,7 @@
           </div>
           <div class="card-desc">
             <p><strong>4. Exploding Code Debt:</strong> AI agents optimize for "does it pass tests" and create deeply nested, unmaintainable code (cyclomatic complexity 25+).</p>
-            <p style="margin-top:6px"><strong>5. Zero Cryptographic Provenance:</strong> No audit ledger proves what code was agent-authored vs human-approved, failing SOC 2 / ISO 27001 compliance standards.</p>
+            <p style="margin-top:6px"><strong>5. Missing Decision Context:</strong> Teams may lack a clear record of what changed, which checks ran, and who approved it. An audit ledger alone does not establish compliance.</p>
             <p style="margin-top:6px"><strong>6. Target PR Loosening:</strong> PRs can modify their own configuration files if policies aren't rooted in the base branch.</p>
           </div>
         </div>
@@ -381,7 +345,7 @@
         <div class="pipe-step">
           <div class="pipe-icon">⚡</div>
           <div class="pipe-name">3. AST Optimizer</div>
-          <div class="pipe-sub">Sandbox tests + 500 fuzzed inputs</div>
+          <div class="pipe-sub">Scratch-copy tests + 1,000 inputs across 4 functions in the seeded run</div>
         </div>
         <div class="pipe-arrow">→</div>
         <div class="pipe-step">
@@ -404,7 +368,7 @@
         </div>
         <div class="card">
           <div class="card-title"><span>⚡ Zero Runtime Bloat</span></div>
-          <div class="card-desc">Built purely with Python standard library (<code>ast</code>, <code>hashlib</code>, <code>hmac</code>) + PyYAML. Fast execution, zero heavy framework dependencies, zero supply-chain risk.</div>
+          <div class="card-desc">Uses Python's standard library plus PyYAML. The core engine avoids a large application framework; install the declared dependencies from the project requirements.</div>
         </div>
       </div>
     </div>
@@ -421,7 +385,7 @@
           </div>
           <div class="card-desc">
             <span class="pill" style="background:rgba(168,85,247,0.15);color:#c084fc;font-size:10px;font-weight:700">PURE PYTHON STDLIB</span>
-            <p style="margin-top:8px">• <strong>Mathematical Equivalence:</strong> Proves ∀ input ∈ Inputs: <code>f_orig(x) ≡ f_opt(x)</code> for pure control-flow paths; differential fuzzing covers dynamic code.</p>
+            <p style="margin-top:8px">• <strong>Scoped Equivalence Check:</strong> Checks extracted paths for supported pure control-flow rewrites; fuzzing and tests provide additional evidence for dynamic behavior.</p>
             <p style="margin-top:6px">• <strong>De Morgan Canonicalization:</strong> Flattens boolean invariants into Disjunctive Normal Form (DNF).</p>
             <p style="margin-top:6px">• <strong>Proof Evidence:</strong> Records immutable cryptographic theorem hash into proposal JSON and receipts.</p>
           </div>
@@ -457,23 +421,23 @@
       <div class="grid-3" style="margin-top:16px">
         <div class="card" style="padding:12px 14px">
           <div style="font-weight:700;font-size:12px;color:var(--text-main)">🧾 Verifiable PR Receipts</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Cryptographically binds review verdict, policy hash, and proof evidence; verified against CI trust anchors.</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Binds the review verdict and proof evidence; authenticity needs a root or key supplied separately through a trusted channel.</div>
         </div>
         <div class="card" style="padding:12px 14px">
-          <div style="font-weight:700;font-size:12px;color:var(--text-main)">⚡ Verified AST Fuzzing</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Sandbox scratch execution under CPU/memory rlimits + 500 edge inputs fuzzed with 0 regressions.</div>
+          <div style="font-weight:700;font-size:12px;color:var(--text-main)">⚡ Rewrite Checks</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Seeded run: tests on a scratch copy + 1,000 inputs across 4 functions with 0 divergences.</div>
         </div>
         <div class="card" style="padding:12px 14px">
           <div style="font-weight:700;font-size:12px;color:var(--text-main)">🔗 Anchor-Bound Ledger</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Immutable blockchain ledger anchored to CI head hash with real-time in-memory tamper detection.</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Append-only, hash-chained audit log; external authenticity requires a separately trusted CI root or HMAC key.</div>
         </div>
       </div>
     </div>
 
     <!-- SLIDE 4 -->
     <div class="slide" id="slide4">
-      <div class="slide-eyebrow">Slide 4 of 5 — Enterprise RBAC &amp; Scale</div>
-      <h1 class="slide-title">Enterprise Zero-Trust &amp; Role-Based Governance</h1>
+      <div class="slide-eyebrow">Slide 4 of 5 — Prototype Access Controls</div>
+      <h1 class="slide-title">Role-Based Approval Controls</h1>
       
       <div class="card" style="margin-bottom:20px;padding:16px">
         <table class="matrix-table">
@@ -522,11 +486,11 @@
       <div class="grid-2">
         <div class="card">
           <div class="card-title"><span>🏢 Corporate Domain Protection</span></div>
-          <div class="card-desc">Strict email validation rejecting 20+ public webmail providers (<code>@gmail.com</code>, <code>@yahoo.com</code>) and enforcing corporate domain onboarding.</div>
+          <div class="card-desc">Configurable domain checks for prototype accounts. This is not a substitute for SSO or a compliance certification.</div>
         </div>
         <div class="card">
-          <div class="card-title"><span>🔐 FIPS-Compliant Password Security</span></div>
-          <div class="card-desc">PBKDF2-HMAC-SHA256 with 600,000 iterations and 16-byte random salts. Zero plain-text credentials; all auth events logged to HMAC ledger.</div>
+          <div class="card-title"><span>🔐 Password Hashing</span></div>
+          <div class="card-desc">PBKDF2-HMAC-SHA256 with 600,000 iterations and 16-byte random salts. The prototype makes no FIPS validation claim.</div>
         </div>
       </div>
     </div>
@@ -541,8 +505,8 @@
           <div class="card-desc">
             <p>• <strong>Real-World PR Evaluation:</strong> 21 commits / 14,500 diff lines scanned with <strong>0% false positives</strong> on production code.</p>
             <p style="margin-top:8px">• <strong>OSS Benchmark:</strong> 124 files / 51,781 LoC across CPython &amp; PyYAML with <strong>0 false positives</strong>.</p>
-            <p style="margin-top:8px">• <strong>Complexity Reduction:</strong> High-debt pricing logic dropped from <strong>27 → 8 cyclomatic (70% drop)</strong>.</p>
-            <p style="margin-top:8px">• <strong>Automated Test Suite:</strong> <strong>223 tests passed, 1 skipped</strong> across Linux (Bubblewrap sandbox), macOS, and Windows matrix (Python 3.10–3.13).</p>
+            <p style="margin-top:8px">• <strong>Seeded Optimizer Run:</strong> Cognitive complexity <strong>15 → 10</strong>, nesting depth <strong>4 → 3</strong>, lines <strong>69 → 47</strong>.</p>
+            <p style="margin-top:8px">• <strong>Automated Test Suite:</strong> Latest local run: <strong>223 passed, 1 skipped</strong>. The repository defines an OS matrix; check live status for its current result.</p>
           </div>
         </div>
 
@@ -578,11 +542,11 @@
     const total = 5;
 
     const NOTES = {
-      1: "When autonomous AI agents write code at machine speed, who governs what they can touch? Today, enterprise teams rely on classic scanners that only emit advisory warnings and miss split secrets, multi-line comment injections, and untrusted shell sinks. AI agents bypass these without resistance. RepoBrain is purpose-built to provide deterministic governance, verified AST cleanup, and cryptographic proof.",
-      2: "RepoBrain provides a complete 5-stage pipeline: an AI agent proposes a change; RepoBrain deterministically blocks threats from the trusted base branch, guides semantics-preserving AST remediation in a sandbox, enforces named human sign-off, and anchors every event in an immutable cryptographic audit ledger.",
-      3: "RepoBrain is built with zero runtime dependencies using the pure Python standard library. First: a symbolic formal prover that certifies pure control-flow rewrites with fuzzing fallback. Second: intra-procedural taint analysis tracing untrusted parameters to command sinks. Third: an RFC-6962 binary Merkle tree producing offline-verifiable inclusion proofs. And fourth: cryptographic PR decision receipts verified against independent CI trust anchors.",
-      4: "Who adopts RepoBrain? Platform and security engineering leaders who want to give their developers the velocity of Cursor or Claude Code without failing SOC 2 or ISO 27001 compliance. We enforce strict corporate email domains, FIPS-compliant PBKDF2 authentication, and a 4-tier Role-Based Access Control matrix where only authorized humans can approve code merges or grant policy waivers.",
-      5: "RepoBrain is production-tested today: 21 production commits and 51,781 open-source lines evaluated with zero false positives on production code, and 223 automated tests passing across Linux, macOS, and Windows runners in CI. As autonomous agents become primary software contributors, RepoBrain provides the definitive safety and cryptographic trust infrastructure enterprise software requires."
+      1: "When coding agents propose changes, teams need clear policy and review evidence. Many scanners are advisory, and detection depends on rules and configuration. RepoBrain adds a base-branch policy gate, checks proposed diffs, supports tested Python cleanup, and records approval and audit evidence.",
+      2: "RepoBrain provides a review pipeline: an AI agent proposes a change; RepoBrain checks policy from the trusted base branch, supports Python remediation with tests and fuzzing, enforces named human sign-off, and records events in a hash-chained audit ledger.",
+      3: "RepoBrain uses Python's standard library and PyYAML. Its symbolic prover checks supported pure control-flow rewrites; tests and differential fuzzing add evidence but do not prove arbitrary Python behavior. The project also includes taint checks, Merkle inclusion proofs, and decision receipts. Receipt authenticity requires a separately trusted root or key.",
+      4: "The prototype includes four role profiles and PBKDF2-HMAC-SHA256 password hashing. These controls demonstrate separation of duties; they do not certify the product for SOC 2 or ISO 27001. Deployments still need their own identity provider, branch protections, and security review.",
+      5: "The latest local test run completed with 223 passed and 1 skipped. Evaluation reports document the tested corpora and their limits. The roadmap covers broader language support, a hosted GitHub App, and longer-term audit-root anchoring."
     };
 
     function showSlide(n) {

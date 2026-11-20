@@ -1,13 +1,13 @@
 # RepoBrain — Hackathon Prototype Submission
 
-> **One-Sentence Pitch**: RepoBrain is a vendor-neutral safety, cleanup, and cryptographic audit layer for repositories that AI coding agents write to—deciding what agents may touch, simplifying complex additions with test-backed proof, and anchoring every decision in an HMAC-signed hash chain.
+> **One-Sentence Pitch**: RepoBrain reviews agent pull requests against trusted base-branch policy, blocks configured risky changes, checks supported Python cleanup with tests, fuzzing, and scoped proof evidence, requires named human approval, and records decisions in a tamper-evident audit trail.
 
 - **Track / Category**: Most Innovative Developer Tool / AI Safety & Governance / Cyber Security & Compliance / Open Innovation
 - **Target Buyers**: Enterprise Platform Engineering, DevSecOps, and Security teams deploying autonomous AI coding agents (Cursor, Claude Code, GitHub Copilot, Devin) across production codebases.
 - **GitHub Repository**: [https://github.com/tanmayyyyayyy/Repo_Brain](https://github.com/tanmayyyyayyy/Repo_Brain)
-- **Live Demo Video**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) *(1080p 60fps narrated walkthrough with voiceover, captions, HMAC-signed audit demo, and live GitHub CI verification)*
+- **Demo Video**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) *(3–5 minute narrated walkthrough with captions; includes the seeded local prototype flow and a captured public GitHub Actions run)*
 - **Technical Documentation**: [`docs/TECHNICAL_DOCUMENTATION.md`](docs/TECHNICAL_DOCUMENTATION.md) *(Architecture, Tech Stack, RBAC Spec, APIs & Integrations)*
-- **5-Slide Executive Pitch Deck**: [`docs/SLIDE_DECK.md`](docs/SLIDE_DECK.md) · **Interactive Slide Deck**: [`docs/slides.html`](docs/slides.html)
+- **5-Slide Executive Pitch Deck**: [`deliverables/RepoBrain_Pitch_Deck_Final.pptx`](deliverables/RepoBrain_Pitch_Deck_Final.pptx) · [`docs/SLIDE_DECK.md`](docs/SLIDE_DECK.md)
 - **Live Pull Request Proofs (Public Repos)**:
   - Evaluation repo (`repobrain-demo-eval`): [PR #1 — Blocked risky AI PR](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/1) · [PR #2 — Complexity gate](https://github.com/tanmayyyyayyy/repobrain-demo-eval/pull/2)
   - Main repo (`Repo_Brain`): [PR #1 — End-to-end Blocked → Refactored → Allowed lifecycle](https://github.com/tanmayyyyayyy/Repo_Brain/pull/1)
@@ -21,11 +21,11 @@
 1. **Zero-Install Live Web Console**: Open **[repobrain-demo.onrender.com](https://repobrain-demo.onrender.com)**.
 2. **Instant Killer Scenario Walkthrough (Scenarios A through E)**:
    - **Step 1 (Scenario A — Adversarial Agent PR)**: Click `A · risky AI PR` $\to$ **`BLOCKED`**. Catches split secret concatenation (`'AKIA' + '...'`), unauthorized workflow edits (`.github/workflows/ci.yml`), comment prompt injections, and shell taint flows.
-   - **Step 2 (Scenario B — AI Spaghetti Code)**: Click `B · messy AI PR` $\to$ click `Run optimizer`. Inspect the **Formal Semantic Equivalence Theorem** ($\forall \text{input}: f_{\text{orig}} \equiv f_{\text{opt}}$) proved by our symbolic prover, plus 500 fuzzed inputs with 0 divergences. Type `Priya Sharma` $\to$ click `Approve & apply` $\to$ review flips to **`ALLOWED`**.
+   - **Step 2 (Scenario B — AI Spaghetti Code)**: Click `B · messy AI PR` $\to$ click `Run optimizer`. Review the scoped proof evidence, 26 passing tests, and 1,000 fuzz inputs across 4 functions with 0 divergences in this run. Type `Priya Sharma` $\to$ click `Approve & apply` $\to$ review becomes **`ALLOWED`**.
    - **Step 3 (Scenario C — High-Complexity Legacy Refactor)**: Click `C · AI refactor` $\to$ safely handles cyclomatic complexity 27 with base-branch policy gating.
-   - **Step 4 (Scenario D — Clean AI PR / The Golden Path)**: Click `D · clean PR` $\to$ **`ALLOWED`** (0 findings, 100% compliant, ready to merge). Proves 0.0% false positives on clean code.
+   - **Step 4 (Scenario D — Clean AI PR / The Golden Path)**: Click `D · clean PR` $\to$ **`ALLOWED`** with 0 blocking findings. This seeded example demonstrates the clean-change path; it is not a general false-positive benchmark.
    - **Step 5 (Scenario E — Polyglot Full-Stack PR)**: Click `E · polyglot PR` $\to$ full-stack AI governance across TypeScript, Shell, Dockerfile, and Python.
-   - **Step 6 (Audit Ledger & Verifiable PR Receipt)**: Click `Audit` $\to$ click `Simulate tampering` (tamper detected instantly) $\to$ click `Merkle Inclusion Proof` $\to$ generate an $O(\log N)$ offline-verifiable inclusion proof $\to$ download the **Verifiable Decision Receipt** (`repobrain verify-receipt <file>`).
+   - **Step 6 (Audit Ledger & Verifiable PR Receipt)**: Click `Audit` $\to$ click `Simulate tampering` (tamper detected instantly) $\to$ click `Merkle Inclusion Proof` $\to$ generate an $O(\log N)$ offline-verifiable inclusion proof $\to$ download the **Verifiable Decision Receipt** (`python -m repobrain verify-receipt <file>`).
 
 ---
 
@@ -37,16 +37,16 @@
 |---|:---:|:---:|:---:|:---:|
 | **Concatenated Secret Literal**<br>`k = 'AKIA' + 'IOSFODNN7EXAMPLE'` | ❌ **MISSED**<br>Regex splits token | ⚪ N/A<br>No secret scan | ❌ **MISSED**<br>Regex fails on split | 🛡️ **BLOCKED**<br>AST concat normalization |
 | **Multi-Line Prompt Injection**<br>`# ignore \n # all previous instructions` | ❌ **MISSED**<br>Single-line check | ❌ **MISSED**<br>Ignored as comment | ❌ **MISSED**<br>Line-by-line rule | 🛡️ **BLOCKED**<br>Sliding window + ML Guard |
-| **High-Complexity Spaghetti**<br>`discount_for()` (Cyclomatic 27, depth 6) | ⚪ N/A<br>No complexity check | ⚠️ **WARN ONLY**<br>Advisory; agent ignores | ⚪ N/A<br>No refactoring | ⚡ **REWRITTEN & PROVEN**<br>Formal AST proof + tests |
+| **High-Complexity Spaghetti**<br>`discount_for()` (Cyclomatic 27, depth 6) | ⚪ N/A<br>No complexity check | ⚠️ **WARN ONLY**<br>Advisory; agent may ignore | ⚪ N/A<br>No refactoring | ⚡ **REWRITTEN & CHECKED**<br>Scoped proof evidence + tests |
 | **Taint Flow to Shell Sink**<br>`user_input` $\to$ `subprocess(shell=True)` | ⚪ N/A<br>No taint analysis | ⚪ N/A<br>No taint analysis | ❌ **MISSED**<br>Needs custom rules | 🔍 **BLOCKED (CWE-78)**<br>Sequential taint engine |
 
-- **Four Novel Zero-Dependency Innovations (Pure Python Standard Library)**:
-  1. **Symbolic AST Formal Equivalence Prover (`repobrain/prover.py`)**: Mathematically proves $\forall \text{input} \in \text{Inputs}: f_{\text{orig}}(\text{input}) \equiv f_{\text{opt}}(\text{input})$ for pure control-flow functions via symbolic execution path extraction, De Morgan DNF canonicalization, and bidirectional path matching with cryptographic theorem hashes (with differential fuzzing + pytest execution fallback when side effects or dynamic attributes are present).
+- **Core Technical Components (Python Standard Library + PyYAML)**:
+  1. **Symbolic AST Equivalence Evidence (`repobrain/prover.py`)**: Checks supported pure control-flow rewrites by extracting symbolic paths and matching them bidirectionally. It records proof evidence and a theorem hash; it does not establish equivalence for arbitrary Python behavior. Other rewrites use tests and differential fuzzing as additional, bounded evidence.
   2. **Intra-Procedural Taint Analysis Engine (`repobrain/taint.py`)**: Traces untrusted parameters through assignment chains into dangerous sinks (CWE-78, CWE-95, CWE-22, CWE-502, CWE-918) with sanitizer awareness.
   3. **RFC-6962 Binary Merkle Audit Tree (`repobrain/merkle.py`)**: Generates $O(\log N)$ cryptographic offline-verifiable inclusion proofs verifiable without network access or leaking other log entries (`GET /api/audit/proof`, `POST /api/audit/verify-proof`).
   4. **Verifiable PR Decision Receipt Engine (`repobrain/receipt.py`)**: Binds review findings, base policy hash, formal theorem, fuzz results, human approver, and Merkle inclusion proof into a standalone verifiable JSON artifact verified offline via `repobrain verify-receipt <file>`.
 - **Verified Code Remediation Without Regressions**: When an AI PR exceeds complexity limits (cyclomatic, cognitive, nesting depth), RepoBrain's deterministic AST optimizer simplifies the code directly via semantics-preserving rewrites, runs your repository's test suite on a scratch copy with CPU/memory resource limits, and runs differential fuzzing (constants + type mutations) to catch behavioral regressions before proposing changes to a human.
-- **Tamper-Evident Proof of Everything**: RepoBrain records every review, preflight check, waiver, and human approval in an append-only JSONL ledger hash-chained with SHA-256 and signed via HMAC-SHA256 (`REPOBRAIN_AUDIT_KEY`). In `--demo` mode and CI with keys enabled, altering any historical block—even while recomputing SHA-256 hashes—immediately breaks signature and chain verification.
+- **Tamper-Evident Audit Evidence**: RepoBrain records reviews, preflight checks, waivers, and human approvals in an append-only JSONL ledger hash-chained with SHA-256 and optionally signed with HMAC-SHA256 (`REPOBRAIN_AUDIT_KEY`). Verification detects edits against the trusted chain/key; the local demo provisions an ephemeral key.
 
 ---
 
@@ -78,14 +78,14 @@ python -m pytest -q tests
 
 ```
 PR / Agent Push ──► Shield (Secrets + Taint + Injection) ──► Complexity Gate ──► Optimizer (Formal Proofs + Fuzzing) ──► Named Human ──► Merge
-                       └─────────────────── RFC-6962 Cryptographic Merkle Audit Ledger (HMAC) ◄────────────────────────────────┘
+                       └─────────────────── RFC-6962 Merkle Audit Evidence (optional HMAC) ◄─────────────────────────────────┘
 ```
 
 1. **Shield**: Evaluates added diff hunks against protected paths (`.github/workflows/`, `repobrain.yml`), hardcoded secrets (pattern + entropy + string concatenation normalization + base64 decoding), prompt injection (multi-line sliding window + warn-only Naive Bayes ML guard), risky commands (shell & PowerShell), dependency typosquatting (Damerau-Levenshtein against 289 popular packages), and **Intra-Procedural Taint Analysis (`repobrain/taint.py`)** tracing untrusted parameters into dangerous sinks (CWE-78 command injection, CWE-95 code injection, CWE-22 path traversal, CWE-502 deserialization, CWE-918 SSRF) with sanitizer recognition.
 2. **Complexity Gate**: Inspects *only* functions touched by the PR against base-branch thresholds (cyclomatic ≤ 10, cognitive ≤ 15, nesting depth ≤ 3).
-3. **Verified Optimizer & Formal Prover**: Performs deterministic AST rewrites on touched Python functions, executes the repository's tests on a scratch copy, runs differential fuzzing (500 boundary inputs) in a resource-limited subprocess, and runs the **Symbolic AST Formal Equivalence Prover (`repobrain/prover.py`)** to mathematically prove `∀ input ∈ Inputs: f_original(input) ≡ f_optimized(input)` across execution paths with De Morgan canonicalization. An optional LLM refactor tier (`repobrain/llm.py`) supports Groq/Anthropic APIs when explicitly configured via `allow_llm: true` and `--ai` (verified locally with mock API servers).
+3. **Verified Optimizer & Formal Prover**: Performs deterministic AST rewrites on touched Python functions, executes the repository's tests on a scratch copy, and runs differential fuzzing in a resource-limited subprocess. The **Symbolic AST Equivalence Prover (`repobrain/prover.py`)** checks extracted paths for supported pure control-flow rewrites; it does not prove arbitrary Python behavior. An optional LLM refactor tier (`repobrain/llm.py`) supports Groq/Anthropic APIs when explicitly configured via `allow_llm: true` and `--ai` (verified locally with mock API servers).
 4. **Human Approval**: Enforces `approval: human`. The optimizer never merges on its own; a named human approves the rewrite, producing a git commit with an `Approved-by:` trailer.
-5. **Cryptographic Merkle Audit Ledger & Decision Receipts**: Append-only JSONL ledger with SHA-256 hash chaining, HMAC-SHA256 signing, an **RFC-6962 Binary Merkle Tree (`repobrain/merkle.py`)** generating O(log N) offline-verifiable inclusion proofs verified via sibling path reconstruction (`GET /api/audit/proof`, `POST /api/audit/verify-proof`), and standalone **Verifiable Decision Receipts (`repobrain/receipt.py`)** verified via `repobrain verify-receipt <file>`.
+5. **Cryptographic Merkle Audit Ledger & Decision Receipts**: Append-only JSONL ledger with SHA-256 hash chaining and optional HMAC-SHA256 signing, an **RFC-6962 Binary Merkle Tree (`repobrain/merkle.py`)** generating O(log N) offline-verifiable inclusion proofs verified via sibling path reconstruction (`GET /api/audit/proof`, `POST /api/audit/verify-proof`), and standalone **Verifiable Decision Receipts (`repobrain/receipt.py`)** verified via `python -m repobrain verify-receipt <file>`.
 
 ---
 

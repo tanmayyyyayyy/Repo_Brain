@@ -27,10 +27,9 @@ ROOT = Path(__file__).resolve().parent.parent
 FFMPEG = "/opt/homebrew/bin/ffmpeg"
 FFPROBE = "/opt/homebrew/bin/ffprobe"
 VOICE = "Daniel"
-VOICE_RATE = "184"
+VOICE_RATE = "165"
 
 WORK = Path("/tmp/repobrain_video_prod")
-OUT_DOWNLOADS = Path.home() / "Downloads" / "repobrain_demo_edited.mp4"
 OUT_REPO = ROOT / "docs" / "demo" / "repobrain_demo_edited.mp4"
 
 
@@ -166,7 +165,7 @@ def make_problem_intro_slide(out_png):
     )
     draw.text(
         (175, 692),
-        "Vendor-neutral safety layer • Python stdlib + PyYAML runtime • 124 tests passing • Zero external runtime bloat",
+        "Python stdlib + PyYAML • 223 tests passed, 1 skipped • seeded demo results are run-specific",
         font=FONTS["body"], fill=(203, 213, 225, 255),
     )
 
@@ -231,7 +230,7 @@ def make_outro_slide(out_png):
 
     stats = [
         "• 21 commits / 14,500 diff lines evaluated (0 runtime FPs) & 51,781 OSS LoC scanned (0 FPs)",
-        "• 124 automated pytest + Playwright UI & security checks passing",
+        "• 223 passed, 1 skipped in the local test suite; CI matrix results are documented in the repo",
         "• Try in 3 commands:  git clone ... && pip install -r requirements.txt && python server.py",
     ]
     sy = cy + 290
@@ -346,7 +345,10 @@ def capture_playwright_clips(durations):
             s5_trim = max(0.0, time.monotonic() - t0)
             page5.wait_for_timeout(3500)
             page5.locator("button:has-text('Run optimizer')").click()
-            page5.wait_for_selector(".pill:has-text('verified')", timeout=20000)
+            page5.wait_for_function(
+                "() => (document.querySelector('#pipeOptBadge')?.innerText || '').toLowerCase().includes('verified')",
+                timeout=20000,
+            )
             page5.wait_for_timeout(3500)
             page5.evaluate("window.scrollTo({top: 420, behavior: 'smooth'})")
             page5.wait_for_timeout(3500)
@@ -446,38 +448,38 @@ def main():
     scenes = [
         (
             "s1", "PROBLEM & SOLUTION", (248, 113, 113),
-            "Autonomous coding agents move fast, but unreviewed diffs leak hardcoded or split secrets, embed hidden prompt injections, and spike complexity. Advisory linters only warn. RepoBrain sits between AI agents and production: enforcing base-branch policy, simplifying code with your tests as judge, and anchoring every action in an HMAC-signed chain.",
-            10.0,
+            "AI coding agents can open useful pull requests quickly. They can also expose credentials, alter the workflow meant to review them, or add code that humans struggle to maintain. Linters often report problems without enforcing a merge decision. RepoBrain applies repository policy from the trusted base, reviews proposed changes, helps simplify supported Python code, and records human approval and audit evidence. I will show a blocked change, a tested rewrite, and how the seeded demo detects tampering.",
+            30.0,
         ),
         (
             "s2", "AGENT PREFLIGHT REFUSAL", (248, 113, 113),
-            "Watch RepoBrain stop an agent before it writes to disk. When demo-agent tries modifying CI workflows or injecting risky curl commands, both our CLI hook and MCP server return BLOCK immediately, refusing the write with exit status one.",
-            14.0,
+            "Before a write reaches disk, an agent can ask RepoBrain's preflight interface to check the target path and proposed content. The CLI and MCP server use the same policy decisions. Here, an agent attempts to modify the protected CI workflow and request an unsafe shell command. RepoBrain rejects the requests before the write. The demo uses a placeholder payload; it does not execute a real credential or shell command.",
+            26.0,
         ),
         (
             "s3", "SHIELD & DIFF INSPECTOR", (56, 189, 248),
-            "In Mission Control, Scenario A flags three blocking violations from demo-agent: a protected workflow edit, a hidden HTML prompt injection, and a placeholder AWS key. Clicking the workflow opens our single-pass diff inspector with clean highlighting and inline annotations.",
-            18.0,
+            "Scenario A is a seeded risky pull request. RepoBrain blocks three findings: a credential in shop slash config dot py, an edit to the protected CI workflow, and prompt injection hidden in an HTML comment. The finding list gives the rule and file location, while the diff inspector shows the changed lines. These are repeatable demo fixtures, not a claim that every secret scanner or repository will behave the same way.",
+            34.0,
         ),
         (
             "s4", "LIVE GITHUB PR PROOF", (56, 189, 248),
-            "On a real public GitHub repository, RepoBrain runs inside GitHub Actions, loads policy strictly from the trusted base branch, evaluates pull request diffs, and posts an actionable sticky comment directly in the PR timeline.",
-            12.0,
+            "This captured pull request shows the GitHub Actions integration on RepoBrain's public repository. The check reports a blocked verdict and places the findings in the pull request conversation. In deployment, keep the policy on the trusted base branch and require the RepoBrain status check through branch protection. The screenshot is evidence from that run; the local seeded demo remains the fallback if the network is slow.",
+            19.0,
         ),
         (
             "s5", "VERIFIED AST OPTIMIZER", (52, 211, 153),
-            "Switching to Scenario B, refactor-bot introduced deeply nested functions exceeding complexity limits. Clicking Run Optimizer simplifies nesting using Python AST rules, passes twenty six unit tests on a scratch copy, verifies a thousand fuzzed inputs with zero divergences, and awaits Priya Sharma's named approval before flipping the verdict to allowed.",
-            22.0,
+            "Scenario B is a separate seeded pull request with a Python function that exceeds the configured complexity limits. RepoBrain proposes deterministic AST rewrites, then runs the repository's targeted tests on a scratch copy and differentially checks one thousand generated inputs with zero divergences in this run. Cognitive complexity moves from fifteen to ten, nesting depth from four to three, and the function from sixty nine lines to forty seven. The symbolic prover covers only supported pure control flow, so we present its proof evidence together with tests and fuzzing rather than claim a proof of arbitrary Python behavior. The optimizer waits for Priya Sharma's named approval, recorded in the commit trailer.",
+            42.0,
         ),
         (
             "s6", "HMAC AUDIT & TAMPER CHECK", (251, 191, 36),
-            "Every decision is written to an append-only ledger signed with HMAC SHA-256. Notice the verified HMAC-signed badge. When we click Simulate Tampering on a historical ledger entry, both content hashing and the HMAC signature break immediately, flagging every downstream entry.",
-            18.0,
+            "RepoBrain records decisions in an append-only ledger. In this seeded demo, the HMAC key is local and ephemeral. The verifier reports the chain as valid before the change. We then edit a historical entry in memory. The audit check detects the changed content and invalidates the affected downstream records. For a receipt to establish authenticity outside this local run, the verifier needs a root or HMAC key supplied through a separately trusted channel; the receipt alone is not its own trust anchor.",
+            34.0,
         ),
         (
             "s7", "TRY REPOBRAIN TODAY", (52, 211, 153),
-            "Evaluated across twenty one commits with zero runtime false positives and one hundred twenty four passing tests. Clone Repo_Brain on GitHub and try Mission Control in three commands.",
-            9.0,
+            "The current local suite reports two hundred twenty three passed and one skipped. The repository includes setup instructions, technical documentation, CI configuration, and this seeded demo fallback. Clone RepoBrain, install the listed requirements, and run the demo server to try the same scenarios. The displayed scenario metrics are run-specific, not general benchmarks.",
+            15.0,
         ),
     ]
 
@@ -525,9 +527,14 @@ def main():
         FFMPEG, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list),
         "-c", "copy", "-movflags", "+faststart", str(OUT_REPO),
     ], check=True, capture_output=True)
-    shutil.copy2(OUT_REPO, OUT_DOWNLOADS)
     total = probe_duration(OUT_REPO)
-    print(f"\nDONE! {OUT_REPO} & {OUT_DOWNLOADS} ({total:.1f}s, {OUT_REPO.stat().st_size / 1e6:.1f} MB)")
+    copy_to = os.environ.get("REPOBRAIN_VIDEO_COPY_OUT")
+    if copy_to:
+        copy_path = Path(copy_to)
+        copy_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(OUT_REPO, copy_path)
+        print(f"Optional copy: {copy_path}")
+    print(f"\nDONE! {OUT_REPO} ({total:.1f}s, {OUT_REPO.stat().st_size / 1e6:.1f} MB)")
 
 
 if __name__ == "__main__":

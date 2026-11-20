@@ -305,7 +305,7 @@ def main():
             set_hud(
                 9,
                 "Verified AST Optimizer & Differential Fuzzing",
-                "Running AST rewrite in scratch sandbox. Executes test suite + 500 fuzzed inputs with 0 regressions."
+                "Running AST rewrite in scratch sandbox. Executes test suite + 1,000 fuzzed inputs across 4 functions with 0 divergences in this seeded run."
             )
             page.evaluate("go('optimizer'); runOpt();")
             time.sleep(3.5)
