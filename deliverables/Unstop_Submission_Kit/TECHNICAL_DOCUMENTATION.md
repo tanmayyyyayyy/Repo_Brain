@@ -121,8 +121,8 @@ RepoBrain enforces organization-level email policies:
 ### 5.1. Shield Engine (`repobrain/shield.py`)
 The Shield engine inspects incoming pull request diffs and file writes before they reach the repository:
 - **Path Guard**: Blocks changes to sensitive infrastructure files (`.github/workflows/`, `secrets/`, `credentials/`, `repobrain.yml`) when authored by an AI actor.
-- **Secret Scanner**: Identifies high-entropy strings, AWS access keys (`AKIA...`), GitHub Personal Access Tokens (`ghp_...`), private keys (`-----BEGIN PRIVATE KEY-----`), and tokens split across string concatenations (`"AKIA" + "..."`) or encoded in Base64.
-- **Prompt Injection Detector**: Multi-line sliding-window scanner detecting delimiter manipulation (`<system>`, `[INST]`), instructions override (`ignore all previous instructions`), and jailbreak attempts.
+- **Secret Scanner**: Identifies high-entropy strings, AWS access keys (`AKIA...`), GitHub Personal Access Tokens (`ghp_...`), private cryptographic key headers, and tokens split across string concatenations (`"AKIA" + "..."`) or encoded in Base64.
+- **Prompt Injection Detector**: Multi-line sliding-window scanner detecting delimiter manipulation (`<system>`, `[INST]`), agent instruction-override directives, and jailbreak attempts.
 - **Dependency Typo-Squatting Guard**: Analyzes `requirements.txt`, `pyproject.toml`, and `package.json` against a curated dataset of popular packages using Damerau-Levenshtein edit distance (distance ≤ 2 flags suspicious packages).
 
 ### 5.2. AST Complexity Gate (`repobrain/metrics.py`)
