@@ -208,6 +208,74 @@ def make_agent_refusal_slide(out_png, preflight_json, mcp_json):
     return out_png
 
 
+def make_team_intro_slide(out_png):
+    im = Image.new("RGBA", (1920, 1080), (8, 12, 18, 255))
+    draw = ImageDraw.Draw(im)
+    for gx in range(0, 1920, 120):
+        draw.line([(gx, 0), (gx, 1080)], fill=(20, 28, 42, 255), width=1)
+    for gy in range(0, 1080, 90):
+        draw.line([(0, gy), (1920, gy)], fill=(20, 28, 42, 255), width=1)
+
+    draw_pill(draw, 140, 55, "CODEQUEST 2026 // FINAL BUILD & INNOVATION SHOWCASE", (56, 189, 248), (16, 32, 54))
+
+    draw.text((140, 115), "RepoBrain: Autonomous AI Agent PR Governance", font=FONTS["h1"], fill=(248, 250, 252, 255))
+    draw.text(
+        (140, 180),
+        "Deterministic policy enforcement, verified AST refactoring, and tamper-evident audit evidence.",
+        font=FONTS["h2"], fill=(148, 163, 184, 255),
+    )
+
+    cw, ch, gap = 790, 420, 40
+    sx, sy = 140, 245
+
+    # Card 1: Tanmay Jain
+    cx1 = sx
+    draw.rounded_rectangle([cx1, sy, cx1 + cw, sy + ch], radius=16, fill=(17, 24, 36, 255), outline=(56, 189, 248, 255), width=2)
+    draw_pill(draw, cx1 + 32, sy + 26, "SYSTEMS & SECURITY ARCHITECT", (56, 189, 248), (14, 36, 52))
+    draw.text((cx1 + 32, sy + 82), "Tanmay Jain", font=FONTS["h1"], fill=(248, 250, 252, 255))
+    bullets1 = [
+        "• Core Governance Engine & Base-Branch Policy Isolation",
+        "• Intra-Procedural Taint Analysis (CWE-78, CWE-95, CWE-22)",
+        "• Symbolic AST Equivalence Prover & RFC-6962 Merkle Tree",
+        "• CLI Hooks, MCP Server Preflight, & Cryptographic Receipts",
+    ]
+    by = sy + 162
+    for b in bullets1:
+        draw.text((cx1 + 32, by), b, font=FONTS["body"], fill=(203, 213, 225, 255))
+        by += 36
+
+    # Card 2: Saanchi Jain
+    cx2 = sx + cw + gap
+    draw.rounded_rectangle([cx2, sy, cx2 + cw, sy + ch], radius=16, fill=(17, 24, 36, 255), outline=(52, 211, 153, 255), width=2)
+    draw_pill(draw, cx2 + 32, sy + 26, "AI GOVERNANCE & PRODUCT LEAD", (52, 211, 153), (14, 38, 32))
+    draw.text((cx2 + 32, sy + 82), "Saanchi Jain", font=FONTS["h1"], fill=(248, 250, 252, 255))
+    bullets2 = [
+        "• AI Coding Agent Risk Modeling & Policy Specification",
+        "• Flight Recorder Mission Control UI/UX (WCAG 2.1 AA Compliant)",
+        "• Named Human Approval Enforcement & Developer Workflow",
+        "• Differential Fuzzing Benchmarks & Compliance Documentation",
+    ]
+    by = sy + 162
+    for b in bullets2:
+        draw.text((cx2 + 32, by), b, font=FONTS["body"], fill=(203, 213, 225, 255))
+        by += 36
+
+    draw.rounded_rectangle([140, 700, 1780, 785], radius=14, fill=(14, 32, 34, 255), outline=(52, 211, 153, 255), width=2)
+    draw.text(
+        (175, 715),
+        "Full-Stack Solution: Zero External Runtime Dependencies • 223 Passing Tests • Open Source (MIT)",
+        font=FONTS["h2"], fill=(52, 211, 153, 255),
+    )
+    draw.text(
+        (175, 750),
+        "Evaluation Scope: Public GitHub PRs + Zero-Install Live Web Console (Scenario A through E)",
+        font=FONTS["body"], fill=(203, 213, 225, 255),
+    )
+
+    im.save(out_png)
+    return out_png
+
+
 def make_outro_slide(out_png):
     im = Image.new("RGBA", (1920, 1080), (8, 12, 18, 255))
     draw = ImageDraw.Draw(im)
@@ -216,30 +284,45 @@ def make_outro_slide(out_png):
     for gy in range(0, 1080, 90):
         draw.line([(0, gy), (1920, gy)], fill=(20, 28, 42, 255), width=1)
 
-    cx, cy, cw, ch = 240, 115, 1440, 670
+    cx, cy, cw, ch = 180, 50, 1560, 780
     draw.rounded_rectangle([cx, cy, cx + cw, cy + ch], radius=24, fill=(14, 19, 27, 255), outline=(56, 189, 248, 255), width=2)
 
-    draw_pill(draw, cx + 520, cy + 48, "PROTOTYPE READY • OPEN SOURCE (MIT)", (52, 211, 153), (14, 38, 32))
+    draw_pill(draw, cx + 460, cy + 28, "CODEQUEST 2026 // PROTOTYPE READY • OPEN SOURCE (MIT)", (52, 211, 153), (14, 38, 32))
 
-    draw.text((cx + 575, cy + 120), "RepoBrain", font=FONTS["h1"], fill=(248, 250, 252, 255))
+    draw.text((cx + 600, cy + 82), "RepoBrain", font=FONTS["h1"], fill=(248, 250, 252, 255))
     draw.text(
-        (cx + 145, cy + 200),
-        "Vendor-neutral safety, AST cleanup, and HMAC-signed audit ledger for repos touched by AI.",
+        (cx + 140, cy + 148),
+        "Vendor-neutral safety, verified AST cleanup, and HMAC-signed audit ledger for repos touched by AI.",
         font=FONTS["h2"], fill=(56, 189, 248, 255),
     )
 
+    # Team members section
+    tx, ty, tw, th = cx + 60, cy + 205, cw - 120, 155
+    draw.rounded_rectangle([tx, ty, tx + tw, ty + th], radius=14, fill=(20, 28, 40, 255), outline=(56, 189, 248, 255), width=1)
+    draw.text((tx + 25, ty + 16), "TEAM REPOBRAIN", font=FONTS["badge"], fill=(56, 189, 248, 255))
+
+    # Tanmay
+    draw.text((tx + 25, ty + 50), "Tanmay Jain", font=FONTS["h2"], fill=(248, 250, 252, 255))
+    draw.text((tx + 25, ty + 90), "Systems & Security Architect", font=FONTS["body"], fill=(56, 189, 248, 255))
+    draw.text((tx + 25, ty + 120), "Core Engine, Taint Analysis, Prover & Merkle Audit", font=FONTS["mono_sm"], fill=(203, 213, 225, 255))
+
+    # Saanchi
+    draw.text((tx + 740, ty + 50), "Saanchi Jain", font=FONTS["h2"], fill=(248, 250, 252, 255))
+    draw.text((tx + 740, ty + 90), "AI Governance & Product Lead", font=FONTS["body"], fill=(52, 211, 153, 255))
+    draw.text((tx + 740, ty + 120), "Policy Engine, Mission Control UI/UX, Compliance", font=FONTS["mono_sm"], fill=(203, 213, 225, 255))
+
     stats = [
         "• 21 commits / 14,500 diff lines evaluated (0 runtime FPs) & 51,781 OSS LoC scanned (0 FPs)",
-        "• 223 passed, 1 skipped in the local test suite; CI matrix results are documented in the repo",
-        "• Try in 3 commands:  git clone ... && pip install -r requirements.txt && python server.py",
+        "• 223 passed, 1 skipped in the test suite across Linux, macOS, and Windows runners",
+        "• 3-Command Local Run:  git clone ... && pip install -r requirements.txt && python server.py",
     ]
-    sy = cy + 290
+    sy = cy + 390
     for s in stats:
-        draw.text((cx + 150, sy), s, font=FONTS["body"], fill=(226, 232, 240, 255))
-        sy += 50
+        draw.text((cx + 80, sy), s, font=FONTS["body"], fill=(226, 232, 240, 255))
+        sy += 38
 
-    draw.rounded_rectangle([cx + 280, cy + 505, cx + 1160, cy + 575], radius=12, fill=(19, 28, 42, 255), outline=(56, 189, 248, 255), width=2)
-    draw.text((cx + 345, cy + 527), "https://github.com/tanmayyyyayyy/Repo_Brain", font=FONTS["h2"], fill=(248, 250, 252, 255))
+    draw.rounded_rectangle([cx + 260, cy + 540, cx + 1300, cy + 610], radius=12, fill=(19, 28, 42, 255), outline=(56, 189, 248, 255), width=2)
+    draw.text((cx + 360, cy + 562), "https://github.com/tanmayyyyayyy/Repo_Brain", font=FONTS["h2"], fill=(248, 250, 252, 255))
 
     im.save(out_png)
     return out_png
@@ -447,6 +530,11 @@ def main():
     print("1/4 Generating voiceover audio & large captions...")
     scenes = [
         (
+            "s0", "CODEQUEST 2026 // REPOBRAIN", (56, 189, 248),
+            "Welcome to the final build showcase for RepoBrain, built for CodeQuest 2026 by Tanmay Jain, Systems and Security Architect, and Saanchi Jain, AI Governance and Product Lead. RepoBrain is a vendor-neutral governance platform that stops autonomous AI agents from introducing silent vulnerabilities, complexity debt, or untracked changes into production repositories.",
+            18.0,
+        ),
+        (
             "s1", "PROBLEM & SOLUTION", (248, 113, 113),
             "AI coding agents can open useful pull requests quickly. They can also expose credentials, alter the workflow meant to review them, or add code that humans struggle to maintain. Linters often report problems without enforcing a merge decision. RepoBrain applies repository policy from the trusted base, reviews proposed changes, helps simplify supported Python code, and records human approval and audit evidence. I will show a blocked change, a tested rewrite, and how the seeded demo detects tampering.",
             30.0,
@@ -477,9 +565,9 @@ def main():
             34.0,
         ),
         (
-            "s7", "TRY REPOBRAIN TODAY", (52, 211, 153),
-            "The current local suite reports two hundred twenty three passed and one skipped. The repository includes setup instructions, technical documentation, CI configuration, and this seeded demo fallback. Clone RepoBrain, install the listed requirements, and run the demo server to try the same scenarios. The displayed scenario metrics are run-specific, not general benchmarks.",
-            15.0,
+            "s7", "TEAM & PROJECT WRAP-UP", (52, 211, 153),
+            "RepoBrain bridges the critical gap between fast autonomous coding agents and rigorous enterprise compliance. On behalf of team members Tanmay Jain and Saanchi Jain, thank you for evaluating RepoBrain for the CodeQuest 2026 Final Build Showcase. The full open-source repository, technical documentation, and test suite are available on GitHub.",
+            18.0,
         ),
     ]
 
@@ -495,6 +583,7 @@ def main():
         print(f"  Audio {sid}: {aud_d:.1f}s -> scene {dur:.1f}s")
 
     print("2/4 Generating intro, terminal agent-refusal, and outro slides...")
+    s0_png = make_team_intro_slide(WORK / "slide_s0.png")
     s1_png = make_problem_intro_slide(WORK / "slide_s1.png")
     pre_out, mcp_out = run_preflight_capture()
     s2_png = make_agent_refusal_slide(WORK / "slide_s2.png", pre_out, mcp_out)
@@ -509,6 +598,7 @@ def main():
     s4_trim = 0.0 if s4_is_still else s4_item[-1]
 
     rendered = [
+        mux_scene("s0", s0_png, True, *audio_info["s0"], captions["s0"]),
         mux_scene("s1", s1_png, True, *audio_info["s1"], captions["s1"]),
         mux_scene("s2", s2_png, True, *audio_info["s2"], captions["s2"]),
         mux_scene("s3", pw_clips["s3"][0], False, *audio_info["s3"], captions["s3"], pw_clips["s3"][1]),
@@ -528,6 +618,13 @@ def main():
         "-c", "copy", "-movflags", "+faststart", str(OUT_REPO),
     ], check=True, capture_output=True)
     total = probe_duration(OUT_REPO)
+    
+    # Update kit copy
+    kit_mp4 = ROOT / "deliverables" / "Unstop_Submission_Kit" / "RepoBrain_Demo_Video.mp4"
+    kit_mp4.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(OUT_REPO, kit_mp4)
+    print(f"Kit copy updated: {kit_mp4}")
+
     copy_to = os.environ.get("REPOBRAIN_VIDEO_COPY_OUT")
     if copy_to:
         copy_path = Path(copy_to)

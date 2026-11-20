@@ -27,5 +27,8 @@ Upload RepoBrain_Pitch_Deck_Final.pptx. It contains exactly 5 slides.
 
 DEMO VIDEO
 Upload RepoBrain_Demo_Video.mp4 to a video host or drive, set access so judges can view it, then paste that share URL into the Unstop Demo Video field. This kit contains the MP4, but does not include a public share URL.
-Suggested title: RepoBrain - CodeQuest 2026 Final Demo
-Suggested description: A 3 minute 43 second walkthrough of RepoBrain's seeded risky-PR block, tested Python rewrite, human approval, and tamper-evident audit checks.
+Suggested title: RepoBrain - CodeQuest 2026 Final Demo (Tanmay Jain & Saanchi Jain)
+Suggested description: A 4-minute narrated walkthrough of RepoBrain's preflight hooks, seeded risky-PR block, tested Python rewrite, named human approval, and cryptographic tamper-evident audit checks.
+Team Members:
+- Tanmay Jain — Systems & Security Architect (Core Engine, Taint Analysis, Prover & Merkle Tree)
+- Saanchi Jain — AI Governance & Product Lead (Policy Models, Mission Control UI/UX, Compliance)
