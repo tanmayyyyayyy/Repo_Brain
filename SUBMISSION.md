@@ -5,7 +5,7 @@
 - **Track / Category**: Most Innovative Developer Tool / AI Safety & Governance / Cyber Security & Compliance / Open Innovation
 - **Target Buyers**: Enterprise Platform Engineering, DevSecOps, and Security teams deploying autonomous AI coding agents (Cursor, Claude Code, GitHub Copilot, Devin) across production codebases.
 - **GitHub Repository**: [https://github.com/tanmayyyyayyy/Repo_Brain](https://github.com/tanmayyyyayyy/Repo_Brain)
-- **Demo Video**: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) *(3–5 minute narrated walkthrough with captions; includes the seeded local prototype flow and a captured public GitHub Actions run)*
+- **Demo Video**: [YouTube (1080p 60fps narrated walkthrough with captions)](https://youtu.be/jgHJLzQHnh0) · local file: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) *(4-minute CodeQuest 2026 showcase featuring Tanmay Jain & Saanchi Jain)*
 - **Technical Documentation**: [`docs/TECHNICAL_DOCUMENTATION.md`](docs/TECHNICAL_DOCUMENTATION.md) · [upload-ready PDF](output/pdf/RepoBrain_Technical_Documentation.pdf) *(Architecture, Tech Stack, RBAC, APIs & Integrations)*
 - **5-Slide Executive Pitch Deck**: [`deliverables/RepoBrain_Pitch_Deck_Final.pptx`](deliverables/RepoBrain_Pitch_Deck_Final.pptx) · [`docs/SLIDE_DECK.md`](docs/SLIDE_DECK.md)
 - **Live Pull Request Proofs (Public Repos)**:
