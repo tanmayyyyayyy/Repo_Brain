@@ -10,11 +10,11 @@
 
 AI-authored changes can include secrets, risky commands, prompt injection, protected-path edits, or hard-to-maintain code. RepoBrain combines deterministic review rules, a scoped Python optimizer, human approval, and tamper-evident audit records. Its results depend on the repository policy, tests, and deployment controls.
 
-RepoBrain solves this with a **zero-trust, multi-tiered defense architecture**:
+RepoBrain combines several checks in a **defense-in-depth review flow**:
 1. **Preflight Agent Safety Interceptor**: Stops autonomous agents *before* they write to disk or commit to version control.
-2. **Shield Engine**: Protects critical workflows, normalizes and unmasks multi-fragment secrets, detects multi-line prompt injections, and blocks typosquatted dependencies using Damerau-Levenshtein distance.
-3. **Verified AST Optimizer & Differential Fuzzing**: Automatically refactors overly complex code and verifies correctness by running tests in isolated scratch sandboxes with differential invariant fuzzing.
-4. **Enterprise Role-Based Access Control (RBAC)**: Separates developer authoring, QA testing, and security analysis from human code merge approvals (`Approved-by:` trailers) and policy waivers.
+2. **Shield Engine**: Checks protected paths, detects and masks secret findings, scans multi-line prompt-injection patterns, and flags suspicious dependency names using Damerau-Levenshtein distance.
+3. **AST Optimizer & Differential Fuzzing**: Proposes rewrites for supported Python patterns, then checks them with project tests and differential fuzzing. Symbolic proof evidence is limited to supported pure control-flow rewrites; the prover does not establish correctness for arbitrary Python.
+4. **Prototype Role-Based Access Control (RBAC)**: Demonstrates role separation among developer, QA, security, and admin personas, including human approval attribution (`Approved-by:` trailers) and policy waivers.
 5. **Cryptographic Audit Ledger**: Records events in an append-only JSONL ledger with SHA-256 hash chaining and optional HMAC-SHA256 signatures. An external trusted root or key is still required to establish authenticity.
 
 ---
@@ -81,10 +81,10 @@ RepoBrain enforces organization-level email policies:
 - **Domain Whitelisting**: Organizations can configure strict corporate domains (e.g. `allowed_domains: ["acme-corp.com", "enterprise.org"]` in `repobrain.yml` or `REPOBRAIN_COMPANY_DOMAINS` environment variable).
 
 ### 4.2. Password Hashing & Cryptographic Storage
-- **Algorithm**: `PBKDF2-HMAC-SHA256` matching OWASP 2024+ security guidelines.
+- **Algorithm**: `PBKDF2-HMAC-SHA256` with 600,000 iterations in the current implementation.
 - **Iterations**: `600,000` computational rounds.
 - **Salt**: 16-byte cryptographically secure random salt generated via `secrets.token_bytes(16)` per user.
-- **Constant-Time Verification**: Verification uses `secrets.compare_digest` to prevent timing side-channel attacks.
+- **Constant-Time Comparison**: Verification uses `secrets.compare_digest` to reduce timing side-channel exposure.
 
 ### 4.3. 4-Tier Enterprise Role Hierarchy
 
@@ -148,7 +148,7 @@ Events are recorded in an append-only JSONL log. Hash chaining makes edits detec
 
 ---
 
-## 6. Complete API Reference
+## 6. Core API Reference
 
 All `/api/*` endpoints require authentication via either:
 - HTTP Header: `X-RepoBrain-Session: <token>` or `Authorization: Bearer <token>`
@@ -242,7 +242,7 @@ Runs deterministic AST refactoring on touched functions exceeding complexity thr
 - **Response (200 OK)**: `{"id": "prop-4a7b", "status": "verified", "files": [...]}`
 
 #### `POST /api/approve`
-Applies an optimization proposal and creates a signed git commit with `Approved-by:` trailer.
+Applies an optimization proposal and creates a git commit with an `Approved-by:` attribution trailer. This is not a cryptographic Git commit signature.
 - **Authorization**: Requires `admin` role (`apply_approval` permission). Returns `403 Forbidden` for other roles.
 - **Request Body**: `{"id": "prop-4a7b", "actor": "Alex Mercer <alex@acme.corp>"}`
 - **Response (200 OK)**: `{"commit": "3f8e12a...", "applied": ["shop/orders.py"]}`
@@ -266,7 +266,7 @@ Vendor-neutral pre-write validation hook for AI agents (Claude Code, Cursor MCP,
 
 ---
 
-### 6.3. Audit & Compliance Export Endpoints
+### 6.3. Audit & Evidence Export Endpoints
 
 #### `GET /api/audit`
 Returns the append-only audit trail and cryptographic signature verification status.
@@ -307,11 +307,11 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
-      - run: pip install repobrain
+      - run: pip install -r requirements.txt .
       - name: Enforce Policy
         env:
           REPOBRAIN_AUDIT_KEY: ${{ secrets.REPOBRAIN_AUDIT_KEY }}
-        run: python -m repobrain check --base origin/${{ github.base_ref }} --sarif repobrain.sarif
+        run: python -m repobrain ci --base origin/${{ github.base_ref }} --sarif repobrain.sarif
       - uses: github/codeql-action/upload-sarif@v3
         if: always()
         with: { sarif_file: repobrain.sarif }
