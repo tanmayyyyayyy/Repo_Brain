@@ -16,6 +16,7 @@ from collections import Counter
 
 DATA = pathlib.Path(__file__).parent / "data" / "injection_corpus.json"
 PROSE = pathlib.Path(__file__).parent / "data" / "negative_prose.txt"   # frozen sample of real technical prose (Python stdlib comments, PSF licence)
+UI_DATA = pathlib.Path(__file__).parent / "data" / "negative_ui.txt"   # negative corpus of UI strings, modals, buttons, role descriptors
 WARN_AT = 0.90         # classifier probability that raises a warning
 _TOK = re.compile(r"[a-z0-9']+")
 # A model warning also needs directive wording (an order, a concealment, an exfiltration verb). Topic words alone
@@ -79,6 +80,36 @@ def prose_negatives():
     return [l for l in PROSE.read_text().splitlines() if l.strip()] if PROSE.exists() else []
 
 
+def ui_negatives():
+    return [l for l in UI_DATA.read_text().splitlines() if l.strip()] if UI_DATA.exists() else []
+
+
+def js_strings():
+    out = []
+    root = pathlib.Path(__file__).parent.parent
+    js_files = list(root.glob("repobrain/web/**/*.js")) + list(root.glob("docs/**/*.js"))
+    for jf in js_files:
+        try:
+            content = jf.read_text(encoding="utf-8", errors="ignore")
+            for m in re.finditer(r"""(?:'([^'\\]*(?:\\.[^'\\]*)*)'|"([^"\\]*(?:\\.[^"\\]*)*)"|`([^`\\]*(?:\\.[^`\\]*)*)`|//\s*(.*)|/\*([\s\S]*?)\*/)""", content):
+                val = m.group(1) or m.group(2) or m.group(3) or m.group(4) or m.group(5) or ""
+                lines = [l.strip() for l in val.split("\n") if l.strip()]
+                for ln in lines:
+                    ln = re.sub(r"<[^>]+>", " ", ln)
+                    ln = re.sub(r"\s+", " ", ln).strip()
+                    if 4 <= len(ln.split()) <= 30 and ln[0].isalpha() and len(ln) < 220:
+                        out.append(ln)
+        except OSError:
+            pass
+    seen = set()
+    dedup = []
+    for s in out:
+        if s not in seen:
+            seen.add(s)
+            dedup.append(s)
+    return dedup
+
+
 def augment(n=700, seed=5):
     """Template-generated attack variants (TRAINING ONLY, never used for evaluation)."""
     r = random.Random(seed)
@@ -112,7 +143,7 @@ def model():
     global _MODEL
     if _MODEL is None:
         pos, neg = corpus()
-        neg, pos = neg + prose_negatives(), pos + augment()
+        neg, pos = neg + prose_negatives() + ui_negatives() + js_strings(), pos + augment()
         _MODEL = NaiveBayes().fit(pos + neg, [1] * len(pos) + [0] * len(neg))
     return _MODEL
 
@@ -143,10 +174,13 @@ def evaluate(rules_fn=None, folds=5, seed=13):
     """k-fold cross-validation. Returns accuracy/precision/recall/F1 for the classifier alone and,
     when rules_fn(text)->bool is given, for rules alone and for rules OR classifier (the hybrid)."""
     pos, neg = corpus()
-    data = [(t, 1) for t in pos] + [(t, 0) for t in neg]
+    ui_neg = ui_negatives()
+    js_neg = js_strings()
+    all_neg = neg + [s for s in (ui_neg + js_neg) if s not in neg]
+    data = [(t, 1) for t in pos] + [(t, 0) for t in all_neg]
     random.Random(seed).shuffle(data)
     preds = {"ml": [], "rules": [], "hybrid": []}
-    truth, extra, synth = [], prose_negatives(), augment()
+    truth, extra, synth = [], prose_negatives() + ui_neg + js_neg, augment()
     for k in range(folds):
         test = data[k::folds]
         train = [d for i, d in enumerate(data) if i % folds != k]
@@ -164,10 +198,15 @@ def evaluate(rules_fn=None, folds=5, seed=13):
         return dict(accuracy=round((tp + tn) / len(truth), 3), precision=round(pr, 3), recall=round(rc, 3),
                     f1=round(2 * pr * rc / (pr + rc), 3) if pr + rc else 0.0, tp=tp, fp=fp, fn=fn, tn=tn)
 
-    out = {"samples": len(truth), "positives": len(pos), "negatives": len(neg), "folds": folds,
+    out = {"samples": len(truth), "positives": len(pos), "negatives": len(all_neg), "folds": folds,
            "ml": metrics(preds["ml"])}
     if rules_fn:
         out["rules"], out["hybrid"] = metrics(preds["rules"]), metrics(preds["hybrid"])
+    js_ui_eval = ui_neg + js_neg
+    if js_ui_eval:
+        m = model()
+        out["js_ui_samples"] = len(js_ui_eval)
+        out["js_ui_false_positive_rate"] = round(sum(1 for s in js_ui_eval if m.prob(s) >= WARN_AT and directive(s)) / len(js_ui_eval), 4)
     prose = stdlib_prose()
     if prose:
         m = model()

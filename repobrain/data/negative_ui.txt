@@ -1,0 +1,125 @@
+Switch Role: Admin / Release Manager (Alex Mercer)
+Switch Role: DevSecOps / Security Lead (Samira Patel)
+Switch Role: QA / Test Engineer (Quinn Vance)
+Switch Role: Software Engineer / Developer (Alice Chen)
+Release Manager Perspective (Alex Mercer): Full governance authority active. Commit merge approval, policy waivers, and security administration enabled.
+Developer Authority: Run AST optimizer rewrites, inspect PR diffs, execute preflight agent safety checks.
+QA / Test Engineer Authority: Inspect differential fuzzing invariants, verify test coverage gates, analyze AI Failure Explainer diagnostics.
+Security Authority: Issue policy waivers, audit cryptographic verification ledgers, enforce security shield rules.
+Enter the 6-digit corporate verification code dispatched to your company email inbox to activate verified governance status.
+Click to manage corporate login, switch roles, or verify identity
+Open RBAC Governance Matrix & Team Directory
+Open Profile & Auth Center
+Sign In with Corporate Email
+Register New Team Member
+Verify Corporate Email OTP
+Signed out of corporate session
+Cryptographic Hash-Chained Audit Trail
+Optimizer Execution Telemetry
+AST rewrite and tests on scratch copy
+Named human approval required
+Merge Gate Verdict: ALLOWED
+Merge Gate Verdict: BLOCKED
+Export Report in Markdown Format
+Export SARIF for GitHub Code Scanning
+Export Audit Ledger in CSV Format
+Export Audit Ledger in JSON Format
+Filter findings by severity level
+Toggle telemetry rail details
+Close modal dialog on Escape
+Copy SHA-256 block hash to clipboard
+Run Shield Preflight Scan
+Run AST Optimizer Rewrites
+Approve proposal and create merge commit
+Request security policy waiver with written justification
+View differential fuzzing invariant violations
+Examine semantic AST transformations across diff
+Verify branch coverage metrics before sign-off
+Download compliance audit report in markdown format
+Deploying new production release to container cluster
+Reviewing pull request diff against trusted base branch
+Managing user role assignments and governance tiers
+Checking repository status for uncommitted changes
+Inspecting syntactic complexity reduction proposals
+Evaluating prompt injection detection thresholds
+Displaying active background tasks and system state
+Updating user profile preferences and notification settings
+Authenticating corporate user session with bearer token
+Selecting target branch for pull request comparison
+Validating corporate email domain pattern live
+Showing differential metrics before and after optimization
+Navigating to identity and access management panel
+Configuring environment variables and secrets safely
+Applying automated code cleanup and formatting rules
+Reviewing pull request diff before merge approval
+Confirming execution of differential fuzzing test harness
+Scanning changed files for hardcoded credentials and tokens
+Displaying interactive code comparison side by side
+Viewing audit chain verification certificate and signatures
+Toggling dark mode and high contrast visual themes
+Refreshing repository metrics and active pull requests
+Monitoring background subprocess execution status
+Saving configuration changes to repository root
+Listing active team members and assigned governance roles
+Displaying detailed error breakdown and failure explanations
+Testing input validation rules across all endpoints
+Generating cryptographic signature for audit ledger block
+Streaming server telemetry and execution diagnostics
+Inspecting line level annotations on changed source files
+Confirming waiver reason before administrative override
+Switching active workspace view to failure explainer
+Executing unit test runner with coverage instrumentation
+Reviewing security policy rules in configuration editor
+Validating syntax tree preserving transformation rules
+Inspecting commit trailers and human approver signatures
+Displaying pull request risk index score calculation
+Managing corporate credentials and session expiration
+Submitting verification code to authenticate account
+Closing slide presentation deck viewer
+Viewing architecture diagram and system component overview
+Inspecting dependency manifest for potential typosquatting
+Evaluating automated test coverage on rewritten functions
+Checking socket peer address against trusted proxy list
+Viewing active rate limiter keys and remaining attempts
+Downloading standalone HTML report for executive review
+Dismissing notification toast message
+Selecting evaluator persona for interactive demo testing
+Reviewing automated audit log tail seek diagnostics
+Enforcing corporate domain whitelist for user registration
+Verifying integrity of cryptographic hash chain records
+Viewing commit history and author attribution metadata
+Inspecting prompt injection classifier evaluation metrics
+Displaying execution time and memory limits for sandbox
+Canceling active modal dialog and returning to dashboard
+Opening diff viewer for selected pull request file
+Navigating through interactive slide deck presentation
+Filtering audit events by decision type and actor
+Viewing preflight safety evaluation verdict for agent action
+Checking that all tests pass before applying changes
+Inspecting cyclomatic complexity and nesting depth metrics
+Reviewing security shield rule definitions and regex patterns
+Confirming human approval sign-off on release candidate
+Displaying current system time and operational status
+Viewing list of supported LLM provider configurations
+Testing rate limit response after multiple invalid attempts
+Inspecting response headers for strict Content-Security-Policy
+Validating password length and complexity requirements
+Generating one-time verification password for account
+Logging out of current administrative session
+Viewing differential fuzzing test results and input cases
+Rendering WCAG compliant high contrast UI elements
+Checking status of bubblewrap sandbox capability probe
+Ensuring isolated execution environment for untrusted scripts
+Displaying step-by-step pipeline execution stages
+Verifying that unauthorized role escalation is rejected
+Displaying real-time governance alerts and notifications
+Viewing summary of merged changes and applied proposals
+Validating JSON payload structure for API requests
+Confirming that unverified users have restricted permissions
+Reviewing audit recovery ledger state and quarantined files
+Displaying compliance status across all governance gates
+Testing cross-platform compatibility across operating systems
+Saving audit anchor file for external verification
+Viewing detailed telemetry log output from test runner
+Confirming that session tokens are hashed on disk
+

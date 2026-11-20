@@ -11,6 +11,8 @@ LISTISH = {"items", "xs", "users", "data", "values", "rows", "lst", "lines", "wo
 DICTISH = {"d", "config", "params", "options", "mapping", "user", "item", "row", "record", "person", "order", "product", "customer"}
 
 
+HAS_ALARM = hasattr(signal, "SIGALRM") and hasattr(signal, "setitimer") and hasattr(signal, "ITIMER_REAL")
+
 class TO(Exception): pass
 def _alarm(*a): raise TO()
 
@@ -49,7 +51,8 @@ def make_gen(rng, consts):
 
 
 def outcome(fn, args):
-    signal.setitimer(signal.ITIMER_REAL, 0.25)
+    if HAS_ALARM:
+        signal.setitimer(signal.ITIMER_REAL, 0.25)
     try:
         r = fn(*args)
         return ("ok", repr(r), repr(args))
@@ -58,12 +61,14 @@ def outcome(fn, args):
     except BaseException as e:
         return ("exc", type(e).__name__, repr(args))
     finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
+        if HAS_ALARM:
+            signal.setitimer(signal.ITIMER_REAL, 0)
 
 
 def main():
     job = json.load(sys.stdin)
-    signal.signal(signal.SIGALRM, _alarm)
+    if HAS_ALARM:
+        signal.signal(signal.SIGALRM, _alarm)
     ns = []
     for key in ("old", "new"):
         g = {"__builtins__": dict(SAFE)}

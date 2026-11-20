@@ -90,7 +90,7 @@ def test_optimizer_commit_scoped_to_proposal_paths(tmp_path):
     
     # Create test repo files
     f1 = os.path.join(root, "f1.py")
-    with open(f1, "w") as f:
+    with open(f1, "w", newline="\n") as f:
         f.write("def f1():\n    return 1\n")
     gitutil.git(root, "add", "f1.py")
     gitutil.git(root, "commit", "-m", "init")

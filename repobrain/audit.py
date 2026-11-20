@@ -4,6 +4,7 @@ import hmac
 import json
 import os
 import pathlib
+import shutil
 import threading
 import time
 
@@ -106,7 +107,77 @@ class AuditLog:
     def __init__(self, home):
         self.home = str(home)
         self.path = os.path.join(self.home, "audit.jsonl")
+        self.recovery_file = os.path.join(self.home, "recovery_pending.json")
+        self._verify_cache = None
         os.makedirs(self.home, exist_ok=True)
+
+    def is_recovery_pending(self) -> bool:
+        if not os.path.exists(self.recovery_file):
+            return False
+        try:
+            with open(self.recovery_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return bool(data.get("recovery_pending", False))
+        except Exception:
+            return False
+
+    def get_recovery_info(self) -> dict:
+        if not os.path.exists(self.recovery_file):
+            return {}
+        try:
+            with open(self.recovery_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    def set_recovery_pending(self, pending: bool, quarantined_file: str = "", error: str = ""):
+        if not pending:
+            if os.path.exists(self.recovery_file):
+                try:
+                    os.remove(self.recovery_file)
+                except OSError:
+                    pass
+        else:
+            with open(self.recovery_file, "w", encoding="utf-8") as f:
+                json.dump({
+                    "recovery_pending": True,
+                    "quarantined_file": quarantined_file,
+                    "timestamp": time.time(),
+                    "error": str(error)
+                }, f)
+
+    def ack_recovery(self, actor: str) -> dict:
+        info = self.get_recovery_info()
+        quarantined = info.get("quarantined_file", "unknown")
+        self.set_recovery_pending(False)
+        self.append("audit-recovery-ack", actor, "ACKNOWLEDGED",
+                    f"Administrator acknowledged recovery for {quarantined}")
+        return {"ok": True, "quarantined_file": quarantined, "acknowledged_by": actor}
+
+    def _quarantine_and_start_recovery(self, err: Exception):
+        now_ts = int(time.time() * 1000)
+        quarantine_fn = f"audit.corrupt.{now_ts}"
+        quarantine_target = os.path.join(self.home, quarantine_fn)
+        if os.path.exists(self.path):
+            shutil.move(self.path, quarantine_target)
+        self.set_recovery_pending(True, quarantine_fn, str(err))
+
+        rec = {
+            "seq": 1,
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "event": "audit-recovery",
+            "actor": "system",
+            "decision": "RECOVERY",
+            "detail": f"Corrupt tail quarantined to {quarantine_fn}: {err}",
+            "prev": GENESIS,
+            "quarantined_file": quarantine_fn
+        }
+        rec["hash"] = _hash(rec)
+        if _key():
+            rec["sig"] = _sig(rec["hash"])
+        with open(self.path, "w", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        return rec
 
     def entries(self):
         if not os.path.exists(self.path):
@@ -139,7 +210,13 @@ class AuditLog:
                         pass
                 except OSError:
                     pass
-                last_seq, prev = _tail_last_record(self.path)
+                try:
+                    last_seq, prev = _tail_last_record(self.path)
+                except AuditCorruptionError as err:
+                    recovery_rec = self._quarantine_and_start_recovery(err)
+                    last_seq = recovery_rec["seq"]
+                    prev = recovery_rec["hash"]
+
                 rec = {"seq": last_seq + 1, "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "event": event,
                        "actor": actor, "decision": decision, "detail": detail, "prev": prev, **extra}
                 rec["hash"] = _hash(rec)
@@ -164,8 +241,59 @@ class AuditLog:
                     except (ImportError, OSError):
                         pass
 
-    def verify(self, expect_head=None):
-        return verify_entries(self.entries(), expect_head)
+    def verify(self, expect_head=None, cached=False):
+        if self.is_recovery_pending():
+            info = self.get_recovery_info()
+            quarantined = info.get("quarantined_file", "corrupt file")
+            return {
+                "ok": False,
+                "count": len(self.entries()),
+                "head": None,
+                "broken_at": 1,
+                "reason": f"Audit ledger recovery pending acknowledgment (quarantined: {quarantined})",
+                "recovery_pending": True,
+                "quarantined_file": quarantined
+            }
+        es = self.entries()
+        stat = os.stat(self.path) if os.path.exists(self.path) else None
+        mtime = getattr(stat, "st_mtime_ns", getattr(stat, "st_mtime", 0)) if stat else 0
+        size = getattr(stat, "st_size", 0) if stat else 0
+        key = _key()
+        if cached and not expect_head and self._verify_cache:
+            c = self._verify_cache
+            if c.get("mtime") == mtime and c.get("size") == size and c.get("key") == key:
+                cached_res = dict(c["result"])
+                cached_res["cached"] = True
+                return cached_res
+
+        res = verify_entries(es, expect_head)
+        if cached and not expect_head and res.get("ok"):
+            self._verify_cache = {
+                "mtime": mtime,
+                "size": size,
+                "key": key,
+                "result": res
+            }
+        return res
+
+    def merkle_tree(self):
+        from . import merkle
+        return merkle.MerkleTree(self.entries())
+
+    def merkle_root(self):
+        return self.merkle_tree().root
+
+    def merkle_proof(self, seq_or_index):
+        from . import merkle
+        entries = self.entries()
+        idx = None
+        for i, e in enumerate(entries):
+            if e.get("seq") == seq_or_index or i == seq_or_index:
+                idx = i
+                break
+        if idx is None:
+            raise KeyError(f"No audit entry with sequence/index {seq_or_index}")
+        return self.merkle_tree().audit_proof(idx)
 
 
 def verify_entries(es, expect_head=None):
@@ -216,8 +344,10 @@ def verify_entries(es, expect_head=None):
                         "reason": "head hash differs from the anchored value (log truncated or rewritten)",
                         "signed": hmac_signed, "hmac_signed": hmac_signed}
 
+    from . import merkle
+    tree = merkle.MerkleTree(es)
     return {"ok": True, "count": len(es), "head": prev, "broken_at": None, "reason": "",
-            "signed": hmac_signed, "hmac_signed": hmac_signed}
+            "signed": hmac_signed, "hmac_signed": hmac_signed, "merkle_root": tree.root}
 
 
 def simulate_tamper(es):

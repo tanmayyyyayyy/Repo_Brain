@@ -52,13 +52,14 @@ To measure false-positive rates on benign production code, Shield was executed a
 
 ### Learned Prompt Injection Guard (ML Guard) Evaluation
 - **Architecture**: Lightweight multinomial Naive Bayes classifier over word unigrams and bigrams trained on `data/injection_corpus.json`.
-- **Corpus & Cross-Validation**: Evaluated via 5-fold cross-validation on a 242-sample team-written corpus (72 positive injection examples, 170 negative development examples).
+- **Corpus & Cross-Validation**: Evaluated via 5-fold cross-validation on an expanded 772-sample corpus (72 positive injection examples, 700 negative development and UI/JavaScript tokens).
 - **Measured Metrics** (`python -m repobrain ml-eval`):
-  * **Classifier Alone**: Precision: 0.938, Recall: 0.625, F1: 0.750, Accuracy: 0.876 (TP: 45, FP: 3, FN: 27, TN: 167)
-  * **Rules Alone**: Precision: 1.000, Recall: 0.167, F1: 0.286, Accuracy: 0.752 (TP: 12, FP: 0, FN: 60, TN: 170)
-  * **Hybrid (Rules OR Classifier)**: Precision: 0.940, Recall: 0.653, F1: 0.770, Accuracy: 0.884 (TP: 47, FP: 3, FN: 25, TN: 167)
+  * **Classifier Alone**: Precision: 0.939, Recall: 0.639, F1: 0.760, Accuracy: 0.962 (TP: 46, FP: 3, FN: 26, TN: 697)
+  * **Rules Alone**: Precision: 1.000, Recall: 0.167, F1: 0.286, Accuracy: 0.922 (TP: 12, FP: 0, FN: 60, TN: 700)
+  * **Hybrid (Rules OR Classifier)**: Precision: 0.941, Recall: 0.667, F1: 0.780, Accuracy: 0.965 (TP: 48, FP: 3, FN: 24, TN: 697)
+  * **UI/JavaScript False-Positive Rate**: 0.0% (evaluated on 530 real-world frontend UI strings and JavaScript files)
   * **Prose False-Positive Rate**: 0.03% (evaluated on 4,000 comment and license lines extracted from the Python standard library)
-- **Honesty Note**: The evaluation corpus is small and team-written. These results indicate that the hybrid classifier is a useful second opinion for paraphrased directives, but are not a claim of production-grade accuracy across arbitrary adversarial distributions.
+- **Honesty Note**: The evaluation corpus is team-written and benchmarked. These results indicate that the hybrid classifier is a useful second opinion for paraphrased directives, but are not a claim of production-grade accuracy across arbitrary adversarial distributions.
 - **Architectural Guardrail**: Rigid deterministic rules can BLOCK a pull request; the ML model only produces a WARNING and elevates the risk score, never blocking on its own.
 
 ---

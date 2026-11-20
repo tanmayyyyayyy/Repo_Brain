@@ -1,38 +1,38 @@
 # RepoBrain — Comprehensive Technical Documentation
-## System Architecture, Technology Stack, APIs, and Enterprise Integrations
-### Final Build & Innovation Showcase (Round 3 / Top 150 Finals)
+## System Architecture, Technology Stack, APIs, and Integrations
+### Final Build & Innovation Showcase
 
 ---
 
 ## 1. Executive Summary & Value Proposition
 
-**RepoBrain** is an enterprise-grade, vendor-neutral safety, complexity optimization, and cryptographic audit governance system for repositories where AI coding agents (Claude Code, Cursor, Copilot Workspace, Devin, Aider) and human developers collaborate.
+**RepoBrain** is a vendor-neutral prototype for safety checks, complexity cleanup, human approval, and audit evidence in repositories changed by coding agents and people.
 
-As autonomous AI agents generate thousands of lines of code per sprint, software engineering organizations face an unprecedented crisis of **governance, supply-chain contamination, architectural erosion, and audit compliance**. Existing linting tools (Ruff, SonarQube) only post non-blocking advisory comments *after* code is committed, and traditional secret scanners fail to detect concatenated or base64-encoded credentials.
+AI-authored changes can include secrets, risky commands, prompt injection, protected-path edits, or hard-to-maintain code. RepoBrain combines deterministic review rules, a scoped Python optimizer, human approval, and tamper-evident audit records. Its results depend on the repository policy, tests, and deployment controls.
 
-RepoBrain solves this with a **zero-trust, multi-tiered defense architecture**:
+RepoBrain combines several checks in a **defense-in-depth review flow**:
 1. **Preflight Agent Safety Interceptor**: Stops autonomous agents *before* they write to disk or commit to version control.
-2. **Shield Engine**: Protects critical workflows, normalizes and unmasks multi-fragment secrets, detects multi-line prompt injections, and blocks typosquatted dependencies using Damerau-Levenshtein distance.
-3. **Verified AST Optimizer & Differential Fuzzing**: Automatically refactors overly complex code and verifies correctness by running tests in isolated scratch sandboxes with differential invariant fuzzing.
-4. **Enterprise Role-Based Access Control (RBAC)**: Separates developer authoring, QA testing, and security analysis from human code merge approvals (`Approved-by:` trailers) and policy waivers.
-5. **Cryptographic Audit Ledger**: Records every event in an append-only JSONL ledger hash-chained with SHA-256 and signed via HMAC-SHA256, proving tamper-resistance to compliance auditors.
+2. **Shield Engine**: Checks protected paths, detects and masks secret findings, scans multi-line prompt-injection patterns, and flags suspicious dependency names using Damerau-Levenshtein distance.
+3. **AST Optimizer & Differential Fuzzing**: Proposes rewrites for supported Python patterns, then checks them with project tests and differential fuzzing. Symbolic proof evidence is limited to supported pure control-flow rewrites; the prover does not establish correctness for arbitrary Python.
+4. **Prototype Role-Based Access Control (RBAC)**: Demonstrates role separation among developer, QA, security, and admin personas, including human approval attribution (`Approved-by:` trailers) and policy waivers.
+5. **Cryptographic Audit Ledger**: Records events in an append-only JSONL ledger with SHA-256 hash chaining and optional HMAC-SHA256 signatures. An external trusted root or key is still required to establish authenticity.
 
 ---
 
 ## 2. Technology Stack & Architectural Philosophy
 
-RepoBrain is engineered with a **minimal-dependency, high-reliability, zero-telemetry philosophy**. It runs completely offline without sending code or metadata to third-party cloud servers.
+RepoBrain uses a small runtime dependency set. Its deterministic checks run locally; external model calls are optional and require explicit configuration. Do not enable the external model tier when code must remain offline.
 
-| Component | Technology / Standards | Rationale & Enterprise Benefits |
+| Component | Technology / Standards | Implementation notes |
 |---|---|---|
 | **Runtime Language** | Python 3.10+ (Standard Library) | Zero deployment friction, cross-platform portability across Linux, macOS, and Windows. |
-| **Parsing & Ast Engine** | Python `ast`, `tokeneater`, `re` | Deterministic, semantic-preserving code inspection and complexity quantification without external compilers. |
-| **Cryptography & Hashing** | Python `hashlib`, `hmac`, `secrets` | FIPS-compliant PBKDF2-HMAC-SHA256 password hashing (600,000 iterations), SHA-256 hash chains, HMAC message authentication. |
+| **Parsing & AST Engine** | Python `ast`, `tokenize`, `re` | Deterministic, semantic-preserving code inspection and complexity quantification without external compilers. |
+| **Cryptography & Hashing** | Python `hashlib`, `hmac`, `secrets` | PBKDF2-HMAC-SHA256 password hashing (600,000 iterations in the current implementation), SHA-256 hash chains, and optional HMAC message authentication. No FIPS validation is claimed. |
 | **Configuration** | PyYAML (`repobrain.yml`) | Industry-standard declarative policy schema versioned directly within trusted base branches. |
-| **Embedded Console Server** | `http.server.ThreadingHTTPServer` | High-performance multi-threaded HTTP server with zero external web framework dependencies (no FastAPI/Flask/Django bloat). |
+| **Embedded Console Server** | `http.server.ThreadingHTTPServer` | Built-in threaded HTTP server; the demo console does not require a separate web framework. |
 | **Frontend Mission Control** | Vanilla Modern JavaScript (ES6+), HTML5, CSS3 | Single-file, zero-build dashboard adhering to WCAG 2.1 AA accessibility standards, responsive from mobile (360px) to 4K displays. |
-| **Testing & Quality Assurance** | `pytest`, `playwright` | Comprehensive unit, integration, security audit, and end-to-end browser tests (137 passed tests). |
-| **Containerization** | Docker, multi-stage Alpine / Python image | Production-ready container image for on-premise deployment and Kubernetes orchestration. |
+| **Testing & Quality Assurance** | `pytest`, `playwright` | Unit, integration, security, and browser checks. The current local run completed with 223 passed and 1 skipped. |
+| **Containerization** | Docker, Alpine / Python image | Container packaging is provided; hardening and operational readiness depend on the deployment environment. |
 
 ---
 
@@ -51,7 +51,7 @@ RepoBrain is engineered with a **minimal-dependency, high-reliability, zero-tele
 │   ┌───────────────────────────┐    ┌───────────────────────────┐    ┌───────────────────────────┐    ┌──────────────────────┐   │
 │   │     1. SHIELD ENGINE      │    │    2. COMPLEXITY GATE     │    │   3. VERIFIED OPTIMIZER   │    │  4. HUMAN APPROVAL   │   │
 │   │  • Protected Paths        │───►│  • Cyclomatic CC <= 10    │───►│  • Semantic AST Rewrites  │───►│  • Named Human Gate  │   │
-│   │  • Unmasked Secrets       │    │  • Cognitive Comp <= 15   │    │  • Isolated Test Runner   │    │  • Git Signed Commit │   │
+│   │  • Unmasked Secrets       │    │  • Cognitive Comp <= 15   │    │  • Isolated Test Runner   │    │  • Approval Trailer │   │
 │   │  • Multi-line Injections  │    │  • Nesting Depth <= 3     │    │  • Differential Fuzzing   │    │  • 'Approved-by:'    │   │
 │   │  • Typo Dependency Guard  │    │  • Touched Functions Only │    │  • Invariant Verification │    │  • Release Manager   │   │
 │   └─────────────┬─────────────┘    └─────────────┬─────────────┘    └─────────────┬─────────────┘    └──────────┬───────────┘   │
@@ -71,9 +71,9 @@ RepoBrain is engineered with a **minimal-dependency, high-reliability, zero-tele
 
 ---
 
-## 4. Enterprise Authentication & Role-Based Access Control (RBAC)
+## 4. Authentication & Role-Based Access Control (RBAC)
 
-RepoBrain implements enterprise-grade identity governance designed for SOC 2 Type II, ISO 27001, and NIST CSF compliance.
+RepoBrain includes prototype authentication and role separation for demonstrating approval workflows. These controls do not certify a deployment against SOC 2, ISO 27001, or NIST requirements.
 
 ### 4.1. Corporate Email Domain Validation
 RepoBrain enforces organization-level email policies:
@@ -81,10 +81,10 @@ RepoBrain enforces organization-level email policies:
 - **Domain Whitelisting**: Organizations can configure strict corporate domains (e.g. `allowed_domains: ["acme-corp.com", "enterprise.org"]` in `repobrain.yml` or `REPOBRAIN_COMPANY_DOMAINS` environment variable).
 
 ### 4.2. Password Hashing & Cryptographic Storage
-- **Algorithm**: `PBKDF2-HMAC-SHA256` matching OWASP 2024+ security guidelines.
+- **Algorithm**: `PBKDF2-HMAC-SHA256` with 600,000 iterations in the current implementation.
 - **Iterations**: `600,000` computational rounds.
 - **Salt**: 16-byte cryptographically secure random salt generated via `secrets.token_bytes(16)` per user.
-- **Constant-Time Verification**: Verification uses `secrets.compare_digest` to prevent timing side-channel attacks.
+- **Constant-Time Comparison**: Verification uses `secrets.compare_digest` to reduce timing side-channel exposure.
 
 ### 4.3. 4-Tier Enterprise Role Hierarchy
 
@@ -121,8 +121,8 @@ RepoBrain enforces organization-level email policies:
 ### 5.1. Shield Engine (`repobrain/shield.py`)
 The Shield engine inspects incoming pull request diffs and file writes before they reach the repository:
 - **Path Guard**: Blocks changes to sensitive infrastructure files (`.github/workflows/`, `secrets/`, `credentials/`, `repobrain.yml`) when authored by an AI actor.
-- **Secret Scanner**: Identifies high-entropy strings, AWS access keys (`AKIA...`), GitHub Personal Access Tokens (`ghp_...`), private keys (`-----BEGIN PRIVATE KEY-----`), and tokens split across string concatenations (`"AKIA" + "..."`) or encoded in Base64.
-- **Prompt Injection Detector**: Multi-line sliding-window scanner detecting delimiter manipulation (`<system>`, `[INST]`), instructions override (`ignore all previous instructions`), and jailbreak attempts.
+- **Secret Scanner**: Identifies high-entropy strings, AWS access keys (`AKIA...`), GitHub Personal Access Tokens (`ghp_...`), private cryptographic key headers, and tokens split across string concatenations (`"AKIA" + "..."`) or encoded in Base64.
+- **Prompt Injection Detector**: Multi-line sliding-window scanner detecting delimiter manipulation (`<system>`, `[INST]`), agent instruction-override directives, and jailbreak attempts.
 - **Dependency Typo-Squatting Guard**: Analyzes `requirements.txt`, `pyproject.toml`, and `package.json` against a curated dataset of popular packages using Damerau-Levenshtein edit distance (distance ≤ 2 flags suspicious packages).
 
 ### 5.2. AST Complexity Gate (`repobrain/metrics.py`)
@@ -139,7 +139,7 @@ When functions exceed complexity limits, the Optimizer automatically generates c
 - **Mandatory Human Approval**: RepoBrain adheres to `approval: human`. Optimization proposals require explicit approval by an authorized Release Manager, committing the change with an `Approved-by: Human Name <email>` git trailer.
 
 ### 5.4. Cryptographic Audit Ledger (`repobrain/audit.py`)
-All events are recorded into an immutable, append-only JSONL log:
+Events are recorded in an append-only JSONL log. Hash chaining makes edits detectable when checked against a trusted head or key:
 - **Hash Chaining**: Each record includes sequence number, UTC timestamp, event type, actor identity, decision, detail, and the SHA-256 hash of the previous record:
   $$H_i = \text{SHA256}(\text{JSON}(R_i \setminus \{\text{hash}, \text{sig}\}) \parallel H_{i-1})$$
 - **HMAC Signatures**: When `REPOBRAIN_AUDIT_KEY` is provided, every block receives an HMAC-SHA256 signature:
@@ -148,7 +148,7 @@ All events are recorded into an immutable, append-only JSONL log:
 
 ---
 
-## 6. Complete API Reference
+## 6. Core API Reference
 
 All `/api/*` endpoints require authentication via either:
 - HTTP Header: `X-RepoBrain-Session: <token>` or `Authorization: Bearer <token>`
@@ -242,7 +242,7 @@ Runs deterministic AST refactoring on touched functions exceeding complexity thr
 - **Response (200 OK)**: `{"id": "prop-4a7b", "status": "verified", "files": [...]}`
 
 #### `POST /api/approve`
-Applies an optimization proposal and creates a signed git commit with `Approved-by:` trailer.
+Applies an optimization proposal and creates a git commit with an `Approved-by:` attribution trailer. This is not a cryptographic Git commit signature.
 - **Authorization**: Requires `admin` role (`apply_approval` permission). Returns `403 Forbidden` for other roles.
 - **Request Body**: `{"id": "prop-4a7b", "actor": "Alex Mercer <alex@acme.corp>"}`
 - **Response (200 OK)**: `{"commit": "3f8e12a...", "applied": ["shop/orders.py"]}`
@@ -266,7 +266,7 @@ Vendor-neutral pre-write validation hook for AI agents (Claude Code, Cursor MCP,
 
 ---
 
-### 6.3. Audit & Compliance Export Endpoints
+### 6.3. Audit & Evidence Export Endpoints
 
 #### `GET /api/audit`
 Returns the append-only audit trail and cryptographic signature verification status.
@@ -278,11 +278,11 @@ Simulates a real-world adversarial ledger alteration in memory, demonstrating ex
 Exports all findings in standard OASIS SARIF v2.1.0 format for direct ingestion into GitHub Code Scanning and enterprise SIEM tools.
 
 #### `GET /api/export?fmt=csv`
-Exports the complete HMAC audit ledger in CSV format for compliance reporting.
+Exports the audit ledger in CSV format for review and evidence collection; this export does not itself establish compliance.
 
 ---
 
-## 7. Enterprise Security Hardening & Zero-Trust Controls
+## 7. Security Controls
 
 1. **DNS-Rebinding Protection**: Validates the `Host` and `X-Forwarded-Host` headers against localhost and explicitly configured domains in `REPOBRAIN_ALLOWED_HOSTS`.
 2. **Strict CSRF Defense**: All state-modifying endpoints (`POST`) require `Content-Type: application/json` and `X-RepoBrain: 1` verification, rejecting unauthorized cross-site requests.
@@ -307,11 +307,11 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
-      - run: pip install repobrain
+      - run: pip install -r requirements.txt .
       - name: Enforce Policy
         env:
           REPOBRAIN_AUDIT_KEY: ${{ secrets.REPOBRAIN_AUDIT_KEY }}
-        run: python -m repobrain check --base origin/${{ github.base_ref }} --sarif repobrain.sarif
+        run: python -m repobrain ci --base origin/${{ github.base_ref }} --sarif repobrain.sarif
       - uses: github/codeql-action/upload-sarif@v3
         if: always()
         with: { sarif_file: repobrain.sarif }

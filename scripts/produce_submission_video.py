@@ -27,10 +27,9 @@ ROOT = Path(__file__).resolve().parent.parent
 FFMPEG = "/opt/homebrew/bin/ffmpeg"
 FFPROBE = "/opt/homebrew/bin/ffprobe"
 VOICE = "Daniel"
-VOICE_RATE = "184"
+VOICE_RATE = "165"
 
 WORK = Path("/tmp/repobrain_video_prod")
-OUT_DOWNLOADS = Path.home() / "Downloads" / "repobrain_demo_edited.mp4"
 OUT_REPO = ROOT / "docs" / "demo" / "repobrain_demo_edited.mp4"
 
 
@@ -166,7 +165,7 @@ def make_problem_intro_slide(out_png):
     )
     draw.text(
         (175, 692),
-        "Vendor-neutral safety layer • Python stdlib + PyYAML runtime • 124 tests passing • Zero external runtime bloat",
+        "Python stdlib + PyYAML • 223 tests passed, 1 skipped • seeded demo results are run-specific",
         font=FONTS["body"], fill=(203, 213, 225, 255),
     )
 
@@ -209,6 +208,74 @@ def make_agent_refusal_slide(out_png, preflight_json, mcp_json):
     return out_png
 
 
+def make_team_intro_slide(out_png):
+    im = Image.new("RGBA", (1920, 1080), (8, 12, 18, 255))
+    draw = ImageDraw.Draw(im)
+    for gx in range(0, 1920, 120):
+        draw.line([(gx, 0), (gx, 1080)], fill=(20, 28, 42, 255), width=1)
+    for gy in range(0, 1080, 90):
+        draw.line([(0, gy), (1920, gy)], fill=(20, 28, 42, 255), width=1)
+
+    draw_pill(draw, 140, 55, "CODEQUEST 2026 // FINAL BUILD & INNOVATION SHOWCASE", (56, 189, 248), (16, 32, 54))
+
+    draw.text((140, 115), "RepoBrain: Autonomous AI Agent PR Governance", font=FONTS["h1"], fill=(248, 250, 252, 255))
+    draw.text(
+        (140, 180),
+        "Deterministic policy enforcement, verified AST refactoring, and tamper-evident audit evidence.",
+        font=FONTS["h2"], fill=(148, 163, 184, 255),
+    )
+
+    cw, ch, gap = 790, 420, 40
+    sx, sy = 140, 245
+
+    # Card 1: Tanmay Jain
+    cx1 = sx
+    draw.rounded_rectangle([cx1, sy, cx1 + cw, sy + ch], radius=16, fill=(17, 24, 36, 255), outline=(56, 189, 248, 255), width=2)
+    draw_pill(draw, cx1 + 32, sy + 26, "SYSTEMS & SECURITY ARCHITECT", (56, 189, 248), (14, 36, 52))
+    draw.text((cx1 + 32, sy + 82), "Tanmay Jain", font=FONTS["h1"], fill=(248, 250, 252, 255))
+    bullets1 = [
+        "• Core Governance Engine & Base-Branch Policy Isolation",
+        "• Intra-Procedural Taint Analysis (CWE-78, CWE-95, CWE-22)",
+        "• Symbolic AST Equivalence Prover & RFC-6962 Merkle Tree",
+        "• CLI Hooks, MCP Server Preflight, & Cryptographic Receipts",
+    ]
+    by = sy + 162
+    for b in bullets1:
+        draw.text((cx1 + 32, by), b, font=FONTS["body"], fill=(203, 213, 225, 255))
+        by += 36
+
+    # Card 2: Saanchi Jain
+    cx2 = sx + cw + gap
+    draw.rounded_rectangle([cx2, sy, cx2 + cw, sy + ch], radius=16, fill=(17, 24, 36, 255), outline=(52, 211, 153, 255), width=2)
+    draw_pill(draw, cx2 + 32, sy + 26, "AI GOVERNANCE & PRODUCT LEAD", (52, 211, 153), (14, 38, 32))
+    draw.text((cx2 + 32, sy + 82), "Saanchi Jain", font=FONTS["h1"], fill=(248, 250, 252, 255))
+    bullets2 = [
+        "• AI Coding Agent Risk Modeling & Policy Specification",
+        "• Flight Recorder Mission Control UI/UX (WCAG 2.1 AA Compliant)",
+        "• Named Human Approval Enforcement & Developer Workflow",
+        "• Differential Fuzzing Benchmarks & Compliance Documentation",
+    ]
+    by = sy + 162
+    for b in bullets2:
+        draw.text((cx2 + 32, by), b, font=FONTS["body"], fill=(203, 213, 225, 255))
+        by += 36
+
+    draw.rounded_rectangle([140, 700, 1780, 785], radius=14, fill=(14, 32, 34, 255), outline=(52, 211, 153, 255), width=2)
+    draw.text(
+        (175, 715),
+        "Full-Stack Solution: Zero External Runtime Dependencies • 223 Passing Tests • Open Source (MIT)",
+        font=FONTS["h2"], fill=(52, 211, 153, 255),
+    )
+    draw.text(
+        (175, 750),
+        "Evaluation Scope: Public GitHub PRs + Zero-Install Live Web Console (Scenario A through E)",
+        font=FONTS["body"], fill=(203, 213, 225, 255),
+    )
+
+    im.save(out_png)
+    return out_png
+
+
 def make_outro_slide(out_png):
     im = Image.new("RGBA", (1920, 1080), (8, 12, 18, 255))
     draw = ImageDraw.Draw(im)
@@ -217,30 +284,45 @@ def make_outro_slide(out_png):
     for gy in range(0, 1080, 90):
         draw.line([(0, gy), (1920, gy)], fill=(20, 28, 42, 255), width=1)
 
-    cx, cy, cw, ch = 240, 115, 1440, 670
+    cx, cy, cw, ch = 180, 50, 1560, 780
     draw.rounded_rectangle([cx, cy, cx + cw, cy + ch], radius=24, fill=(14, 19, 27, 255), outline=(56, 189, 248, 255), width=2)
 
-    draw_pill(draw, cx + 520, cy + 48, "PROTOTYPE READY • OPEN SOURCE (MIT)", (52, 211, 153), (14, 38, 32))
+    draw_pill(draw, cx + 460, cy + 28, "CODEQUEST 2026 // PROTOTYPE READY • OPEN SOURCE (MIT)", (52, 211, 153), (14, 38, 32))
 
-    draw.text((cx + 575, cy + 120), "RepoBrain", font=FONTS["h1"], fill=(248, 250, 252, 255))
+    draw.text((cx + 600, cy + 82), "RepoBrain", font=FONTS["h1"], fill=(248, 250, 252, 255))
     draw.text(
-        (cx + 145, cy + 200),
-        "Vendor-neutral safety, AST cleanup, and HMAC-signed audit ledger for repos touched by AI.",
+        (cx + 140, cy + 148),
+        "Vendor-neutral safety, verified AST cleanup, and HMAC-signed audit ledger for repos touched by AI.",
         font=FONTS["h2"], fill=(56, 189, 248, 255),
     )
 
+    # Team members section
+    tx, ty, tw, th = cx + 60, cy + 205, cw - 120, 155
+    draw.rounded_rectangle([tx, ty, tx + tw, ty + th], radius=14, fill=(20, 28, 40, 255), outline=(56, 189, 248, 255), width=1)
+    draw.text((tx + 25, ty + 16), "TEAM REPOBRAIN", font=FONTS["badge"], fill=(56, 189, 248, 255))
+
+    # Tanmay
+    draw.text((tx + 25, ty + 50), "Tanmay Jain", font=FONTS["h2"], fill=(248, 250, 252, 255))
+    draw.text((tx + 25, ty + 90), "Systems & Security Architect", font=FONTS["body"], fill=(56, 189, 248, 255))
+    draw.text((tx + 25, ty + 120), "Core Engine, Taint Analysis, Prover & Merkle Audit", font=FONTS["mono_sm"], fill=(203, 213, 225, 255))
+
+    # Saanchi
+    draw.text((tx + 740, ty + 50), "Saanchi Jain", font=FONTS["h2"], fill=(248, 250, 252, 255))
+    draw.text((tx + 740, ty + 90), "AI Governance & Product Lead", font=FONTS["body"], fill=(52, 211, 153, 255))
+    draw.text((tx + 740, ty + 120), "Policy Engine, Mission Control UI/UX, Compliance", font=FONTS["mono_sm"], fill=(203, 213, 225, 255))
+
     stats = [
         "• 21 commits / 14,500 diff lines evaluated (0 runtime FPs) & 51,781 OSS LoC scanned (0 FPs)",
-        "• 124 automated pytest + Playwright UI & security checks passing",
-        "• Try in 3 commands:  git clone ... && pip install -r requirements.txt && python server.py",
+        "• 223 passed, 1 skipped in the test suite across Linux, macOS, and Windows runners",
+        "• 3-Command Local Run:  git clone ... && pip install -r requirements.txt && python server.py",
     ]
-    sy = cy + 290
+    sy = cy + 390
     for s in stats:
-        draw.text((cx + 150, sy), s, font=FONTS["body"], fill=(226, 232, 240, 255))
-        sy += 50
+        draw.text((cx + 80, sy), s, font=FONTS["body"], fill=(226, 232, 240, 255))
+        sy += 38
 
-    draw.rounded_rectangle([cx + 280, cy + 505, cx + 1160, cy + 575], radius=12, fill=(19, 28, 42, 255), outline=(56, 189, 248, 255), width=2)
-    draw.text((cx + 345, cy + 527), "https://github.com/tanmayyyyayyy/Repo_Brain", font=FONTS["h2"], fill=(248, 250, 252, 255))
+    draw.rounded_rectangle([cx + 260, cy + 540, cx + 1300, cy + 610], radius=12, fill=(19, 28, 42, 255), outline=(56, 189, 248, 255), width=2)
+    draw.text((cx + 360, cy + 562), "https://github.com/tanmayyyyayyy/Repo_Brain", font=FONTS["h2"], fill=(248, 250, 252, 255))
 
     im.save(out_png)
     return out_png
@@ -346,7 +428,10 @@ def capture_playwright_clips(durations):
             s5_trim = max(0.0, time.monotonic() - t0)
             page5.wait_for_timeout(3500)
             page5.locator("button:has-text('Run optimizer')").click()
-            page5.wait_for_selector(".pill:has-text('verified')", timeout=20000)
+            page5.wait_for_function(
+                "() => (document.querySelector('#pipeOptBadge')?.innerText || '').toLowerCase().includes('verified')",
+                timeout=20000,
+            )
             page5.wait_for_timeout(3500)
             page5.evaluate("window.scrollTo({top: 420, behavior: 'smooth'})")
             page5.wait_for_timeout(3500)
@@ -445,39 +530,44 @@ def main():
     print("1/4 Generating voiceover audio & large captions...")
     scenes = [
         (
+            "s0", "CODEQUEST 2026 // REPOBRAIN", (56, 189, 248),
+            "Welcome to the final build showcase for RepoBrain, built for CodeQuest 2026 by Tanmay Jain, Systems and Security Architect, and Saanchi Jain, AI Governance and Product Lead. RepoBrain is a vendor-neutral governance platform that stops autonomous AI agents from introducing silent vulnerabilities, complexity debt, or untracked changes into production repositories.",
+            18.0,
+        ),
+        (
             "s1", "PROBLEM & SOLUTION", (248, 113, 113),
-            "Autonomous coding agents move fast, but unreviewed diffs leak hardcoded or split secrets, embed hidden prompt injections, and spike complexity. Advisory linters only warn. RepoBrain sits between AI agents and production: enforcing base-branch policy, simplifying code with your tests as judge, and anchoring every action in an HMAC-signed chain.",
-            10.0,
+            "AI coding agents can open useful pull requests quickly. They can also expose credentials, alter the workflow meant to review them, or add code that humans struggle to maintain. Linters often report problems without enforcing a merge decision. RepoBrain applies repository policy from the trusted base, reviews proposed changes, helps simplify supported Python code, and records human approval and audit evidence. I will show a blocked change, a tested rewrite, and how the seeded demo detects tampering.",
+            30.0,
         ),
         (
             "s2", "AGENT PREFLIGHT REFUSAL", (248, 113, 113),
-            "Watch RepoBrain stop an agent before it writes to disk. When demo-agent tries modifying CI workflows or injecting risky curl commands, both our CLI hook and MCP server return BLOCK immediately, refusing the write with exit status one.",
-            14.0,
+            "Before a write reaches disk, an agent can ask RepoBrain's preflight interface to check the target path and proposed content. The CLI and MCP server use the same policy decisions. Here, an agent attempts to modify the protected CI workflow and request an unsafe shell command. RepoBrain rejects the requests before the write. The demo uses a placeholder payload; it does not execute a real credential or shell command.",
+            26.0,
         ),
         (
             "s3", "SHIELD & DIFF INSPECTOR", (56, 189, 248),
-            "In Mission Control, Scenario A flags three blocking violations from demo-agent: a protected workflow edit, a hidden HTML prompt injection, and a placeholder AWS key. Clicking the workflow opens our single-pass diff inspector with clean highlighting and inline annotations.",
-            18.0,
+            "Scenario A is a seeded risky pull request. RepoBrain blocks three findings: a credential in shop slash config dot py, an edit to the protected CI workflow, and prompt injection hidden in an HTML comment. The finding list gives the rule and file location, while the diff inspector shows the changed lines. These are repeatable demo fixtures, not a claim that every secret scanner or repository will behave the same way.",
+            34.0,
         ),
         (
             "s4", "LIVE GITHUB PR PROOF", (56, 189, 248),
-            "On a real public GitHub repository, RepoBrain runs inside GitHub Actions, loads policy strictly from the trusted base branch, evaluates pull request diffs, and posts an actionable sticky comment directly in the PR timeline.",
-            12.0,
+            "This captured pull request shows the GitHub Actions integration on RepoBrain's public repository. The check reports a blocked verdict and places the findings in the pull request conversation. In deployment, keep the policy on the trusted base branch and require the RepoBrain status check through branch protection. The screenshot is evidence from that run; the local seeded demo remains the fallback if the network is slow.",
+            19.0,
         ),
         (
             "s5", "VERIFIED AST OPTIMIZER", (52, 211, 153),
-            "Switching to Scenario B, refactor-bot introduced deeply nested functions exceeding complexity limits. Clicking Run Optimizer simplifies nesting using Python AST rules, passes twenty six unit tests on a scratch copy, verifies a thousand fuzzed inputs with zero divergences, and awaits Priya Sharma's named approval before flipping the verdict to allowed.",
-            22.0,
+            "Scenario B is a separate seeded pull request with a Python function that exceeds the configured complexity limits. RepoBrain proposes deterministic AST rewrites, then runs the repository's targeted tests on a scratch copy and differentially checks one thousand generated inputs with zero divergences in this run. Cognitive complexity moves from fifteen to ten, nesting depth from four to three, and the function from sixty nine lines to forty seven. The symbolic prover covers only supported pure control flow, so we present its proof evidence together with tests and fuzzing rather than claim a proof of arbitrary Python behavior. The optimizer waits for Priya Sharma's named approval, recorded in the commit trailer.",
+            42.0,
         ),
         (
             "s6", "HMAC AUDIT & TAMPER CHECK", (251, 191, 36),
-            "Every decision is written to an append-only ledger signed with HMAC SHA-256. Notice the verified HMAC-signed badge. When we click Simulate Tampering on a historical ledger entry, both content hashing and the HMAC signature break immediately, flagging every downstream entry.",
-            18.0,
+            "RepoBrain records decisions in an append-only ledger. In this seeded demo, the HMAC key is local and ephemeral. The verifier reports the chain as valid before the change. We then edit a historical entry in memory. The audit check detects the changed content and invalidates the affected downstream records. For a receipt to establish authenticity outside this local run, the verifier needs a root or HMAC key supplied through a separately trusted channel; the receipt alone is not its own trust anchor.",
+            34.0,
         ),
         (
-            "s7", "TRY REPOBRAIN TODAY", (52, 211, 153),
-            "Evaluated across twenty one commits with zero runtime false positives and one hundred twenty four passing tests. Clone Repo_Brain on GitHub and try Mission Control in three commands.",
-            9.0,
+            "s7", "TEAM & PROJECT WRAP-UP", (52, 211, 153),
+            "RepoBrain bridges the critical gap between fast autonomous coding agents and rigorous enterprise compliance. On behalf of team members Tanmay Jain and Saanchi Jain, thank you for evaluating RepoBrain for the CodeQuest 2026 Final Build Showcase. The full open-source repository, technical documentation, and test suite are available on GitHub.",
+            18.0,
         ),
     ]
 
@@ -493,6 +583,7 @@ def main():
         print(f"  Audio {sid}: {aud_d:.1f}s -> scene {dur:.1f}s")
 
     print("2/4 Generating intro, terminal agent-refusal, and outro slides...")
+    s0_png = make_team_intro_slide(WORK / "slide_s0.png")
     s1_png = make_problem_intro_slide(WORK / "slide_s1.png")
     pre_out, mcp_out = run_preflight_capture()
     s2_png = make_agent_refusal_slide(WORK / "slide_s2.png", pre_out, mcp_out)
@@ -507,6 +598,7 @@ def main():
     s4_trim = 0.0 if s4_is_still else s4_item[-1]
 
     rendered = [
+        mux_scene("s0", s0_png, True, *audio_info["s0"], captions["s0"]),
         mux_scene("s1", s1_png, True, *audio_info["s1"], captions["s1"]),
         mux_scene("s2", s2_png, True, *audio_info["s2"], captions["s2"]),
         mux_scene("s3", pw_clips["s3"][0], False, *audio_info["s3"], captions["s3"], pw_clips["s3"][1]),
@@ -525,9 +617,21 @@ def main():
         FFMPEG, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list),
         "-c", "copy", "-movflags", "+faststart", str(OUT_REPO),
     ], check=True, capture_output=True)
-    shutil.copy2(OUT_REPO, OUT_DOWNLOADS)
     total = probe_duration(OUT_REPO)
-    print(f"\nDONE! {OUT_REPO} & {OUT_DOWNLOADS} ({total:.1f}s, {OUT_REPO.stat().st_size / 1e6:.1f} MB)")
+    
+    # Update kit copy
+    kit_mp4 = ROOT / "deliverables" / "Unstop_Submission_Kit" / "RepoBrain_Demo_Video.mp4"
+    kit_mp4.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(OUT_REPO, kit_mp4)
+    print(f"Kit copy updated: {kit_mp4}")
+
+    copy_to = os.environ.get("REPOBRAIN_VIDEO_COPY_OUT")
+    if copy_to:
+        copy_path = Path(copy_to)
+        copy_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(OUT_REPO, copy_path)
+        print(f"Optional copy: {copy_path}")
+    print(f"\nDONE! {OUT_REPO} ({total:.1f}s, {OUT_REPO.stat().st_size / 1e6:.1f} MB)")
 
 
 if __name__ == "__main__":

@@ -70,7 +70,7 @@ def main():
             # Optimizer
             print("[5/7] Running optimizer on Scenario B...")
             page.locator("button:has-text('Run optimizer')").click()
-            page.wait_for_selector(".pill:has-text('verified')", timeout=15000)
+            page.wait_for_selector("#pipeOptBadge:has-text('verified')", timeout=15000)
             content = page.content()
             assert "cognitive" in content and "15" in content and "10" in content, "Expected cognitive reduction 15->10"
             assert "tests" in content.lower(), "Expected tests report"
@@ -91,6 +91,25 @@ def main():
             assert "ALLOWED" in page.locator(".verdict .big").inner_text()
             page.screenshot(path=os.path.join(SCREENSHOTS_DIR, "05_review_allowed.png"))
             print("  ✓ Re-run PR review: verdict is now ALLOWED")
+
+            # Verify Decision Receipt endpoint and cryptographic proof
+            rcpt_data = page.evaluate("() => api('/api/receipt')")
+            assert rcpt_data and rcpt_data.get("receipt_version") == "1.0", f"Invalid receipt response: {rcpt_data}"
+            assert rcpt_data["review"]["decision"] == "ALLOWED"
+            assert rcpt_data["remediation"]["remediated"] is True
+            from repobrain import receipt as R
+            trusted_root = rcpt_data["audit"]["merkle_root"]
+            ver_res = R.verify_receipt(rcpt_data, trusted_root=trusted_root)
+            assert ver_res["valid"] is True, f"Receipt verification failed: {ver_res['errors']}"
+            assert ver_res["checks"]["trust_anchor"]["status"] == "verified"
+            # Verify that tampering is caught against the trusted anchor
+            fake_rcpt = dict(rcpt_data)
+            fake_rcpt["review"] = dict(rcpt_data["review"])
+            fake_rcpt["review"]["decision"] = "FORGED"
+            fake_ver = R.verify_receipt(fake_rcpt, trusted_root=trusted_root)
+            assert fake_ver["valid"] is False, "Tampered receipt should fail verification"
+            print("  ✓ Cryptographic Decision Receipt downloaded and verified offline against trust anchor: VALID & UNTAMPERED")
+            print("  ✓ Tampered receipt modification correctly DETECTED and REJECTED")
 
             # Audit trail & Tamper detection
             print("[7/7] Verifying audit hash chain & tamper detection...")

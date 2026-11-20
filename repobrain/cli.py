@@ -6,7 +6,7 @@ import pathlib
 import sys
 
 from . import audit as A
-from . import demo, explainer, export, gitutil, hooks, llm, metrics, mlguard, optimizer, report, review, server, shield
+from . import auth, demo, explainer, export, gitutil, hooks, llm, metrics, mlguard, optimizer, report, review, server, shield
 from . import policy as P
 
 TEST_RX = review.TEST_RX
@@ -161,6 +161,11 @@ def cmd_explain(a):
 
 def cmd_audit(a):
     _, _, _, _, log = _ctx(a)
+    if getattr(a, "ack_recovery", False):
+        actor = getattr(a, "actor", None) or "admin"
+        res = log.ack_recovery(actor)
+        print(f"Audit ledger recovery acknowledged by {actor}: quarantined {res.get('quarantined_file')}")
+        return 0
     expect = getattr(a, "expect", None)
     if not expect and getattr(a, "anchor_file", None) and os.path.isfile(a.anchor_file):
         try:
@@ -195,7 +200,7 @@ def cmd_audit(a):
 
 def cmd_waive(a):
     root, base, pol, home, log = _ctx(a)
-    w = review.waive(home, gitutil.head(root), a.actor, a.reason)
+    w = review.waive(home, gitutil.head(root), a.actor, a.reason, root=root)
     log.append("waive", a.actor, "WAIVED", w["reason"], head=gitutil.head(root))
     print("waived:", w)
     return 0
@@ -280,6 +285,99 @@ def cmd_ci(a):
     return 0 if st["verdict"] == "ready" else 1
 
 
+def cmd_create_admin(a):
+    if not a.password or len(a.password) < 12:
+        print("repobrain create-admin: Password must be at least 12 characters", file=sys.stderr)
+        return 1
+    home = os.path.abspath(a.home) if getattr(a, "home", None) else A.home_for(_root(a))
+    auth_mgr = auth.AuthManager(home, is_demo=False)
+    has_admin = any(u.get("role") == "admin" for u in auth_mgr.list_users())
+    if has_admin:
+        print("repobrain create-admin: An administrator already exists. Role changes must be performed by an existing admin.", file=sys.stderr)
+        return 1
+    try:
+        log = A.AuditLog(home)
+        u, _ = auth_mgr.bootstrap_admin(
+            email=a.email,
+            password=a.password,
+            name=getattr(a, "name", "") or "Administrator",
+            company=getattr(a, "company", ""),
+            audit_log=log
+        )
+        print(f"Successfully bootstrapped system administrator: {u['email']} (ID: {u['id']})")
+        return 0
+    except Exception as e:
+        print(f"repobrain create-admin: {e}", file=sys.stderr)
+        return 1
+
+
+def cmd_receipt(a):
+    root, base, pol, home, log = _ctx(a)
+    rev = review.run(root, pol, base=base, extra_actor=getattr(a, "actor", None))
+    prop = None
+    try:
+        pdir = os.path.join(home, "proposals")
+        if os.path.isdir(pdir):
+            pfiles = sorted([f for f in os.listdir(pdir) if f.endswith(".json")])
+            if pfiles:
+                with open(os.path.join(pdir, pfiles[-1]), encoding="utf-8") as pf:
+                    prop = json.load(pf)
+    except Exception:
+        pass
+
+    from . import receipt as R
+    rcpt = R.generate_receipt(root, rev, log, proposal=prop, approver=getattr(a, "actor", None), base=base)
+
+    if getattr(a, "json", False):
+        print(json.dumps(rcpt, indent=2))
+    else:
+        out_path = getattr(a, "out", None) or "repobrain-receipt.json"
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(rcpt, f, indent=2)
+        print(f"✅ Verifiable PR decision receipt generated: {out_path}")
+        print(f"   Commit: {str(rcpt['review']['commit'])[:12]} vs {rcpt['review']['base']}")
+        print(f"   Verdict: {rcpt['review']['decision']} ({rcpt['review']['findings_count']['blocking']} blocking findings)")
+        print(f"   Merkle Root: {str(rcpt['audit']['merkle_root'])[:16]}... (tree size {rcpt['audit']['merkle_proof']['tree_size']})")
+        if getattr(a, "write_anchor", None):
+            try:
+                os.makedirs(os.path.dirname(os.path.abspath(a.write_anchor)), exist_ok=True)
+                with open(a.write_anchor, "w", encoding="utf-8") as f:
+                    f.write(rcpt["audit"]["merkle_root"] + "\n")
+                print(f"   Anchor written: {rcpt['audit']['merkle_root'][:16]}… -> {a.write_anchor}")
+            except OSError as exc:
+                print(f"repobrain: cannot write anchor file: {exc}", file=sys.stderr)
+                return 2
+        print(f"   Offline verify via: repobrain verify-receipt {out_path}")
+    return 0
+
+
+def cmd_verify_receipt(a):
+    from . import receipt as R
+    receipt_file = getattr(a, "receipt_file", "")
+    if not os.path.exists(receipt_file):
+        print(f"Error: receipt file not found: {receipt_file}", file=sys.stderr)
+        return 1
+
+    try:
+        with open(receipt_file, "r", encoding="utf-8") as f:
+            rcpt_data = json.load(f)
+    except Exception as e:
+        print(f"Error reading receipt JSON: {e}", file=sys.stderr)
+        return 1
+
+    audit_key = getattr(a, "key", None) or os.environ.get("REPOBRAIN_AUDIT_KEY")
+    trusted_root = getattr(a, "trusted_root", None)
+    anchor_file = getattr(a, "anchor_file", None)
+    result = R.verify_receipt(rcpt_data, trusted_root=trusted_root, audit_key=audit_key, anchor_file=anchor_file)
+
+    if getattr(a, "json", False):
+        print(json.dumps(result, indent=2))
+    else:
+        print(R.format_verification_report(result, rcpt_data))
+
+    return 0 if result["valid"] else 1
+
+
 def build():
     ap = argparse.ArgumentParser(prog="repobrain", description=__doc__)
     ap.add_argument("--repo", default=".", help="repository path (default: .)")
@@ -316,6 +414,8 @@ def build():
     sp = add("audit", cmd_audit, help="show / verify / export the audit log")
     sp.add_argument("--expect", help="anchored head hash to verify against"); sp.add_argument("--export", action="store_true")
     sp.add_argument("--tail", type=int, default=25)
+    sp.add_argument("--ack-recovery", action="store_true", help="acknowledge audit ledger recovery state")
+    sp.add_argument("--actor", help="actor acknowledging recovery")
     sp.add_argument("--anchor-file", dest="anchor_file",
                     help="path to a file containing the anchored head hash (written by --write-anchor)")
     sp.add_argument("--write-anchor", dest="write_anchor",
@@ -346,6 +446,26 @@ def build():
     sp = add("ci", cmd_ci, help="one command for CI: shield + gate + optimizer")
     sp.add_argument("--base", default="main"); sp.add_argument("--actor", default="ci")
     sp.add_argument("--sarif"); sp.add_argument("--summary")
+
+    sp = add("create-admin", cmd_create_admin, help="bootstrap initial system administrator")
+    sp.add_argument("--email", required=True, help="administrator corporate email")
+    sp.add_argument("--password", required=True, help="administrator password (min 12 chars)")
+    sp.add_argument("--name", default="", help="administrator full name")
+    sp.add_argument("--company", default="", help="company name")
+
+    sp = add("receipt", cmd_receipt, help="generate a downloadable cryptographic PR decision receipt")
+    sp.add_argument("--base", help="base git ref (default: main)")
+    sp.add_argument("--actor", help="actor generating the receipt")
+    sp.add_argument("--out", help="output file path (default: repobrain-receipt.json)")
+    sp.add_argument("--write-anchor", dest="write_anchor", help="save Merkle root to anchor file for verification")
+    sp.add_argument("--json", action="store_true", help="output receipt JSON to stdout")
+
+    sp = add("verify-receipt", cmd_verify_receipt, help="cryptographically verify a PR decision receipt offline")
+    sp.add_argument("receipt_file", help="path to receipt JSON file to verify")
+    sp.add_argument("--trusted-root", dest="trusted_root", default=None, help="known trusted Merkle root hex to verify against")
+    sp.add_argument("--anchor-file", dest="anchor_file", default=None, help="path to anchor file containing trusted Merkle root")
+    sp.add_argument("--key", dest="key", default=None, help="HMAC secret audit key to verify entry signature")
+    sp.add_argument("--json", action="store_true", help="output verification results as JSON")
 
     return ap
 
