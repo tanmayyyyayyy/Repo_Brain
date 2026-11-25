@@ -24,7 +24,10 @@ blocked:                    # AI-authored changes to these paths are BLOCKED (hu
   - "*.pem"
   - id_rsa
   - repobrain.yml
-blocked_for: ai             # ai | all
+blocked_for: all            # ai | all (blocks protected paths for all authors by default)
+ignore:                         # paths Shield will not scan (e.g. web demo fixtures)
+  - repobrain/web/app.js
+  - repobrain/web/app.css
 review_required:            # changes here are flagged for explicit human review
   - requirements.txt
   - package.json

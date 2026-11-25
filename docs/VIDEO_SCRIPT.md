@@ -1,68 +1,70 @@
-# RepoBrain Video Demo Script (2:30 Exact Presentation)
+# RepoBrain Final Demo Video Script
 
-> **Theme**: Flight recorder & mission control for repositories touched by AI coding agents.
-> **Length**: ~2 minutes 05 seconds (`docs/demo/repobrain_demo_edited.mp4`).
-> **Screen Setup**: Full-frame 1600×900 dark mode scaled cleanly to 1920×1080 60fps with narrated AAC audio and large lower-third captions.
+**Target runtime:** about 4 minutes 05 seconds (within the required 3–5 minutes).
+**Rendered file:** [`docs/demo/repobrain_demo_edited.mp4`](demo/repobrain_demo_edited.mp4)
+**Build command:** `.venv/bin/python scripts/produce_submission_video.py`
 
----
+The producer creates a narrated 1080p video with on-screen captions. Demo metrics are from seeded local runs; they are not general benchmarks. The GitHub PR shot is a captured run from the public repository. If the hosted service is slow, record against the local seeded server.
 
-## ⏱️ Video Timeline & Cues
+## Team Credits (CodeQuest 2026)
+- **Tanmay Jain** — Systems & Security Architect (Core Engine, Taint Analysis, Prover & Merkle Audit)
+- **Saanchi Jain** — AI Governance & Product Lead (Policy Models, Mission Control UI/UX, Compliance)
 
-### [0:00 - 0:30] Hook & Mission Control
-- **On Screen**: Show RepoBrain web console hero section. Point to persistent left rail with 5-stage pipeline stepper (Shield -> Gate -> Optimizer -> Human -> Audit).
-- **Spoken Audio**:
-  > "Autonomous coding agents like Claude Code, Cursor, and Devin are generating massive pull requests. But engineering teams face a dilemma: either spend hours reviewing AI spaghetti code, or risk accidental credential leaks, corrupted CI workflows, and prompt injection attacks.
-  >
-  > This is **RepoBrain**: an open-source, vendor-neutral governance, cleanup, and audit layer for repositories that AI agents write to. It doesn't write code—it decides what agents may touch, cleans up what they write using your existing tests as the judge, and keeps cryptographic proof of every decision."
+## Timeline and narration
 
----
+### 0:00–0:26 — Team & Project Introduction (CodeQuest 2026)
 
-### [0:30 - 1:10] Scenario A: The Risky AI PR (Shield Defense)
-- **Action**: Click `Scenario A` button (or press `1`). Verdict hero updates to **BLOCKED**. Click `.github/workflows/ci.yml` in the PR map to open the unified diff with red inline annotations.
-- **Spoken Audio**:
-  > "Here in Scenario A, an AI agent attempted to update configuration. Shield immediately flags three blocking violations:
-  > First, a hardcoded AWS key in `shop/config.py`, automatically masked.
-  > Second, an unauthorized modification to our protected deployment workflow in `.github/workflows/ci.yml`.
-  > And third, an indirect prompt injection hidden in markdown instructing future agents to exfiltrate secrets.
-  >
-  > Notice the policy source: `origin/main`. Even if an AI agent edits `repobrain.yml` in its PR branch, RepoBrain reads policy strictly from the trusted base ref. The agent cannot loosen its own rules."
+**Show:** Branded CodeQuest 2026 title card with team members Tanmay Jain and Saanchi Jain and their respective roles.
 
----
+> Welcome to the final build showcase for RepoBrain, built for CodeQuest 2026 by Tanmay Jain, Systems and Security Architect, and Saanchi Jain, AI Governance and Product Lead. RepoBrain is a vendor-neutral governance platform that stops autonomous AI agents from introducing silent vulnerabilities, complexity debt, or untracked changes into production repositories.
 
-### [1:10 - 1:55] Scenario B: The Messy AI PR & Verified AST Optimizer
-- **Action**: Click `Scenario B` (or press `2`). Verdict updates to yellow **CHANGES REQUIRED**. Point out `discount_for` exceeding nesting depth (4 > 3) and cognitive complexity (15 > 10). Click **Optimize** button.
-- **Spoken Audio**:
-  > "Now let's switch to Scenario B. The code is secure, but it's classic AI slop: deep nesting, redundant else-branches, and high cognitive complexity.
-  >
-  > Instead of sending code back for another hallucinatory review loop, we click **Optimize**.
-  > On a temporary scratch copy with resource limits, RepoBrain applies semantic-preserving AST rewrites, runs our unit tests (`26 passed`), and verifies behavior using differential fuzzing.
-  >
-  > Cognitive complexity drops from 15 to 10; nesting depth drops from 4 to 3. Inline comments and line endings are strictly preserved.
-  > RepoBrain never merges on its own: a named human, Priya Sharma, approves the proposal, committing it with an `Approved-by:` trailer. Re-running the review now flips the verdict to **ALLOWED**."
+### 0:26–0:58 — Problem and solution
 
----
+**Show:** Branded problem and solution card.
 
-### [1:55 - 2:30] Cryptographic Audit Trail & Tamper Detection
-- **Action**: Click **Audit** tab (or press `5`). Point out the vertical timeline blockchain ledger and the `HMAC-signed` status pill. Click **Simulate tampering**.
-- **Spoken Audio**:
-  > "Underneath every check is an append-only JSONL audit ledger. Every review, waiver, and human approval is anchored in a SHA-256 hash chain and HMAC-signed with `REPOBRAIN_AUDIT_KEY`.
-  >
-  > If someone tampers with historical block #8 in memory—even if they recompute the SHA-256 hashes—the cryptographic HMAC signature fails immediately, invalidating every downstream block in the chain.
-  >
-  > With zero heavy runtime dependencies, 137 passing automated tests, and a measured 0.03% false-positive rate across 4,000 stdlib prose samples, RepoBrain gives engineering leaders complete confidence to adopt AI coding agents at scale. Thank you."
+> AI coding agents can open useful pull requests quickly. They can also expose credentials, alter the workflow meant to review them, or add code that humans struggle to maintain. Linters often report problems without enforcing a merge decision. RepoBrain applies repository policy from the trusted base, reviews proposed changes, helps simplify supported Python code, and records human approval and audit evidence. I will show a blocked change, a tested rewrite, and how the seeded demo detects tampering.
 
----
+### 0:58–1:25 — Preflight refusal
 
-## 🎤 Judge Q&A Cheat Sheet
+**Show:** CLI and MCP preflight responses for a protected workflow edit and unsafe shell command.
 
-1. **"How accurate is your prompt injection detector?"**
-   > *Answer*: "We believe in honest metrics: our zero-dependency Naive Bayes classifier was evaluated on a 242-sample team-written corpus via 5-fold cross-validation, achieving 0.938 precision, 0.625 recall, and 0.75 F1 (0.77 hybrid). On 4,000 benign Python standard library comments, its measured false-positive rate is 0.03%. Crucially, rigid deterministic rules can block; the ML model only warns and elevates risk—it never blocks on its own."
+> Before a write reaches disk, an agent can ask RepoBrain's preflight interface to check the target path and proposed content. The CLI and MCP server use the same policy decisions. Here, an agent attempts to modify the protected CI workflow and request an unsafe shell command. RepoBrain rejects the requests before the write. The demo uses a placeholder payload; it does not execute a real credential or shell command.
 
-2. **"Does the optimizer send my proprietary code to OpenAI or Anthropic?"**
-   > *Answer*: "No. By default, RepoBrain's AST optimizer runs 100% locally on your machine or CI runner using standard library Python AST rules. External LLM APIs are only engaged if you explicitly set `allow_llm: true` and configure `GROQ_API_KEY` or `ANTHROPIC_API_KEY` for high-complexity Scenario C function refactoring."
+### 1:25–1:59 — Scenario A: blocked risky pull request
 
-3. **"Can an attacker bypass the audit log by rewriting historical entries?"**
-   > *Answer*: "In an unsigned chain, an attacker could recompute SHA-256 hashes. That's why RepoBrain supports HMAC-SHA256 signing (`REPOBRAIN_AUDIT_KEY`) and CI head anchoring (`--anchor-file` and `--expect <seq>`). Modifying an entry invalidates the HMAC signature, and truncating tail entries fails the anchored head check in GitHub Actions."
+**Show:** Seeded blocked verdict, findings list, and annotated workflow diff.
 
-4. **"How does this integrate into our workflow today?"**
-   > *Answer*: "RepoBrain runs as a GitHub Action (`action.yml`), a CLI tool (`repobrain review`), a pre-commit hook (`.pre-commit-hooks.yaml`), an MCP server for any agent (`integrations/mcp_server.py`), and a Claude Code pre-execution tool hook (`integrations/claude-code/`)."
+> Scenario A is a seeded risky pull request. RepoBrain blocks three findings: a credential in shop slash config dot py, an edit to the protected CI workflow, and prompt injection hidden in an HTML comment. The finding list gives the rule and file location, while the diff inspector shows the changed lines. These are repeatable demo fixtures, not a claim that every secret scanner or repository will behave the same way.
+
+### 1:59–2:25 — GitHub Actions integration
+
+**Show:** Captured public-repository pull request with the RepoBrain check and findings comment.
+
+> This captured pull request shows the GitHub Actions integration on RepoBrain's public repository. The check reports a blocked verdict and places the findings in the pull request conversation. In deployment, keep the policy on the trusted base branch and require the RepoBrain status check through branch protection. The screenshot is evidence from that run; the local seeded demo remains the fallback if the network is slow.
+
+### 2:25–3:15 — Scenario B: optimizer and human approval
+
+**Show:** Complexity gate, optimizer output, test and fuzz results, complexity deltas, named approval, and allowed review.
+
+> Scenario B is a separate seeded pull request with a Python function that exceeds the configured complexity limits. RepoBrain proposes deterministic AST rewrites, then runs the repository's targeted tests on a scratch copy and differentially checks one thousand generated inputs with zero divergences in this run. Cognitive complexity moves from fifteen to ten, nesting depth from four to three, and the function from sixty nine lines to forty seven. The symbolic prover covers only supported pure control flow, so we present its proof evidence together with tests and fuzzing rather than claim a proof of arbitrary Python behavior. The optimizer waits for Priya Sharma's named approval, recorded in the commit trailer.
+
+### 3:15–3:49 — Audit tamper detection
+
+**Show:** Verified audit status, then simulate an edit to a historical entry and show the invalidated records.
+
+> RepoBrain records decisions in an append-only ledger. In this seeded demo, the HMAC key is local and ephemeral. The verifier reports the chain as valid before the change. We then edit a historical entry in memory. The audit check detects the changed content and invalidates the affected downstream records. For a receipt to establish authenticity outside this local run, the verifier needs a root or HMAC key supplied through a separately trusted channel; the receipt alone is not its own trust anchor.
+
+### 3:49–4:08 — Team Wrap-Up & Closing
+
+**Show:** Closing card with team members Tanmay Jain and Saanchi Jain, verification stats, open-source MIT license, and repository URL.
+
+> RepoBrain bridges the critical gap between fast autonomous coding agents and rigorous enterprise compliance. On behalf of team members Tanmay Jain and Saanchi Jain, thank you for evaluating RepoBrain for the CodeQuest 2026 Final Build Showcase. The full open-source repository, technical documentation, and test suite are available on GitHub.
+
+## Demo fallback
+
+```bash
+python -m pip install -r requirements.txt
+python -m repobrain serve --demo --port 8765
+```
+
+Open `http://127.0.0.1:8765/` and use the seeded scenarios. Do not use real credentials in the demo.

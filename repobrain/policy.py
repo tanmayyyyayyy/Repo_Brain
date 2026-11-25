@@ -25,9 +25,10 @@ DEFAULT = {
     "blocked": [".github/workflows/", ".github/actions/", "CODEOWNERS", ".gitlab-ci.yml", "Jenkinsfile",
                 "secrets/", "credentials/", ".env", ".env.*", "*.pem", "id_rsa", "repobrain.yml",
                 "conftest.py", "tox.ini", "Makefile", "setup.py"],
-    "blocked_for": "ai",             # ai | all  (humans get a warning when "ai")
+    "blocked_for": "all",            # all | ai  (default 'all' blocks protected paths for both AI and human)
     "review_required": ["requirements.txt", "package.json", "pyproject.toml",
                         "Dockerfile", "package-lock.json"],
+    "require_signed_commits": False, # policy option to reject unsigned commits asserting human identity
     "ai_actors": ["copilot", "claude", "codex", "cursor", "devin", "gemini", "aider",
                   "openai", "chatgpt", "antigravity", "bot", "agent"],
     "allow_llm": False,              # optimizer may send function code to an LLM API
@@ -41,7 +42,7 @@ DEFAULT = {
     "ml_guard": True,                # learned prompt-injection classifier
     "require_sandbox": False,        # strictly require Bubblewrap container isolation (fails if bwrap unavailable)
     "dependency_guard": True,        # typosquat / dependency-confusion checks
-    "ignore": [],                    # paths Shield will not scan
+    "ignore": ["repobrain/web/app.js", "repobrain/web/app.css"],  # paths Shield will not scan (e.g. web demo fixtures)
 }
 
 _TYPES = {
@@ -52,7 +53,7 @@ _TYPES = {
     "review_required": list, "ai_actors": list, "allow_llm": bool,
     "remove_unused_imports": bool, "allow_comment_loss": bool, "preserve_comments": bool,
     "languages": list, "fuzz": bool, "ml_guard": bool, "dependency_guard": bool, "ignore": list,
-    "require_sandbox": bool,
+    "require_sandbox": bool, "require_signed_commits": bool,
 }
 
 _ENUMS = {
@@ -162,6 +163,14 @@ def load_for(root, base=None):
     """Prefer the policy file as it exists on the trusted base ref.
     If base branch has no policy (or in CI), fall back to strict defaults
     rather than trusting an untrusted working tree policy added or edited by a PR."""
+    if not base:
+        try:
+            from . import gitutil
+            if gitutil.is_repo(root):
+                base = gitutil.resolve_base(root, None)
+        except Exception:
+            base = None
+
     if base:
         r = subprocess.run(["git", "show", f"{base}:repobrain.yml"], cwd=root,
                            capture_output=True, text=True)
@@ -192,7 +201,7 @@ def load_for(root, base=None):
         return pol
 
 
-def is_ai(text, policy):
+def is_ai(text, policy=None):
     low = text.lower()
     toks = set(re.split(r"[^a-z0-9]+", low))
     actors = policy.get("ai_actors") if hasattr(policy, "get") else None
@@ -208,7 +217,8 @@ def is_ai(text, policy):
     # If noreply is present, only consider AI if a bot/agent keyword is also in the identity
     # (prevents human web-UI edits and squash merges like username@users.noreply.github.com from false-positive)
     if "noreply" in low:
-        if any(b in low for b in ("bot", "agent", "ai", "copilot", "claude", "synth")):
+        bot_tokens = {"bot", "agent", "ai", "copilot", "claude", "synth", "devin", "codex"}
+        if any(b in toks for b in bot_tokens):
             return True
         return False
     return False

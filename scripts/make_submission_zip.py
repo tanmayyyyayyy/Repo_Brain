@@ -9,8 +9,15 @@ import os
 import sys
 import zipfile
 
+# Ensure UTF-8 stdout on all platforms (including Windows console)
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT_DIR = os.path.expanduser("~/Downloads")
+OUT_DIR = os.environ.get("REPOBRAIN_SUBMISSION_ZIP_DIR") or os.path.expanduser("~/Downloads")
 ZIP_NAME = "RepoBrain_Round3_Final_Submission.zip"
 OUT_PATH = os.path.join(OUT_DIR, ZIP_NAME)
 
@@ -63,6 +70,7 @@ def should_exclude(rel_path):
 
 
 def main():
+    os.makedirs(OUT_DIR, exist_ok=True)
     print(f"📦 Packaging RepoBrain submission from: {ROOT}")
     print(f"🎯 Output target: {OUT_PATH}")
 
@@ -85,7 +93,7 @@ def main():
                 if "raw_screen_recording" in fname or fname.endswith(".mov"):
                     continue
 
-                arcname = os.path.join("repobrain-prototype", rel_path)
+                arcname = os.path.join("repobrain-prototype", rel_path).replace("\\", "/")
                 zf.write(full_path, arcname)
                 total_files += 1
                 total_bytes += os.path.getsize(full_path)

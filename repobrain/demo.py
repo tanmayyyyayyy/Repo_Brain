@@ -91,16 +91,54 @@ def seed(root):
     _git(root, "checkout", "-q", "-b", "ai/orders")
     _commit(root, {"shop/orders.py": "# Updated order processing\n" + _read("orders.py")},
             "Touch order processing module", *ai)
+
+    # Scenario D: Clean, fully-compliant AI PR (The Golden Path)
+    _git(root, "checkout", "-q", "main")
+    _git(root, "checkout", "-q", "-b", "ai/clean-pr")
+    clean_bot = ("clean-agent[bot]", "clean-agent@users.noreply.local")
+    _commit(root, {
+        "shop/tax.py": '"""Sales tax calculation module."""\n\n\ndef calculate_tax(amount: float, rate: float = 0.05) -> float:\n    """Calculate sales tax with standard rounding."""\n    if amount <= 0:\n        return 0.0\n    return round(amount * rate, 2)\n',
+        "tests/test_tax.py": 'from shop.tax import calculate_tax\n\n\ndef test_calculate_tax_positive():\n    assert calculate_tax(100.0, 0.05) == 5.0\n\n\ndef test_calculate_tax_zero():\n    assert calculate_tax(0.0) == 0.0\n\n\ndef test_calculate_tax_negative():\n    assert calculate_tax(-10.0) == 0.0\n'
+    }, "Add clean sales tax module with tests", *clean_bot)
+
+    # Scenario E: Polyglot AI PR (TypeScript, Shell, Dockerfile alongside Python)
+    _git(root, "checkout", "-q", "main")
+    _git(root, "checkout", "-q", "-b", "ai/polyglot")
+    poly_bot = ("polyglot-bot[bot]", "polyglot-bot@users.noreply.local")
+    _commit(root, {
+        "src/checkout.ts": 'export interface CartItem {\n  id: string;\n  price: number;\n  qty: number;\n}\n\nexport function calculateTotal(items: CartItem[]): number {\n  return items.reduce((sum, item) => sum + item.price * item.qty, 0);\n}\n',
+        "scripts/deploy.sh": '#!/usr/bin/env bash\nset -euo pipefail\necho "Running verified deployment script..."\npytest -q tests/\n',
+        "Dockerfile": 'FROM python:3.11-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY . .\nCMD ["pytest", "-q"]\n'
+    }, "Add polyglot checkout service, verified deploy script, and Dockerfile", *poly_bot)
+
     _git(root, "checkout", "-q", "ai/risky-pr")
     return root
 
 
-SCENARIOS = {"risky": "ai/risky-pr", "pricing": "ai/pricing", "orders": "ai/orders"}
-SCENARIO_BASES = {"risky": "main", "pricing": "main", "orders": "orders-base"}
+SCENARIOS = {
+    "risky": "ai/risky-pr",
+    "pricing": "ai/pricing",
+    "orders": "ai/orders",
+    "clean": "ai/clean-pr",
+    "polyglot": "ai/polyglot",
+}
+SCENARIO_BASES = {
+    "risky": "main",
+    "pricing": "main",
+    "orders": "orders-base",
+    "clean": "main",
+    "polyglot": "main",
+}
 
 
 def switch(root, name):
-    _git(root, "checkout", "-q", "-f", SCENARIOS[name])
+    target = SCENARIOS.get(name, SCENARIOS["risky"])
+    try:
+        _git(root, "reset", "--hard", "-q")
+        _git(root, "clean", "-fd", "-q")
+    except Exception:
+        pass
+    _git(root, "checkout", "-q", "-f", target)
 
 
 def run_scenario_c(root=None, ask=None):

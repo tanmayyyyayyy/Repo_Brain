@@ -10,23 +10,40 @@ from . import policy as P
 TEST_RX = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$)")
 
 
-def _waivers(home):
-    try:
-        with open(os.path.join(home, "waivers.json"), encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return {}
+def _waivers(home, root=None):
+    res = {}
+    if root:
+        for fname in (".repobrain_waivers.json", os.path.join(".repobrain", "waivers.json")):
+            try:
+                with open(os.path.join(root, fname), encoding="utf-8") as f:
+                    res.update(json.load(f))
+            except (OSError, json.JSONDecodeError):
+                pass
+    if home:
+        try:
+            with open(os.path.join(home, "waivers.json"), encoding="utf-8") as f:
+                res.update(json.load(f))
+        except (OSError, json.JSONDecodeError):
+            pass
+    return res
 
 
-def waive(home, head, actor, reason):
+def waive(home, head, actor, reason, root=None):
     if len(reason.strip()) < 10:
         raise ValueError("a waiver needs a written reason (min 10 characters)")
-    w = _waivers(home)
-    w[head] = {"actor": actor, "reason": reason.strip(), "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
-    os.makedirs(home, exist_ok=True)
-    with open(os.path.join(home, "waivers.json"), "w", encoding="utf-8") as f:
-        json.dump(w, f)
-    return w[head]
+    w = _waivers(home, root)
+    entry = {"actor": actor, "reason": reason.strip(), "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+    w[head] = entry
+    if root:
+        rdir = os.path.join(root, ".repobrain")
+        os.makedirs(rdir, exist_ok=True)
+        with open(os.path.join(rdir, "waivers.json"), "w", encoding="utf-8") as f:
+            json.dump(w, f, indent=2)
+    if home:
+        os.makedirs(home, exist_ok=True)
+        with open(os.path.join(home, "waivers.json"), "w", encoding="utf-8") as f:
+            json.dump(w, f, indent=2)
+    return entry
 
 
 def run(root, policy, base=None, home=None, extra_actor=None):
@@ -36,13 +53,35 @@ def run(root, policy, base=None, home=None, extra_actor=None):
     added = gitutil.added_lines(root, base)
     actors = gitutil.file_actors(root, base)
     files, findings, gate = [], [], []
+
+    ci_env = bool(os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"))
+    pr_author = os.environ.get("REPOBRAIN_PR_AUTHOR", "").strip()
+    pr_author_type = os.environ.get("REPOBRAIN_PR_AUTHOR_TYPE", "").strip()
+    ci_bot = bool(ci_env and (pr_author_type.lower() == "bot" or pr_author.lower().endswith("[bot]")))
+
+    if policy.get("require_signed_commits", False) and head:
+        sig = gitutil.git(root, "log", "-1", "--format=%G?", head, check=False).strip()
+        if sig not in ("G", "U"):
+            findings.append(shield.finding("block", "unsigned-commit", "(commit)",
+                                           f"commit {head[:7]} is not signed (status %G?='{sig or 'N'}') while policy require_signed_commits is true"))
+
     for status, path in changes:
+        if shield.ignored(path, policy):
+            continue
         ids = set(actors.get(path, set()))
         if extra_actor:
             ids.add(extra_actor)
-        ai = any(P.is_ai(i, policy) for i in ids)
+        if pr_author:
+            ids.add(pr_author)
+        if ci_bot:
+            ai = True
+            file_ai_source = "ci_metadata"
+        else:
+            ai = any(P.is_ai(i, policy) for i in ids)
+            file_ai_source = "heuristic"
         ff = shield.scan_path(path, status, ai, policy)
         entry = {"path": path, "status": status, "actors": sorted(ids), "ai": ai, "findings": ff,
+                 "ai_source": file_ai_source,
                  "violations": [], "added": len(added.get(path, {}))}
         if status != "D":
             text = gitutil.show(root, "HEAD", path)
@@ -76,7 +115,21 @@ def run(root, policy, base=None, home=None, extra_actor=None):
 
     blocks = [f for f in findings if f["severity"] == "block"]
     warns = [f for f in findings if f["severity"] == "warn"]
-    waiver = _waivers(home).get(head) if home else None
+    waiver = (_waivers(home, root).get(head) or _waivers(home, root).get("*")) if (home or root) else None
+    if not waiver:
+        try:
+            range_spec = f"{base}..{head}" if base else head
+            msg = gitutil.git(root, "log", range_spec, "--format=%B", check=False)
+            for line in msg.splitlines():
+                if line.strip().lower().startswith("waived-by:"):
+                    parts = line.strip().split(":", 1)[1].strip()
+                    if " - " in parts:
+                        actor_part, reason_part = parts.split(" - ", 1)
+                        if len(reason_part.strip()) >= 10:
+                            waiver = {"actor": actor_part.strip(), "reason": reason_part.strip(), "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+                            break
+        except Exception:
+            pass
     if blocks:
         decision, why = "BLOCKED", f"{len(blocks)} blocking finding(s) - not waivable, fix and push"
         verdict = "blocked"
@@ -96,6 +149,7 @@ def run(root, policy, base=None, home=None, extra_actor=None):
 
     return {"base": base, "head": head, "branch": gitutil.branch(root), "decision": decision,
             "verdict": verdict, "reason": why,
+            "ai_detection_source": ("ci_metadata" if ci_bot else "heuristic"),
             "files": files, "findings": findings, "gate": gate, "waiver": waiver,
             "risk": risk_info,
             "counts": {"files": len(files), "ai_files": len(ai_files), "blocks": len(blocks),

@@ -105,7 +105,10 @@ def measure(fn):
 
 def analyze(src):
     """-> list of per-function dicts (qualified names, line spans, metrics)."""
-    tree = ast.parse(src)
+    try:
+        tree = ast.parse(src)
+    except Exception:
+        return []
     out = []
 
     def visit(node, prefix):
