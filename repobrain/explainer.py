@@ -58,12 +58,31 @@ RULES = [
      "Compare 'expected' vs 'actual' in the output; fix the code or the stale test (not both blindly).", "code"),
     (r"(?:fatal: )?[Aa]uthentication failed|401 Unauthorized|403 Forbidden", "Authentication failed",
      "Credentials were rejected.", "Refresh the token/secret and confirm it has the right scopes.", "infra"),
+    (r"\bundefined:\s*(\w+)", "Undefined Go identifier",
+     "Go cannot resolve '{0}' in this package.", "Define '{0}' or fix the import that should provide it.", "code"),
+    (r"cannot find package ['\"]([^'\"]+)", "Missing Go package",
+     "Go cannot fetch or locate package '{0}'.", "Run `go mod tidy` or correct the module path for '{0}'.", "dependency"),
+    (r"error\[E\d{4}\]:\s*([^\n]+)|error: could not compile", "Rust compile error",
+     "The Rust compiler rejected the source: {0}.", "Read the compiler diagnostic and fix the type or borrow error.", "code"),
+    (r"BUILD FAILURE|COMPILATION ERROR|FAILURE: Build failed with an exception", "JVM build failed",
+     "Maven or Gradle stopped the build before tests completed.", "Check the first ERROR line above; fix compilation or dependency resolution.", "build"),
+    (r"npm ERR! (?:code )?(ENOENT|ELIFECYCLE|EACCES)", "npm lifecycle failure",
+     "npm could not complete a script or command: {0}.", "Check the script name, file permissions and installed dependencies.", "dependency"),
+    (r"docker: Error response from daemon|failed to solve:", "Docker build or runtime failure",
+     "The container engine refused the build or run request.", "Inspect the daemon message above for a missing file, network or permission problem.", "infra"),
+    (r"make: \*\*\* [^\n]* Error \d+", "Make target failed",
+     "A Makefile recipe exited with a non-zero status.", "Re-run the failing target verbosely with `make -n <target>` and fix its first error.", "build"),
 ]
 
 LOC_PY = re.compile(r'File "([^"]+)", line (\d+)')
 LOC_PYTEST = re.compile(r"^([\w./\\-]+\.py):(\d+): ", re.M)
 LOC_JS = re.compile(r"at (?:.*? \()?([\w./\\-]+\.[jt]sx?):(\d+):\d+")
-FAILED = re.compile(r"^FAILED ([\w./\\:\[\]-]+)(?: - (.*))?$", re.M)
+LOC_GO = re.compile(r"([^\s:]+\.go):(\d+):(\d+)")
+LOC_JAVA = re.compile(r"(?:at\s+[\w.$]+\()?([^\s(:]+\.java):(\d+)\)")
+LOC_JAVA_SIMPLE = re.compile(r"([\w./\\-]+\.java):(\d+):")
+LOC_RUST = re.compile(r"--> ([^\s:]+):(\d+):(\d+)")
+LOC_GENERIC = re.compile(r"^([\w./\\-]+\.(?:rb|cs|php|kt|swift|c|cpp|h)):(\d+):", re.M)
+FAILED = re.compile(r"^(?:FAILED|FAIL|--- FAIL:)\s+([\w./\\:\[\]-]+)(?: - (.*))?$", re.M)
 
 
 def redact(text):
@@ -102,7 +121,7 @@ def explain(log, ask=None):
 
     loc = None
     loc_str = None
-    for rx in (LOC_PYTEST, LOC_PY, LOC_JS):
+    for rx in (LOC_PYTEST, LOC_PY, LOC_JS, LOC_GO, LOC_JAVA, LOC_JAVA_SIMPLE, LOC_RUST, LOC_GENERIC):
         found = rx.findall(log)
         if found:
             loc = {"file": found[-1][0], "line": int(found[-1][1])}

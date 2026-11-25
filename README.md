@@ -15,11 +15,11 @@
 > - **Final Submission Files**: [5-slide pitch deck](deliverables/RepoBrain_Pitch_Deck_Final.pptx) · [technical documentation PDF](output/pdf/RepoBrain_Technical_Documentation.pdf) · [Unstop submission kit ZIP](deliverables/Unstop_Submission_Kit.zip).
 > - **Interactive Pitch Deck**: [`docs/slides.html`](docs/slides.html) (or visit `/slides` in console) · Markdown: [`docs/SLIDE_DECK.md`](docs/SLIDE_DECK.md).
 > - **Quick Local Run**: `pip install -r requirements.txt && python server.py` (or Docker: `docker run --rm -p 8765:8765 repobrain`).
-> - **Verification**: Latest local test run: 223 passed, 1 skipped. The CI workflow defines an OS matrix; check its live status before claiming a current green run. Shield evaluation details and scope are in [`SHIELD_EVAL.md`](docs/SHIELD_EVAL.md).
+> - **Verification**: Latest local test run: 237 passed, 1 skipped. The CI workflow defines an OS matrix; check its live status before claiming a current green run. Shield evaluation details and scope are in [`SHIELD_EVAL.md`](docs/SHIELD_EVAL.md).
 > - **Runtime Stack**: Python standard library plus PyYAML; install the declared requirements with the setup instructions below.
 
-**A vendor-neutral safety, cleanup and audit layer for repos that AI agents write to.**
-It does not write code. It applies repository policy to proposed changes, checks supported Python rewrites with tests, fuzzing, and scoped symbolic proof evidence, and records tamper-evident audit data.
+**A vendor-neutral developer workflow agent, safety layer, cleanup engine and audit trail for repos that AI agents write to.**
+It applies repository policy to proposed changes, triages and reviews PRs, diagnoses failed builds, runs tests, produces initial on-call incident briefs, checks supported Python rewrites with tests, fuzzing, and scoped symbolic proof evidence, and records tamper-evident audit data. Human approval is still required before any code change is applied.
 
 ![RepoBrain Architecture](docs/architecture.svg)
 
@@ -104,6 +104,28 @@ python -m repobrain verify-receipt receipt.json
 ```
 
 
+## Developer Workflow Agent (Track 5)
+
+One deterministic agent entry point automates the five repetitive tasks in the developer workflow. It works on any Git repository and any stack — point `--repo` at your own checkout; the seeded demo is optional. Every task uses the same base-branch policy, produces a structured JSON result plus Markdown report, and writes a tamper-evident audit entry. See the [hackathon-agnostic playbook](docs/HACKATHON_PLAYBOOK.md) for onboarding any team, CI system, language or alert provider.
+
+| Task | What the agent does | Implementation |
+|---|---|---|
+| **PR triage** | Assigns P0–P3 priority, security/code-review/AI-change/fast-track queue, labels, reviewer shortlist and SLA from the review verdict, risk score and forge-agnostic PR metadata (title/labels/author/draft/size) | `repobrain/triage.py` |
+| **Code review** | Runs Shield + complexity gate against the trusted base branch and emits an ALLOWED / CHANGES_REQUIRED / BLOCKED verdict with next actions | `repobrain/review.py` + agent wrapper |
+| **Failed-build diagnosis** | Explains CI logs with deterministic patterns across Python, Node, Go, Rust, Java/Maven/Gradle, Docker and Make (optional LLM summary), correlates failures with changed files and failed tests, and produces an action plan | `repobrain/diagnose.py` + `repobrain/explainer.py` |
+| **Testing** | Detects the test command for npm/pnpm/yarn, Go, Cargo, Maven, Gradle, Make or Python, maps changed files to tests across languages, runs the suite on a scratch copy with sandbox limits, and repeats failures to detect flakes | `repobrain/testing.py` + `repobrain/optimizer.py` |
+| **Initial on-call response** | Classifies provider-agnostic alerts into SEV1–SEV4, correlates recent commits and audit decisions, persists an incident brief and a first-hour playbook, and records human acknowledgement | `repobrain/incident.py` |
+
+```bash
+python -m repobrain agent workflow --base main --with-tests              # all five tasks in one run
+python -m repobrain triage --base main --pr '{"title":"Hotfix: checkout 500s","labels":["urgent"]}' --json
+python -m repobrain diagnose --log build.log --out diagnosis.md          # failed-build diagnosis
+python -m repobrain test --repeats 2                                     # suite + flake detection
+python -m repobrain incident --alert '{"severity":"SEV1","service":"payments","message":"outage"}' --actor Priya
+```
+
+The same entry point is available to automation via `POST /api/agent` (`{"task": "triage"|"review"|"diagnose"|"test"|"incident"|"workflow", ...}`); incident acknowledgement requires Security Lead or Admin authority. The agent never merges, pages, rolls back, or edits repository files on its own: diagnosis and incident response recommend actions, and the optimizer still needs named human approval.
+
 ## Run it in 60 seconds
 
 ```bash
@@ -171,12 +193,13 @@ Full 4-view × 2-viewport × 2-theme matrix lives in [`docs/ui/`](docs/ui/); the
 
 | Module | What it actually does |
 |---|---|
+| **Developer Workflow Agent** | `repobrain agent <task>` / `POST /api/agent` orchestrates PR triage (P0–P3, queues, labels, reviewers), review, failed-build diagnosis, test execution with flake detection, and initial incident briefs; every run writes an artifact and audit entry. No auto-merge, paging or rollback. |
 | **Shield** | Reads `git diff base...HEAD`. Identifies AI authorship per file (commit author/committer, `Co-authored-by:`). Protected-path behavior follows `blocked_for` policy (default `all`); scans for hardcoded secrets (patterns, entropy, concatenated and base64 forms), prompt-injection text in added lines (multi-line window plus warn-only Naive Bayes guard), hidden/bidi Unicode, risky shell/PowerShell commands, and dependency typosquatting. Evidence is masked. |
 | **Policy** | `repobrain.yml`, validated, read from the **trusted base branch** — a PR (or an agent) cannot loosen its own rules. Supports `min_function_coverage` to enforce test execution of rewritten functions, `fuzz: true` for differential fuzzing, and `ml_guard: true`. |
 | **Complexity gate** | Cyclomatic + cognitive + nesting depth, only on functions the PR touched (legacy debt doesn't block). `repobrain scan` lists the legacy debt separately. |
 | **Optimizer** | AST rewrites that are semantics-preserving (else-after-return, guard clauses, merge nested ifs, bool returns, loop→comprehension, `== None`, unused imports). Only changed functions are re-emitted; **everything else stays byte-identical** with original CRLF/LF line endings preserved, comments are kept, functions whose inline comments would be lost are skipped. Result is run against **your test suite on a scratch copy with CPU/memory rlimits** (with Bubblewrap container isolation and unshared network when user namespaces are available; on hosts without unprivileged user namespaces like Render free tier, rlimit and env-allowlist protection applies, and `require_sandbox: true` can be configured to fail closed) and **differentially fuzzed** (constants + type-confused inputs compared against the original function); any divergence immediately discards the proposal. Applying needs a named human, refuses stale proposals, commits with `Approved-by:`. |
 | **Optimizer – AI tier** *(optional)* | For functions still over limits: prompts an LLM (Groq `openai/gpt-oss-120b` or Anthropic `claude-sonnet-5-5`, selectable via `REPOBRAIN_LLM_PROVIDER`) to refactor *one function*, scans the reply with Shield before accepting, then test-gates and differentially fuzzes it. Off unless `allow_llm: true` **and** `--ai` **and** `GROQ_API_KEY` or `ANTHROPIC_API_KEY` is set. Verified against local mock API servers in automated tests. |
-| **Failure Explainer** | 18 rule-based patterns (Python/Node/CI/infra) → cause, fix, file:line, failed tests. Optional LLM summary with secrets redacted. |
+| **Failure Explainer** | Rule-based patterns (Python/Node/Go/Rust/Java/Docker/Make/CI/infra) → cause, fix, file:line, failed tests. Optional LLM summary with secrets redacted. |
 | **Audit** | Append-only JSONL, SHA-256 hash chain with optional HMAC-SHA256 signing (`REPOBRAIN_AUDIT_KEY`, auto-provisioned ephemerally in `--demo`), `verify`, `--expect <anchored head>`, `--anchor-file <path>`, `--write-anchor <path>`, SARIF, CSV, JSON export, markdown review report. |
 | **Agent Preflight API** | Vendor-neutral HTTP endpoint (`/api/preflight`), CLI (`repobrain preflight`), MCP server (`integrations/mcp_server.py`), and pre-execution tool hooks (`integrations/claude-code/`) allowing external agents to check permissions before writing files. |
 | **RBAC & Auth** | Configurable corporate-domain validation, PBKDF2-HMAC-SHA256 password hashing (600,000 iterations), four demo roles (Admin, Security Lead, Tester, Developer), permission checks, persona switcher, and audit logging. No FIPS validation is claimed. |
@@ -245,7 +268,7 @@ repobrain/          policy · metrics · gitutil · shield · rewrite · optimiz
 repobrain/web/      index.html single-file WCAG 2.1 AA Mission Control UI
 demo_assets/        files for the seeded demo repo
 integrations/       MCP server and Claude Code pre-execution hook templates
-tests/              223 passing tests (1 skipped) incl. symbolic formal prover, intra-procedural taint analysis, RFC-6962 Merkle tree, verifiable PR decision receipts with CI trust anchors, multi-scenario coverage (A-E), zero-failure resilience, security audit fixes, non-demo isolation, differential fuzzing, ML guard evaluation, mock LLM tests, tamper detection, server security, Playwright UI & a11y
+tests/              237 passing tests (1 skipped) incl. symbolic formal prover, intra-procedural taint analysis, RFC-6962 Merkle tree, verifiable PR decision receipts with CI trust anchors, multi-scenario coverage (A-E), zero-failure resilience, security audit fixes, non-demo isolation, differential fuzzing, ML guard evaluation, mock LLM tests, tamper detection, server security, Playwright UI & a11y
 scripts/            contrast check, screenshot matrix, headless demo check, real-commit evaluator, video pipeline
 ```
 

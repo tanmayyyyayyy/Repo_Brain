@@ -31,7 +31,8 @@ RepoBrain uses a small runtime dependency set. Its deterministic checks run loca
 | **Configuration** | PyYAML (`repobrain.yml`) | Industry-standard declarative policy schema versioned directly within trusted base branches. |
 | **Embedded Console Server** | `http.server.ThreadingHTTPServer` | Built-in threaded HTTP server; the demo console does not require a separate web framework. |
 | **Frontend Mission Control** | Vanilla Modern JavaScript (ES6+), HTML5, CSS3 | Single-file, zero-build dashboard adhering to WCAG 2.1 AA accessibility standards, responsive from mobile (360px) to 4K displays. |
-| **Testing & Quality Assurance** | `pytest`, `playwright` | Unit, integration, security, and browser checks. The current local run completed with 223 passed and 1 skipped. |
+| **Testing & Quality Assurance** | `pytest`, `playwright` | Unit, integration, security, and browser checks. The current local run completed with 237 passed and 1 skipped. |
+| **Developer Workflow Agent** | `repobrain/agent.py` + `triage.py`, `diagnose.py`, `testing.py`, `incident.py` | Single orchestrator for PR triage, code review, failed-build diagnosis, test execution with flake detection, and initial on-call response. Available via CLI and `POST /api/agent`; emits JSON, Markdown, persisted artifacts and audit entries. |
 | **Containerization** | Docker, Alpine / Python image | Container packaging is provided; hardening and operational readiness depend on the deployment environment. |
 
 ---
@@ -252,6 +253,13 @@ Issues an authorized technical debt waiver for a pull request, logged to the HMA
 - **Authorization**: Requires `admin` or `security` role (`grant_waiver` permission).
 - **Request Body**: `{"reason": "Accepting legacy technical debt for hotfix release", "actor": "Samira Patel"}`
 - **Response (200 OK)**: `{"waived": true, "head": "...", "reason": "..."}`
+
+#### `POST /api/agent`
+Runs one Developer Workflow task (`triage`, `review`, `diagnose`, `test`, `incident`, or `workflow`) against the same trusted base-branch policy used by the console.
+- **Authorization**: Read-only tasks require a valid session token; `ack: true` on an incident requires `admin` or `security` role (`grant_waiver` permission).
+- **Request Body**: `{"task": "incident", "alert": {"severity": "SEV1", "service": "payments", "message": "outage"}, "actor": "on-call"}` (or `{"task": "diagnose", "log": "<CI log>"}`, `{"task": "test", "repeats": 2}`).
+- **Response (200 OK)**: Task-specific JSON (priority/queue for triage, causes/suspect files for diagnose, counts/flaky for test, severity/playbook/brief path for incident); `{"task": "workflow"}` includes all requested sub-results.
+- **Limits**: CI logs are capped at 200,000 characters; secrets are redacted before persistence. The agent never merges, pages, rolls back or edits repository files.
 
 #### `POST /api/preflight`
 Vendor-neutral pre-write validation hook for AI agents (Claude Code, Cursor MCP, etc.).

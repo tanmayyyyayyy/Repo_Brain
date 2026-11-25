@@ -45,4 +45,4 @@ The root file must be stored through a trusted channel, such as CI artifacts pro
 
 ## Checks
 
-Run the automated suite with `python -m pytest -q`. The most recent verified local run completed with **223 passed, 1 skipped**. `scripts/demo_check.py` exercises the seeded block, optimizer, human approval, receipt, and ledger tamper path in a browser.
+Run the automated suite with `python -m pytest -q`. The most recent verified local run completed with **237 passed, 1 skipped**. `scripts/demo_check.py` exercises the seeded block, optimizer, human approval, receipt, and ledger tamper path in a browser.

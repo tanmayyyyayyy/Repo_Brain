@@ -6,7 +6,7 @@ import pathlib
 import sys
 
 from . import audit as A
-from . import auth, demo, explainer, export, gitutil, hooks, llm, metrics, mlguard, optimizer, report, review, server, shield
+from . import agent, auth, demo, explainer, export, gitutil, hooks, llm, metrics, mlguard, optimizer, report, review, server, shield
 from . import policy as P
 
 TEST_RX = review.TEST_RX
@@ -261,6 +261,50 @@ def cmd_ml_eval(a):
     return 0
 
 
+def _read_agent_input(spec, use_stdin=False):
+    if not spec:
+        return sys.stdin.read() if use_stdin else ""
+    if spec == "-":
+        return sys.stdin.read()
+    if os.path.isfile(spec):
+        return open(spec, encoding="utf-8", errors="replace").read()
+    return spec
+
+
+def _agent_pr(spec):
+    text = _read_agent_input(spec)
+    if not text:
+        return None
+    try:
+        parsed = json.loads(text)
+    except ValueError:
+        return {"title": text[:300]}
+    return parsed if isinstance(parsed, dict) else {"title": str(parsed)[:300]}
+
+
+def cmd_agent(a):
+    root, base, pol, home, log = _ctx(a)
+    task = getattr(a, "task", "workflow")
+    log_text = _read_agent_input(getattr(a, "log", None), use_stdin=(task == "diagnose"))
+    alert = _read_agent_input(getattr(a, "alert", None))
+    res = agent.run(task=task, root=root, base=base, policy=pol, home=home,
+                    actor=getattr(a, "actor", None), log_text=log_text, alert=alert,
+                    pr=_agent_pr(getattr(a, "pr", None)),
+                    repeats=getattr(a, "repeats", 1), ai=getattr(a, "ai", False),
+                    with_tests=getattr(a, "with_tests", False), log=log)
+    md = agent.to_markdown(res)
+    if getattr(a, "out", None):
+        with open(a.out, "w", encoding="utf-8") as f:
+            f.write(md + "\n")
+        print("wrote", a.out)
+    print(json.dumps(res, indent=2) if getattr(a, "json", False) else md)
+    if task == "test" and res.get("status") == "failed":
+        return 1
+    if task in ("review", "triage") and res.get("decision") == "BLOCKED":
+        return 1
+    return 0
+
+
 def cmd_hook(a):
     print("installed", hooks.install(_root(a)))
     return 0
@@ -438,6 +482,25 @@ def build():
 
     sp = add("preflight", cmd_preflight, help="vendor-neutral preflight check")
     sp.add_argument("--actor", required=True); sp.add_argument("--path", required=True); sp.add_argument("--content-file")
+
+    sp = add("agent", cmd_agent, help="Developer Workflow agent: triage, review, diagnose, test, incident, workflow")
+    sp.add_argument("task", nargs="?", default="workflow", choices=agent.TASKS)
+    sp.add_argument("--base"); sp.add_argument("--actor", default="repobrain-agent")
+    sp.add_argument("--log", help="CI log file, literal text, or - for stdin (diagnose)")
+    sp.add_argument("--alert", help="alert JSON file or literal JSON/text (incident)")
+    sp.add_argument("--pr", help="PR metadata JSON file or literal JSON/text (title, labels, author, draft, additions, deletions)")
+    sp.add_argument("--repeats", type=int, default=1, help="repeat failing test runs to detect flakes (1-5)")
+    sp.add_argument("--ai", action="store_true", help="optional LLM summary when explicitly allowed by policy")
+    sp.add_argument("--with-tests", action="store_true", help="execute the suite as part of the full workflow")
+    sp.add_argument("--json", action="store_true"); sp.add_argument("--out", help="write markdown report here")
+
+    for name in ("triage", "diagnose", "test", "incident"):
+        sp = add(name, cmd_agent, help=f"agent shortcut: {name}")
+        sp.set_defaults(task=name)
+        sp.add_argument("--base"); sp.add_argument("--actor", default="repobrain-agent")
+        sp.add_argument("--log"); sp.add_argument("--alert"); sp.add_argument("--pr")
+        sp.add_argument("--repeats", type=int, default=1); sp.add_argument("--ai", action="store_true")
+        sp.add_argument("--json", action="store_true"); sp.add_argument("--out")
 
     add("ml-eval", cmd_ml_eval, help="evaluate learned prompt injection classifier")
     add("install-hook", cmd_hook, help="install pre-commit hook")

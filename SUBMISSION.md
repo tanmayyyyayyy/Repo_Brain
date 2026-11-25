@@ -1,8 +1,8 @@
 # RepoBrain — Hackathon Prototype Submission
 
-> **One-Sentence Pitch**: RepoBrain reviews agent pull requests against trusted base-branch policy, blocks configured risky changes, checks supported Python cleanup with tests, fuzzing, and scoped proof evidence, requires named human approval, and records decisions in a tamper-evident audit trail.
+> **One-Sentence Pitch**: RepoBrain is a developer workflow agent that triages and reviews agent pull requests against trusted base-branch policy, diagnoses failed builds, runs tests with flake detection, produces initial on-call incident briefs, checks supported Python cleanup with tests, fuzzing, and scoped proof evidence, requires named human approval, and records decisions in a tamper-evident audit trail.
 
-- **Track / Category**: Most Innovative Developer Tool / AI Safety & Governance / Cyber Security & Compliance / Open Innovation
+- **Track / Category**: Track 5 — Developer Workflow (primary fit) / Most Innovative Developer Tool / AI Safety & Governance / Cyber Security & Compliance / Open Innovation
 - **Target Buyers**: Enterprise Platform Engineering, DevSecOps, and Security teams deploying autonomous AI coding agents (Cursor, Claude Code, GitHub Copilot, Devin) across production codebases.
 - **GitHub Repository**: [https://github.com/tanmayyyyayyy/Repo_Brain](https://github.com/tanmayyyyayyy/Repo_Brain)
 - **Demo Video**: [YouTube (1080p 60fps narrated walkthrough with captions)](https://youtu.be/jgHJLzQHnh0) · local file: [`docs/demo/repobrain_demo_edited.mp4`](docs/demo/repobrain_demo_edited.mp4) *(4-minute CodeQuest 2026 showcase featuring Tanmay Jain & Saanchi Jain)*
@@ -87,10 +87,23 @@ PR / Agent Push ──► Shield (Secrets + Taint + Injection) ──► Complex
 4. **Human Approval**: Enforces `approval: human`. The optimizer never merges on its own; a named human approves the rewrite, producing a git commit with an `Approved-by:` trailer.
 5. **Cryptographic Merkle Audit Ledger & Decision Receipts**: Append-only JSONL ledger with SHA-256 hash chaining and optional HMAC-SHA256 signing, an **RFC-6962 Binary Merkle Tree (`repobrain/merkle.py`)** generating O(log N) offline-verifiable inclusion proofs verified via sibling path reconstruction (`GET /api/audit/proof`, `POST /api/audit/verify-proof`), and standalone **Verifiable Decision Receipts (`repobrain/receipt.py`)** verified via `python -m repobrain verify-receipt <file>`.
 
+### Developer Workflow agent (`repobrain/agent.py`)
+
+A single deterministic entry point (`python -m repobrain agent <task>` or `POST /api/agent`) covers every repetitive task in Track 5:
+
+1. **PR triage** (`repobrain/triage.py`): P0–P3 priority, security / code-review / AI-change / fast-track queue, labels, suggested reviewers from configurable code owners, and SLA hours derived from risk score, blocking rules and AI authorship.
+2. **Code review** (`repobrain/review.py`): Shield + complexity gate verdict on the trusted base branch, with named human approval for any applied change.
+3. **Failed-build diagnosis** (`repobrain/diagnose.py`): rule-based CI log patterns for Python, Node, Go, Rust, Java/Maven/Gradle, Docker and Make plus optional LLM summary, failed-test extraction, correlation of failure locations with changed files, and a concrete action plan. Evidence is redacted.
+4. **Testing** (`repobrain/testing.py`): test-command detection for npm/pnpm/yarn, Go, Cargo, Maven, Gradle, Make and Python, changed-file → test mapping across languages, suite execution on a scratch copy with sandbox limits, coverage metadata, and failure repetition to flag flaky tests.
+5. **Initial on-call response** (`repobrain/incident.py`): provider-agnostic alert classification (SEV1–SEV4), recent commit and audit correlation, persisted incident brief, first-hour playbook, and human acknowledgement requiring Security Lead / Admin authority.
+
+Every task emits structured JSON, Markdown, an artifact under the audit home, and an audit-log entry. The agent deliberately does not merge, page, roll back or edit repository files without human action.
+
 ---
 
 ## 4. Key Documentation & Proof Links
 
+- [**Hackathon-Agnostic Playbook (`docs/HACKATHON_PLAYBOOK.md`)**](docs/HACKATHON_PLAYBOOK.md): How any team, repository, language or CI provider adopts the same developer workflow agent without depending on the seeded demo.
 - [**Real-World Evaluation (`docs/REAL_WORLD_EVAL.md`)**](docs/REAL_WORLD_EVAL.md): Shield evaluated across 21 commits (177 file revisions, 14,500 diff lines) with 0 false positives on runtime production code.
 - [**Tool Comparison Matrix (`docs/COMPARISON.md`)**](docs/COMPARISON.md): Comparison of RepoBrain vs Gitleaks, detect-secrets, radon, and Semgrep.
 - [**Threat Model (`THREAT_MODEL.md`)**](THREAT_MODEL.md): Protected assets, attacker personas, attack paths, mitigations, and non-goals.

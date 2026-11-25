@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 from . import audit as A
-from . import auth, demo, deps, explainer, export, gitutil, llm, optimizer, report, review, risk, shield
+from . import auth, demo, deps, explainer, export, gitutil, incident, llm, optimizer, report, review, risk, shield
 from . import policy as P
 from .review import TEST_RX
 
@@ -914,6 +914,22 @@ def route(ctx, path, body, user=None, wid=None):
         ask = llm.ask if body.get("ai") and pol.get("allow_llm") and llm.available() else None
         res = explainer.explain(str(body.get("log", ""))[:200_000], ask)
         ctx.log.append("explain", "repobrain", "EXPLAINED", res["summary"])
+        return res
+    if path == "/api/agent":
+        from . import agent
+        task = str(body.get("task", "workflow")).lower()
+        if task not in agent.TASKS:
+            raise ValueError("unknown agent task: " + task)
+        if task == "incident" and body.get("ack"):
+            if not user or not auth.check_permission(user, "grant_waiver"):
+                raise PermissionError("Permission Denied: incident acknowledgement requires Security Lead or Admin authority.")
+        res = agent.run(task=task, root=active_root, base=active_base, policy=ctx.policy(active_root),
+                        home=ctx.home, actor=actor or (user or {}).get("name"),
+                        log_text=str(body.get("log", ""))[:200_000],
+                        alert=body.get("alert"), pr=body.get("pr"), repeats=body.get("repeats", 1),
+                        ai=bool(body.get("ai")), with_tests=bool(body.get("with_tests")), log=ctx.log)
+        if body.get("ack") and res.get("task") == "incident":
+            res = incident.acknowledge(res, actor or (user or {}).get("name") or "on-call", ctx.log)
         return res
     if path == "/api/preflight":
         actor_name = str(body.get("actor", "unknown-agent"))[:80]

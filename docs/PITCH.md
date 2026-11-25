@@ -12,7 +12,7 @@
 4. **Technical Approach**: Python standard library plus PyYAML. Deterministic rules can block; the Naive Bayes ML guard warns only. Its documented evaluation reports 5-fold CV on 772 samples: precision 0.939, recall 0.639, F1 0.760; false-positive rates are reported only for the tested JS/UI and stdlib corpora. Mission Control uses per-run tokens and CSRF checks.
 5. **Impact & Future Scope**:
    - **Measured Evaluation**: 21 commits / 14,500 diff lines scanned with 0% false positives on runtime production code ([`REAL_WORLD_EVAL.md`](REAL_WORLD_EVAL.md)), and 0 false positives across 51,781 LoC of stdlib/OSS Python ([`SHIELD_EVAL.md`](SHIELD_EVAL.md)).
-   - **Test Status**: The latest local run completed with 223 passed and 1 skipped. The repository also contains an OS matrix workflow; check its current GitHub status before presenting it as green.
+   - **Test Status**: The latest local run completed with 237 passed and 1 skipped. The repository also contains an OS matrix workflow; check its current GitHub status before presenting it as green.
    - **Roadmap**: TypeScript/Go AST optimizers, GitHub Marketplace App (expanding architectural prototype [`repobrain/webhook.py`](../repobrain/webhook.py)), and Sigstore Rekor / AWS KMS hardware key anchoring.
 
 ## Deliverables Status
