@@ -164,7 +164,7 @@ function goto(sel, smooth = true) {
  * PART 2: state, rendering, actions
  * ===================================================================== */
 let ST = null, sel = null, tab = "review", dataSig = "", selfAction = 0, tourRunning = false;
-const TABS = ["review", "agents", "explain", "audit", "policy", "model"];
+const TABS = ["review", "agents", "agent", "explain", "audit", "policy", "model"];
 const base = (p) => p.split("/").pop(), dir = (p) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/") + 1) : "");
 const VLABEL = { blocked: "Blocked", changes: "Changes required", ready: "Ready for review" };
 const RCOL = { low: "#7CF2B4", moderate: "#E8F23A", high: "#FFB74D", critical: "#FF5C6A" };
@@ -265,9 +265,9 @@ function buildLabels() {
 function switchTab(t) { tab = t; renderAll(); }
 function renderPane() {
   const pane = $("#pane");
-  if (pane.dataset.tab === tab && ["agents", "explain", "policy", "model"].includes(tab)) return;   // keep what the user typed
+  if (pane.dataset.tab === tab && ["agents", "agent", "explain", "policy", "model"].includes(tab)) return;   // keep what the user typed
   pane.dataset.tab = tab;
-  pane.innerHTML = { review: paneReview, agents: paneAgents, explain: paneExplain, audit: paneAudit, policy: panePolicy, model: paneModel }[tab]();
+  pane.innerHTML = { review: paneReview, agents: paneAgents, agent: paneAgent, explain: paneExplain, audit: paneAudit, policy: panePolicy, model: paneModel }[tab]();
   if (tab === "model") loadModel(); if (tab === "policy") syncSliders();
 }
 const empty = (m) => `<div class="empty">${m}</div>`;
@@ -336,6 +336,47 @@ function paneAgents() {
   <details style="margin-top:12px"><summary class="hint" style="cursor:pointer">How an agent calls this</summary><pre class="snip">curl -s localhost:8765/api/preflight -H 'X-RepoBrain: 1' \\
   -d '{"actor":"my-agent","files":[{"path":"app.py","content":"..."}]}'
 # or in Python: examples/agent_guard.py  (3 lines to wrap any agent's file writes)</pre></details>`;
+}
+const AGENT_FLOWS = [
+  ["run", "Run all five"], ["triage", "PR triage"], ["review", "Code review"],
+  ["diagnose", "Diagnose build"], ["test", "Run tests"], ["incident", "Incident response"],
+];
+function paneAgent() {
+  const btns = AGENT_FLOWS.map(([k, n]) => `<button class="btn" data-act="agent-run" data-w="${k}">${esc(n)}</button>`).join("");
+  return `<h3>Developer agent <span class="mono">triage · review · diagnose · test · incident</span></h3>
+  <p class="hint" style="margin-bottom:10px">Automates the repetitive engineering work and records every recommendation in the same audit chain. It never writes, reverts, merges or pages: a human still decides.</p>
+  <div class="preset">${btns}</div>
+  <label class="hint" style="display:block;margin-bottom:6px">Build log / incident alert (used by diagnose, incident and run)</label>
+  <textarea class="in" id="ag-text" style="min-height:110px" spellcheck="false" placeholder="Paste a failed build log or incident alert JSON…"></textarea>
+  <div id="ag-out" style="margin-top:10px"></div>`;
+}
+function agentOut(r) {
+  const t = r.triage || (r.workflow === "triage" ? r : null), v = r.review || (r.workflow === "review" ? r : null);
+  const d = r.diagnose || (r.workflow === "diagnose" ? r : null), s = r.test || (r.workflow === "test" ? r : null);
+  const i = r.incident || (r.workflow === "incident" ? r : null);
+  const bad = /blocked|request-changes|failed/.test(r.verdict || "") || r.severity === "SEV1";
+  let h = `<div class="dec ${bad ? "block" : "warn"}">${esc(r.summary || r.workflow)}</div>
+    <div class="hint" style="margin:6px 0 12px">advice only · no action taken · every step audited</div>`;
+  if (t) h += `<div class="find"><div class="top"><span class="chip">1 · triage</span><span class="chip">${esc(t.priority)}</span><span class="chip">${esc(t.verdict)}</span></div>
+    <div class="msg">${esc(t.summary)}</div><div class="hint">Route: ${esc((t.route || []).join(", "))}</div></div>`;
+  if (v) h += `<div class="find"><div class="top"><span class="chip">2 · review</span><span class="chip">${esc(v.verdict)}</span></div>
+    <div class="msg">${esc(v.summary)}</div>${(v.comments || []).slice(0, 8).map((c) => `<div class="hint"><span class="sev ${c.severity}">${esc(c.severity)}</span> <code>${esc(c.rule)}</code> ${esc(c.file)}:${c.line} — ${esc(c.body)}</div>`).join("")}</div>`;
+  if (d) h += `<div class="find"><div class="top"><span class="chip">3 · diagnose</span><span class="chip">${esc(d.confidence || "")} confidence</span></div>
+    <div class="msg">${esc(d.summary || "")}</div>${((d.diagnosis || {}).findings || []).map((x) => `<div class="hint"><b>${esc(x.cause)}</b> · ${esc(x.fix)}</div>`).join("")}</div>`;
+  if (s) h += `<div class="find"><div class="top"><span class="chip">4 · test</span><span class="chip">${esc(s.status)}</span></div><div class="msg">${esc(s.summary || "")}</div></div>`;
+  if (i) h += `<div class="find"><div class="top"><span class="chip">5 · incident</span><span class="chip">${esc(i.severity)}</span><span class="chip">${i.page ? "page on-call" : "no page"}</span></div>
+    <div class="msg">${esc(i.summary || "")}</div><div class="hint">Suspects: ${esc((i.suspects || []).map((c) => c.sha).join(", ") || "none")}</div>
+    ${(i.actions || []).map((a) => `<div class="hint">${a.step}. ${esc(a.action)}</div>`).join("")}</div>`;
+  return h;
+}
+async function doAgent(w) {
+  const out = $("#ag-out"); out.innerHTML = `<span class="hint">Running ${esc(w)}…</span>`;
+  try {
+    const r = await api("/api/agent", { workflow: w, text: $("#ag-text").value });
+    out.innerHTML = agentOut(r);
+    pulse((r.verdict && /blocked|request-changes|failed/.test(r.verdict)) || r.severity === "SEV1" ? REDC : LIME);
+    refresh();
+  } catch (e) { out.innerHTML = `<div class="note">${esc(e.message)}</div>`; }
 }
 function paneExplain() {
   return `<h3>Failure Explainer <span class="mono">paste a build or test log</span></h3>
@@ -422,6 +463,7 @@ document.addEventListener("click", async (e) => {
   else if (act === "waive-open") { const w = $(`.wv[data-i="${t.dataset.i}"]`); w.hidden = !w.hidden; w.querySelector("input").focus(); }
   else if (act === "waive") { const reason = t.parentElement.querySelector("input").value;
     await run("waive", () => api("/api/waive", { rule: t.dataset.rule, file: t.dataset.file, reason, by: "reviewer" }), { ok: () => "Waiver recorded in the audit log." }); pulse(LAV); $("#pane").dataset.tab = ""; renderAll(); }
+  else if (act === "agent-run") doAgent(t.dataset.w);
   else if (act === "preset") { const [a, p, c] = AGENT_PRESETS[t.dataset.k]; $("#pf-actor").value = a; $("#pf-path").value = p; $("#pf-content").value = c; doPreflight(); }
   else if (act === "preflight") doPreflight();
   else if (act === "xpreset") { $("#x-log").value = XLOGS[t.dataset.k]; doExplain(); }
@@ -462,7 +504,7 @@ async function savePolicy() {
 
 /* ---------- command palette ---------- */
 const CMDS = () => [
-  ...TABS.map((t, i) => ({ n: "Go to: " + { review: "Review", agents: "Agent preflight", explain: "Explain a failure", audit: "Audit trail", policy: "Policy", model: "Model card" }[t], k: String(i + 1), f: () => { tab = t; renderAll(); goto("#console"); } })),
+  ...TABS.map((t, i) => ({ n: "Go to: " + { review: "Review", agents: "Agent preflight", agent: "Developer agent", explain: "Explain a failure", audit: "Audit trail", policy: "Policy", model: "Model card" }[t], k: String(i + 1), f: () => { tab = t; renderAll(); goto("#console"); } })),
   { n: "Approve optimization", k: "", f: A["approve-opt"] }, { n: "Approve merge", k: "", f: A["approve-merge"] },
   ...(ST && ST.is_demo ? [...ST.scenarios.map((s) => ({ n: "Simulate: " + s.title, k: "", f: () => A.scenario(s.id) })), { n: "Reset demo", k: "", f: A.reset },
     { n: "Simulate audit tampering", k: "", f: () => { tab = "audit"; A.tamper().then(() => goto("#console")); } }, { n: "Restore audit log", k: "", f: A.restore }] : []),
@@ -488,7 +530,7 @@ $("#palette-btn").onclick = openPalette; $("#sat-ask").onclick = openPalette;
 addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("#palette").hidden ? openPalette() : closePalette(); }
   else if (e.key === "Escape") { closePalette(); }
-  else if (!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && /^[1-6]$/.test(e.key) && !e.ctrlKey && !e.metaKey && progress > 3.4) { tab = TABS[+e.key - 1]; renderAll(); }
+  else if (!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && /^[1-7]$/.test(e.key) && !e.ctrlKey && !e.metaKey && progress > 3.4) { tab = TABS[+e.key - 1]; renderAll(); }
 });
 
 /* ---------- autopilot demo (for recording the submission video) ---------- */

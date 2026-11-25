@@ -11,7 +11,7 @@ Security model (this is a security tool, so the console itself must not be an at
 import hashlib, json, os, pathlib, shutil, subprocess, threading, time, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import yaml
-from . import audit, deps, explainer, export, llm, mlguard, optimizer, policy, risk, shield
+from . import agent, audit, deps, explainer, export, llm, mlguard, optimizer, policy, risk, shield
 
 WEB = pathlib.Path(__file__).parent / "web"
 STATIC = {"/": ("index.html", "text/html; charset=utf-8"), "/app.css": ("app.css", "text/css; charset=utf-8"),
@@ -397,6 +397,11 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True})
             if u.path == "/api/ml":
                 return self._send(200, ml_report())
+            if u.path == "/api/agent":
+                last = agent.latest(home_for(CFG["root"]))
+                if q.get("fmt") == "md":
+                    return self._send(200, agent.markdown(last).encode(), "text/markdown; charset=utf-8") if last else self._send(404, {"error": "no agent run yet"})
+                return self._send(200, last or {"error": "no agent run yet"})
             if u.path == "/api/export":
                 st, fmt = state(CFG["root"], CFG["base"]), q.get("fmt", "json")
                 finds = [x for f in st["files"] for x in f["findings"] if not x["waived"]]
@@ -443,6 +448,22 @@ class H(BaseHTTPRequestHandler):
             if path == "/api/explain":
                 r = explainer.explain(str(b.get("text", ""))[:200_000], bool(b.get("ai")))
                 audit.log(home, "explain", "info", "repobrain", {"findings": len(r["findings"])})
+                return self._send(200, r)
+            if path == "/api/agent":
+                wf = str(b.get("workflow") or "run")[:30]
+                if wf not in agent.WORKFLOWS:
+                    return self._send(400, {"error": "unknown workflow", "workflows": list(agent.WORKFLOWS)})
+                text = str(b.get("text") or "")[:200_000]
+                alert = b.get("alert") or text
+                alert = str(alert)[:200_000] if isinstance(alert, str) else alert
+                args = (root, base, by, bool(b.get("ai")), home)
+                if wf == "triage": r = agent.triage(*args)
+                elif wf == "review": r = agent.review(*args)
+                elif wf == "diagnose": r = agent.diagnose(root, text, base, by, bool(b.get("ai")), home)
+                elif wf == "test": r = agent.test(root, base, by, home)
+                elif wf == "incident": r = agent.incident(root, alert, base, by, bool(b.get("ai")), home)
+                else: r = agent.run(root, base, alert or None, text, by, bool(b.get("ai")), home)
+                r.pop("markdown", None)
                 return self._send(200, r)
             if path == "/api/preflight":
                 return self._send(200, preflight(root, str(b.get("actor", "unknown-agent"))[:80], b.get("files", [])))

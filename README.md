@@ -13,6 +13,7 @@ RepoBrain does **not** write code. It sits on top of a repository and does four 
 | **Optimizer** | Simplifies code and proves it is safe | Rewrites are spliced **per function** (untouched code stays byte-identical, comments are never deleted), then must pass the project's tests **and** a **differential fuzzer** that compares old vs new on generated inputs |
 | **Failure Explainer** | Turns a build log into cause + fix | Proposes a concrete patch (e.g. the right PyPI name) and warns when a "missing package" looks like an AI-hallucinated typosquat |
 | **Audit** | Tamper-evident record of every decision | SHA-256 hash chain, optional HMAC signing, approval **pinned to a commit** (a new commit, even by an AI, invalidates it), exports to SARIF / Markdown / CSV / HTML |
+| **Developer Agent** | Automates five repetitive jobs: PR triage, code review, failed-build diagnosis, testing and initial on-call response | One command or API call per job; every recommendation is structured, audited and **read-only** — rules decide, an optional LLM only summarises |
 
 Plus an **Agent Preflight API**: any agent asks `POST /api/preflight` *before* writing a file and gets allow / warn / block, logged to the same chain ([`examples/agent_guard.py`](examples/agent_guard.py), three lines).
 
@@ -37,6 +38,27 @@ A raw **WebGL2** particle scene (no libraries, works offline) is not decoration:
 
 The demo repo is a real git history with an AI-authored PR. **Simulate an agent…** pushes new commits (lookalike packages, hidden Unicode, leaked credentials) and **Simulate tampering** edits a past audit record so you can watch the chain break at that exact record.
 
+## Developer agent: all five workflows
+
+```bash
+python -m repobrain agent --workflow triage     --base main
+python -m repobrain agent --workflow review     --base main
+python -m repobrain agent --workflow diagnose   --log demo/failed_build.log
+python -m repobrain agent --workflow test       --base main
+python -m repobrain agent --workflow incident   --log alert.json
+python -m repobrain agent --workflow run        --log demo/failed_build.log --alert alert.json --markdown brief.md
+```
+
+| Workflow | What it automates |
+|---|---|
+| **Triage** | Prioritises (P0–P3), explains the risk factors, routes to security / code owner / split-the-change |
+| **Review** | Line-level comments from Shield, the complexity gate, missing tests and large diffs, plus the verified Optimizer proposal |
+| **Diagnose** | Cause + fix + proposed patch from a build log, correlated with the changed files it implicates |
+| **Test** | Runs the repo's own tests on a scratch copy (pytest or the built-in runner) and maps failures back to changed files |
+| **Incident** | Severity, timeline of recent commits, suspect change, containment steps and escalation decision from an alert |
+
+The agent writes nothing to the repository: the `run` workflow only stores a brief at `~/.repobrain/<repo-hash>/agent/latest.md` (and `latest.json`). The console has a **Developer agent** tab; the API is `POST /api/agent` (`{"workflow": "run", "text": "…", "alert": {…}}`) and `GET /api/agent?fmt=md`. Every workflow appends an `agent:<workflow>` record to the same hash chain.
+
 ## Measured results (nothing here is aspirational)
 
 | Claim | Evidence |
@@ -44,7 +66,8 @@ The demo repo is a real git history with an AI-authored PR. **Simulate an agent�
 | Optimizer on the demo `orders.py` | nesting 4 → 3, cognitive complexity Σ 23 → 13, 34 → 19 lines; 4 project tests pass; **750 fuzz inputs, 0 divergences** |
 | The fuzzer is not a rubber stamp | A "simplification" that changes `>=` to `>` is caught (tests in `tests/test_engine.py`); an AI-suggested off-by-one is rejected end-to-end (`tests/test_llm.py`, mock provider) |
 | Learned injection guard | 5-fold CV on 72 attacks + 170 hard negatives: rules-only precision 1.00 / recall 0.25; **model precision 0.94 / recall 0.62**; hybrid recall 0.64. **0.03 % false positives** on 4,000 held-out real prose lines (Python stdlib). `python -m repobrain ml-eval` reproduces it |
-| Test suite | 39 tests (engine, server security, ML claims, LLM verification) pass on the built-in runner, Python 3.12. The CI workflow is also configured to run them under pytest on 3.10 – 3.12; I could not run pytest in my build sandbox, so watch the first CI run |
+| Test suite | 50 tests (engine, server security, ML claims, LLM verification, all five agent workflows) pass on the built-in runner, Python 3.13. The CI workflow is also configured to run them under pytest on 3.10 – 3.12; I could not run pytest in my build sandbox, so watch the first CI run |
+| Agent safety | `tests/test_agent.py` checks that triage/review/diagnose/test/incident and `run` leave the working tree byte-identical; the API test checks the same five-workflow brief |
 | Dogfooding | `python -m repobrain shield` over this repo's own tree: clean |
 
 ## Honest limits
@@ -55,6 +78,7 @@ The demo repo is a real git history with an AI-authored PR. **Simulate an agent�
 * **We found our own hotspots.** RepoBrain's gate flags 33 of its 160 functions at the default policy (worst: `shield.scan_text`, `server.state`). This repo's policy therefore runs the complexity gate advisory (`optimize: off`) while Shield is enforced. Refactoring them is the first roadmap item.
 * **The LLM path is verified with a mock server only.** No real provider was called during development; the safety property (AI output is verified like any other change) *is* tested. Without a key everything else is fully local.
 * Scenarios *simulate* agent behaviour on a synthetic repo; they are not recordings of real Copilot/Codex runs.
+* The Developer Agent **only proposes**. It never writes code, reverts a commit, merges or pages anyone; on-call is advisory triage, not a pager/Slack integration. Its incident severity is a keyword heuristic, not a trained model.
 
 ## GitHub integration
 
@@ -71,6 +95,9 @@ flowchart LR
   P --> S[Shield<br/>rules + learned guard + deps + unicode]
   P --> O[Optimizer<br/>AST rewrite → tests → differential fuzz]
   P --> E[Failure Explainer]
+  T[Developer agent<br/>triage · review · diagnose · test · incident] -->|advice only| S
+  T --> E
+  T --> L
   S & O & E --> L[(Hash-chained audit log)]
   L --> H{Human approval<br/>pinned to commit}
   H --> M[Merge]
@@ -94,10 +121,10 @@ Parts of this codebase, including the engine, the WebGL scene and the UI, were d
 ## Repo map
 
 ```
-repobrain/            engine: shield · deps · mlguard · optimizer · fuzz · explainer · audit · risk · export · server · cli
+repobrain/            engine: shield · deps · mlguard · optimizer · fuzz · explainer · agent · audit · risk · export · server · cli
 repobrain/web/        index.html · app.css · scene.js (WebGL2) · app.js
 repobrain/data/       injection corpus + frozen negative prose
-tests/                39 tests          demo/   messy.py + failing log
+tests/                50 tests          demo/   messy.py + failing log
 examples/             agent_guard.py    docs/   ARCHITECTURE · PITCH · screenshots
 .github/              PR check (SARIF + comment) · tests · dependabot        action.yml
 ```

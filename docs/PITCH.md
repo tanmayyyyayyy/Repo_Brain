@@ -3,19 +3,20 @@
 ## Round 2: idea deck (≤ 10 slides)
 1. **Problem**: AI agents now commit to real repos. Each vendor's controls are separate; companies can't answer "what did AI change, who allowed it, can we prove it?" Users: engineering leads, agencies handing AI-written code to clients, compliance teams.
 2. **Solution**: RepoBrain = one policy file, one audit trail, any AI. (Hero screenshot.)
-3. **USP & features**: Shield · Optimizer with proof · Failure Explainer · tamper-evident audit · Agent Preflight API.
+3. **USP & features**: Shield · Optimizer with proof · Failure Explainer · tamper-evident audit · Agent Preflight API · Developer Agent (PR triage, code review, build diagnosis, testing, initial incident response — proposals only, all audited).
 4. **Demo moment**: AI PR blocked → learned guard catches a paraphrased injection → optimizer proof (tests + 750 fuzz inputs) → typosquats → tampered log breaks the chain.
 5. **Tech stack**: Python stdlib + PyYAML; raw WebGL2; GitHub Actions + SARIF; optional Anthropic/OpenAI/Ollama.
 6. **Architecture**: the mermaid diagram from the README.
 7. **Novelty**: differential fuzzing as a safety net for AI refactors; approval pinned to a commit; rules-block/model-warns design; vendor-neutral preflight.
 8. **Differentiation**: vs CodeRabbit (reviews) / SonarQube (static gate) / Socket (deps) / Copilot (writes). Be honest: "their controls are separate and tool-specific; we are the common layer."
 9. **Feasibility & scalability**: already running; added-lines-only scanning; cached analysis; GitHub App + queue is the scale path; BYO key / local Ollama for privacy.
-10. **Impact & roadmap**: refactor our own hotspots (we found them with our own tool), JS support, GitHub App, real agent connectors.
+10. **Impact & roadmap**: all five dev workflows are automated as read-only advice; refactor our own hotspots (we found them with our own tool), JS support, GitHub App, real pager/agent connectors.
 *Optional 2-min video:* use **play autopilot demo** (footer link) and narrate the on-screen captions.
 
 ## Round 3: deliverables checklist
 - [x] Working prototype + GitHub repo + README (stack, setup)
 - [x] GitHub tools: Actions PR check, SARIF code scanning, sticky PR comment, composite action, dependabot, PR template
+- [x] Developer agent: PR triage, code review, failed-build diagnosis, testing, initial incident response (`python -m repobrain agent`)
 - [x] Screenshots in `docs/screenshots/`
 - [ ] **You:** record the demo video (autopilot), push to GitHub, enable Pages/hosting if you want a live link
 - [ ] **You:** adapt the AI-disclosure paragraph in the README to what your team actually did

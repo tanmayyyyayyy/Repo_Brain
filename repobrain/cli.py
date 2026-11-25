@@ -1,6 +1,6 @@
 """RepoBrain command line. Same engine as the console and the GitHub Action."""
 import argparse, json, pathlib, subprocess, sys
-from . import audit, explainer, export, hooks, mlguard, optimizer, policy, report, server, shield
+from . import agent, audit, explainer, export, hooks, mlguard, optimizer, policy, report, server, shield
 
 
 def _root(a):
@@ -89,6 +89,41 @@ def cmd_preflight(a):
     sys.exit(1 if r["decision"] == "block" else 0)
 
 
+def cmd_agent(a):
+    """One agent for PR triage, code review, build diagnosis, testing and initial incident response."""
+    root, base, home = _root(a), a.base, server.home_for(_root(a))
+    text = sys.stdin.read() if a.log == "-" else (pathlib.Path(a.log).read_text() if a.log else "")
+    alert = pathlib.Path(a.alert).read_text() if a.alert else text
+    if a.workflow == "triage":
+        r = agent.triage(root, base, a.actor, a.ai, home)
+    elif a.workflow == "review":
+        r = agent.review(root, base, a.actor, a.ai, home)
+    elif a.workflow == "diagnose":
+        r = agent.diagnose(root, text, base, a.actor, a.ai, home)
+    elif a.workflow == "test":
+        r = agent.test(root, base, a.actor, home)
+    elif a.workflow == "incident":
+        try:
+            alert = json.loads(alert) if alert.strip().startswith("{") else alert
+        except ValueError:
+            pass
+        r = agent.incident(root, alert, base, a.actor, a.ai, home)
+    else:
+        try:
+            alert = json.loads(alert) if alert.strip().startswith("{") else (alert or None)
+        except ValueError:
+            pass
+        r = agent.run(root, base, alert, text, a.actor, a.ai, home)
+    if a.markdown:
+        md = agent.markdown(r)
+        pathlib.Path(a.markdown).write_text(md)
+        if not a.json:
+            print(md)
+    if a.json or not a.markdown:
+        print(json.dumps(r, indent=2))
+    sys.exit(agent.exit_code(r))
+
+
 def cmd_ml_eval(a):
     print(json.dumps(mlguard.evaluate(shield.injection_rule_hit), indent=2))
 
@@ -130,6 +165,13 @@ def main():
     p = add("explain", cmd_explain); p.add_argument("log"); p.add_argument("--ai", action="store_true")
     add("audit", cmd_audit); add("report", cmd_report)
     p = add("preflight", cmd_preflight); p.add_argument("--actor", required=True); p.add_argument("--path", required=True); p.add_argument("--content-file")
+    p = add("agent", cmd_agent, help="developer agent: triage · review · diagnose · test · incident")
+    p.add_argument("--workflow", choices=agent.WORKFLOWS, default="run")
+    p.add_argument("--base", default="main"); p.add_argument("--actor", default="dev-agent")
+    p.add_argument("--log", help="build/test/incident log file, or - for stdin")
+    p.add_argument("--alert", help="incident alert JSON file")
+    p.add_argument("--ai", action="store_true"); p.add_argument("--markdown", help="write a Markdown brief")
+    p.add_argument("--json", action="store_true", help="print JSON as well as Markdown")
     add("ml-eval", cmd_ml_eval); add("install-hook", cmd_hook); add("hook-check", cmd_hook_check)
     p = add("ci", cmd_ci); p.add_argument("--base", default="origin/main"); p.add_argument("--actor", default="ci"); p.add_argument("--sarif"); p.add_argument("--summary")
     a = ap.parse_args()

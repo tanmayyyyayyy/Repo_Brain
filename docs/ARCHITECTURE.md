@@ -10,6 +10,11 @@
 4. **Audit** appends a record whose hash commits to the previous one (optional HMAC with `REPOBRAIN_AUDIT_KEY`). Approvals are bound to a commit SHA.
 5. **Merge Risk Index** (0–100) is a transparent weighted sum with its factors shown, deliberately *not* a trained model.
 
+## Developer agent
+`repobrain/agent.py` orchestrates five repetitive workflows: **triage** (priority P0–P3, routing, risk factors), **review** (Shield findings + complexity gate + missing-test/large-diff comments + the verified Optimizer proposal), **diagnose** (the Failure Explainer correlated with changed files), **test** (the project's tests in a scratch copy, with failures mapped to changed files) and **incident** (severity, commit timeline, suspect change, containment and escalation from an alert). `run` executes all five and writes `agent/latest.json` + `agent/latest.md` under the audit home. The CLI is `python -m repobrain agent`, the console has a Developer agent tab, and the API is `POST /api/agent` / `GET /api/agent?fmt=md`.
+
+The agent is read-only by construction: no workflow writes, reverts, merges or pages. Each appends an `agent:<workflow>` record to the same hash chain, and anything that would change the repository still requires human approval. Rules produce verdicts; an optional LLM only adds prose, never a decision.
+
 ## Optional LLM (vendor-neutral)
 `REPOBRAIN_LLM=anthropic|openai|ollama` (+ `REPOBRAIN_LLM_URL`, `REPOBRAIN_LLM_MODEL`). Used to refine functions that still break policy and to explain unknown logs. Ollama keeps everything local. AI output goes through the same tests + fuzzing.
 

@@ -105,6 +105,17 @@ def test_tamper_is_detected_and_restorable():
     assert s["chain"]["ok"] is True
 
 
+def test_agent_api_runs_all_five_and_stores_the_brief():
+    call("POST", "/api/reset")
+    st, r = call("POST", "/api/agent", {"workflow": "run", "text": "ModuleNotFoundError: No module named 'yaml'",
+                                        "alert": {"title": "checkout slow", "service": "payments", "text": "degraded latency"}})
+    assert st == 200 and set(r["workflows_run"]) == {"triage", "review", "diagnose", "test", "incident"}
+    st, md = call("GET", "/api/agent?fmt=md")
+    assert st == 200 and b"RepoBrain developer agent" in md
+    st, r = call("POST", "/api/agent", {"workflow": "nope"})
+    assert st == 400
+
+
 def test_exports():
     call("POST", "/api/reset")
     _, sarif = call("GET", "/api/export?fmt=sarif")
